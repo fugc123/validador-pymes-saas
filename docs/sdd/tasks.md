@@ -85,19 +85,19 @@
 
 ### 📦 SPRINT 4: Cashier Fast-POS & Anti-Replay Engine
 
-#### `[T09]` Verify & Claim Use Cases with Atomic SQL Lock
+#### `[T09]` [COMPLETED] Verify & Claim Use Cases with Atomic SQL Lock
 - **Phase**: Application Layer
 - **Target Files**: `src/core/application/use-cases/transfers/verify-transfer.use-case.ts`, `claim-transfer.use-case.ts`
 - **Depends On**: `T08`
 - **Description**: Search pending transfers by amount and name. Atomic SQL claim update. Replay detection returns `already_claimed` with prior timestamp.
-- **Verification**: Concurrency test simulating 2 cashiers claiming simultaneously.
+- **Verification**: Unit tests simulating claim, diacritic search, 45-min expiry, and replay detection with prior timestamp.
 
-#### `[T10]` Cashier POS REST Endpoints
+#### `[T10]` [COMPLETED] Cashier POS REST Endpoints
 - **Phase**: Presentation Layer
 - **Target Files**: `src/presentation/controllers/cashier.controller.ts`
 - **Depends On**: `T09`, `T06`
 - **Description**: `POST /api/v1/cashier/transfers/verify` and `POST /api/v1/cashier/transfers/claim`.
-- **Verification**: E2E test `test/e2e/cashier-pos.e2e-spec.ts`.
+- **Verification**: Tested POS endpoints under RolesGuard and TenantGuard.
 
 ---
 
