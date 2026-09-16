@@ -15,6 +15,7 @@ This directory contains the immutable, historical Architecture Decision Records 
 | **[ADR-005](ADR-005-multi-bank-parsing-strategy.md)** | Multi-Bank Parsing Strategy (Itaú, GNB, UENO, Familiar, Atlas, Continental) | `Accepted` | 2026-09-15 | Bank Parsers, Strategy Pattern, SIPAP, Regex Resilience |
 | **[ADR-006](ADR-006-merchant-onboarding-and-subscription-billing.md)** | Merchant Onboarding, Approval Requests & $15/mo Subscription Billing | `Accepted` | 2026-09-15 | Onboarding Flow, Merchant Approval, Stripe/Local Checkout |
 | **[ADR-007](ADR-007-premium-fast-pos-design-system.md)** | Premium Fast-POS UX/UI Design System & High-Velocity Operation | `Accepted` | 2026-09-15 | Frontend Architecture, React, Tailwind, Web Audio Chimes, Kiosk UI |
+| **[ADR-008](ADR-008-multi-tenant-memberships-and-tenant-switching.md)** | Multi-Tenant Organization Memberships & Tenant Switching | `Accepted` | 2026-09-16 | Auth, Memberships, Multi-Store, Organization Switcher, JWT |
 
 ---
 

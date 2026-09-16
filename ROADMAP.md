@@ -20,20 +20,26 @@ This roadmap defines the sequential development phases, deliverables, and accept
 
 ## 📋 Detailed Task Breakdown
 
-### 🎯 Phase 2: NestJS Core, PostgreSQL & Multi-Tenant RBAC
+### 🎯 Phase 2: NestJS Core, PostgreSQL & Multi-Tenant RBAC with Organization Memberships
 - [ ] Initialize NestJS project structure with strict Clean Architecture separation:
-  - `src/core/domain/`: Pure entities (`Merchant`, `User`, `Transfer`, `Subscription`, `MerchantRequest`).
-  - `src/core/application/`: Use cases with explicit `tenantId` contracts.
+  - `src/core/domain/`: Pure entities (`Merchant`, `User`, `MerchantMembership`, `Transfer`, `Subscription`, `MerchantRequest`).
+  - `src/core/application/`: Use cases with explicit `tenantId` contracts and membership resolution.
   - `src/infrastructure/`: PostgreSQL adapters, Drizzle/Prisma repositories.
   - `src/presentation/`: NestJS controllers, guards, interceptors.
-- [ ] Database Schema Definition:
+- [ ] Database Schema Definition (Decoupled Identity & Memberships):
+  - `users`: `id`, `email`, `password_hash`, `full_name`, `is_super_admin`, `created_at`.
   - `merchants`: `id`, `name`, `slug`, `webhook_secret`, `status`, `created_at`.
-  - `users`: `id`, `tenant_id`, `email`, `password_hash`, `role` (`SUPER_ADMIN`, `MERCHANT_OWNER`, `CASHIER`).
+  - `merchant_memberships`: `id`, `user_id` (FK), `merchant_id` (FK), `role` (`MERCHANT_OWNER` | `CASHIER`), `is_active`. Unique index on `(user_id, merchant_id)`.
   - `transfers`: `id`, `tenant_id`, `operation_id`, `amount`, `payer_name`, `payer_bank`, `status`, `claimed_at`, `claimed_by_user_id`.
   - `subscriptions`: `id`, `tenant_id`, `status` (`trial`, `active`, `past_due`, `cancelled`), `expires_at`.
   - `merchant_requests`: `id`, `business_name`, `owner_name`, `email`, `phone`, `city`, `status`.
+- [ ] Two-Stage Authentication & Multi-Store Selector (ADR-008):
+  - `POST /api/v1/auth/login`: Validates credentials, returns user identity + array of active memberships.
+  - Auto-select fast path if user belongs to 1 company.
+  - `POST /api/v1/auth/select-tenant`: Issues tenant-scoped JWT with specific company role.
+  - `POST /api/v1/auth/switch-tenant`: Allows instant company switching from the UI navigation bar without logging out.
 - [ ] Implement `TenantContextInterceptor` & `TenantGuard`:
-  - Enforce `tenant_id` extraction from JWT claims for authenticated routes.
+  - Enforce `tenant_id` extraction from scoped JWT claims for all operational routes.
   - Guarantee zero cross-tenant data leakage.
 - [ ] Seed SuperAdmin account via environment variables (`SUPERADMIN_EMAIL`, `SUPERADMIN_PASSWORD`).
 
