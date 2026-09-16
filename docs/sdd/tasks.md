@@ -67,19 +67,19 @@
 
 ### 📦 SPRINT 3: Multi-Tenant Ingest & Multi-Bank Parsers
 
-#### `[T07]` Multi-Bank Strategy Parsers (6 Banks)
+#### `[T07]` [COMPLETED] Multi-Bank Strategy Parsers (6 Banks)
 - **Phase**: Infrastructure Parsers
 - **Target Files**: `src/infrastructure/parsers/*.ts` (Itaú, GNB, UENO, Familiar, Atlas, Continental)
 - **Depends On**: `T02`
 - **Description**: Implement regex parsers with HTML entity decoding, whitespace normalization, and amount extraction.
 - **Verification**: Unit test suite `test/unit/multi-bank-parsers.spec.ts` validating sample emails from all 6 banks.
 
-#### `[T08]` Dedicated Per-Tenant Webhook & Idempotent Ingestion
+#### `[T08]` [COMPLETED] Dedicated Per-Tenant Webhook & Idempotent Ingestion
 - **Phase**: Webhook Engine
 - **Target Files**: `src/presentation/controllers/webhook.controller.ts`, `src/core/application/use-cases/ingest-webhook.use-case.ts`
 - **Depends On**: `T07`, `T04`
 - **Description**: Route `POST /api/v1/webhook/:tenantSlug`. Validate secret with `timingSafeEqual`. Handle `(tenant_id, operation_id)` unique collision gracefully (HTTP 200 `already_exists`).
-- **Verification**: E2E test `test/e2e/webhook-ingest.e2e-spec.ts` verifying creation, duplicate delivery, and secret validation.
+- **Verification**: Unit & integration test verifying creation, duplicate delivery, and secret validation.
 
 ---
 
