@@ -13,7 +13,8 @@
     "test": "jest --config jest.config.js",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
-    "test:e2e": "jest --config test/jest-e2e.json"
+    "test:e2e": "jest --config test/jest-e2e.json",
+    "seed:pilot": "ts-node -r tsconfig-paths/register src/infrastructure/database/seeds/seed-pilot.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.3.0",
