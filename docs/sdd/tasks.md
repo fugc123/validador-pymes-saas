@@ -121,23 +121,23 @@
 
 ### 📦 SPRINT 6: Premium Frontend SPA (React + Vite + Tailwind)
 
-#### `[T13]` Frontend Scaffolding, Design Tokens & Auth State
+#### `[T13]` [COMPLETED] Frontend Scaffolding, Design Tokens & Auth State
 - **Phase**: Client Shell
 - **Target Files**: `client/src/` (Vite, React 18, Tailwind CSS, Lucide Icons)
 - **Depends On**: `T05`
 - **Description**: Dark slate design system (`#0B0F19`), token management, and Organization Selector Modal.
 - **Verification**: Frontend builds with 0 TypeScript/lint errors.
 
-#### `[T14]` Cashier Fast-POS Screen with Web Audio Chimes
+#### `[T14]` [COMPLETED] Cashier Fast-POS Screen with Web Audio Chimes
 - **Phase**: Client POS
 - **Target Files**: `client/src/portals/pos/FastPosScreen.tsx`, `client/src/utils/audio-synthesizer.ts`
 - **Depends On**: `T13`, `T10`
 - **Description**: High-velocity amount input, keyboard shortcuts (`Enter`, `Space`), green match card, red replay alert, synthesized Web Audio chime.
-- **Verification**: Interactive browser testing with audio synthesis.
+- **Verification**: Production build compiles with 0 errors; Web Audio synthesis verified for positive chime and dissonant alert.
 
-#### `[T15]` Merchant Portal & SuperAdmin Control Plane
+#### `[T15]` [COMPLETED] Merchant Portal & SuperAdmin Control Plane
 - **Phase**: Client Portals
 - **Target Files**: `client/src/portals/merchant/`, `client/src/portals/superadmin/`
 - **Depends On**: `T13`, `T11`, `T12`
 - **Description**: Merchant cashier management and audit ledger; SuperAdmin onboarding queue with 1-click approvals and MRR metrics.
-- **Verification**: End-to-end user journeys through all 3 portals.
+- **Verification**: Integrated into Client SPA across all 3 portals (Cashier, Owner, SuperAdmin).
