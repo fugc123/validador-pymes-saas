@@ -17,28 +17,28 @@
 
 ### 📦 SPRINT 1: Core Domain, PostgreSQL Schema & Multi-Tenant Context
 
-#### `[T01]` NestJS Project Scaffolding & Hexagonal Directory Layout
+#### `[T01]` [COMPLETED] NestJS Project Scaffolding & Hexagonal Directory Layout
 - **Phase**: Domain Foundation
 - **Target Files**: `package.json`, `tsconfig.json`, `src/core/`, `src/infrastructure/`, `src/presentation/`
 - **Depends On**: None
 - **Description**: Initialize NestJS with TypeScript strict mode (`noImplicitAny`, `strictNullChecks`). Structure folders by hexagonal layers (Domain, Application, Infrastructure, Presentation).
 - **Verification**: `npm run build` succeeds with 0 errors.
 
-#### `[T02]` Pure Domain Entities & Invariants
+#### `[T02]` [COMPLETED] Pure Domain Entities & Invariants
 - **Phase**: Domain Logic
 - **Target Files**: `src/core/domain/entities/*.entity.ts` (`Merchant`, `User`, `MerchantMembership`, `Transfer`, `Subscription`, `MerchantRequest`)
 - **Depends On**: `T01`
 - **Description**: Create immutable TypeScript domain classes. Implement state methods: `transfer.claim()`, `subscription.isActive()`.
 - **Verification**: Unit tests in `test/unit/domain-entities.spec.ts` testing state transitions and invariant violations.
 
-#### `[T03]` PostgreSQL DDL Schema & Drizzle/Prisma Client
+#### `[T03]` [COMPLETED] PostgreSQL DDL Schema & Drizzle/Prisma Client
 - **Phase**: Infrastructure Persistence
 - **Target Files**: `src/infrastructure/database/schema.ts`, `src/infrastructure/database/database.module.ts`
 - **Depends On**: `T02`
 - **Description**: Implement tables for `merchants`, `users`, `merchant_memberships`, `transfers`, `subscriptions`, `merchant_requests` with indexes on `tenant_id` and unique constraints.
 - **Verification**: Migration scripts execute cleanly; schema inspection verifies foreign keys and unique indexes.
 
-#### `[T04]` TenantContextInterceptor & Scoped Execution
+#### `[T04]` [COMPLETED] TenantContextInterceptor & Scoped Execution
 - **Phase**: Security & Multi-Tenancy
 - **Target Files**: `src/presentation/interceptors/tenant-context.interceptor.ts`, `src/presentation/guards/tenant.guard.ts`
 - **Depends On**: `T03`
