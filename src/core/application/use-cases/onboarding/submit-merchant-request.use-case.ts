@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
 import { IMerchantRequestRepository } from '../../ports/onboarding.ports';
 import { MerchantRequest } from '../../../domain/entities/merchant-request.entity';
 
@@ -19,7 +19,7 @@ export interface SubmitMerchantRequestOutput {
 
 @Injectable()
 export class SubmitMerchantRequestUseCase {
-  constructor(private readonly requestRepo: IMerchantRequestRepository) {}
+  constructor(@Inject('IMerchantRequestRepository') private readonly requestRepo: IMerchantRequestRepository) {}
 
   async execute(input: SubmitMerchantRequestInput): Promise<SubmitMerchantRequestOutput> {
     const request = new MerchantRequest({

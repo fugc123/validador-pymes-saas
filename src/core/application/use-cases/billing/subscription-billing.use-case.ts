@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Inject, NotFoundException } from '@nestjs/common';
 import { ISubscriptionRepository } from '../../ports/onboarding.ports';
 
 export interface ConfirmPaymentInput {
@@ -17,7 +17,7 @@ export interface SubscriptionStatusOutput {
 
 @Injectable()
 export class SubscriptionBillingUseCase {
-  constructor(private readonly subscriptionRepo: ISubscriptionRepository) {}
+  constructor(@Inject('ISubscriptionRepository') private readonly subscriptionRepo: ISubscriptionRepository) {}
 
   async getStatus(tenantId: string): Promise<SubscriptionStatusOutput> {
     const sub = await this.subscriptionRepo.findByTenantId(tenantId);

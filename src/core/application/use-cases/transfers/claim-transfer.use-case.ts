@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Inject,
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
@@ -22,7 +23,7 @@ export interface ClaimTransferOutput {
 
 @Injectable()
 export class ClaimTransferUseCase {
-  constructor(private readonly transferRepo: ITransferRepository) {}
+  constructor(@Inject('ITransferRepository') private readonly transferRepo: ITransferRepository) {}
 
   async execute(input: ClaimTransferInput): Promise<ClaimTransferOutput> {
     const claimTime = input.claimTimestamp ?? new Date();

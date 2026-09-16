@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Inject,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -30,8 +31,8 @@ export interface IngestWebhookOutput {
 @Injectable()
 export class IngestWebhookUseCase {
   constructor(
-    private readonly merchantRepo: IMerchantRepository,
-    private readonly transferRepo: ITransferRepository,
+    @Inject('IMerchantRepository') private readonly merchantRepo: IMerchantRepository,
+    @Inject('ITransferRepository') private readonly transferRepo: ITransferRepository,
     private readonly parserFactory: BankParserFactory,
   ) {}
 

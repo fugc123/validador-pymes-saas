@@ -1,4 +1,4 @@
-import { ForbiddenException, NotFoundException, Injectable } from '@nestjs/common';
+import { ForbiddenException, NotFoundException, Injectable, Inject } from '@nestjs/common';
 import {
   IUserRepository,
   IMerchantRepository,
@@ -23,10 +23,10 @@ export interface SelectTenantOutput {
 @Injectable()
 export class SelectTenantUseCase {
   constructor(
-    private readonly userRepo: IUserRepository,
-    private readonly merchantRepo: IMerchantRepository,
-    private readonly membershipRepo: IMembershipRepository,
-    private readonly tokenService: ITokenService,
+    @Inject('IUserRepository') private readonly userRepo: IUserRepository,
+    @Inject('IMerchantRepository') private readonly merchantRepo: IMerchantRepository,
+    @Inject('IMembershipRepository') private readonly membershipRepo: IMembershipRepository,
+    @Inject('ITokenService') private readonly tokenService: ITokenService,
   ) {}
 
   async execute(input: SelectTenantInput): Promise<SelectTenantOutput> {

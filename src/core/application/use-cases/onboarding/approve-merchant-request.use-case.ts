@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Inject,
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
@@ -37,11 +38,11 @@ function slugify(text: string): string {
 @Injectable()
 export class ApproveMerchantRequestUseCase {
   constructor(
-    private readonly requestRepo: IMerchantRequestRepository,
-    private readonly merchantRepo: IMerchantRepository,
-    private readonly userRepo: IUserRepository,
-    private readonly membershipRepo: IMembershipRepository,
-    private readonly subscriptionRepo: ISubscriptionRepository,
+    @Inject('IMerchantRequestRepository') private readonly requestRepo: IMerchantRequestRepository,
+    @Inject('IMerchantRepository') private readonly merchantRepo: IMerchantRepository,
+    @Inject('IUserRepository') private readonly userRepo: IUserRepository,
+    @Inject('IMembershipRepository') private readonly membershipRepo: IMembershipRepository,
+    @Inject('ISubscriptionRepository') private readonly subscriptionRepo: ISubscriptionRepository,
   ) {}
 
   async execute(input: ApproveMerchantRequestInput): Promise<ApproveMerchantRequestOutput> {

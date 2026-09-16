@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
 import { ITransferRepository } from '../../ports/transfer.ports';
 
 export interface VerifyTransferInput {
@@ -35,7 +35,7 @@ function removeDiacritics(str: string): string {
 
 @Injectable()
 export class VerifyTransferUseCase {
-  constructor(private readonly transferRepo: ITransferRepository) {}
+  constructor(@Inject('ITransferRepository') private readonly transferRepo: ITransferRepository) {}
 
   async execute(input: VerifyTransferInput): Promise<VerifyTransferOutput> {
     const maxAgeMinutes = input.maxAgeMinutes ?? 45;

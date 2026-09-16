@@ -1,4 +1,4 @@
-import { UnauthorizedException, ForbiddenException, Injectable } from '@nestjs/common';
+import { UnauthorizedException, ForbiddenException, Injectable, Inject } from '@nestjs/common';
 import {
   IUserRepository,
   IMembershipRepository,
@@ -40,10 +40,10 @@ export type LoginOutput =
 @Injectable()
 export class LoginUseCase {
   constructor(
-    private readonly userRepo: IUserRepository,
-    private readonly membershipRepo: IMembershipRepository,
-    private readonly passwordHasher: IPasswordHasher,
-    private readonly tokenService: ITokenService,
+    @Inject('IUserRepository') private readonly userRepo: IUserRepository,
+    @Inject('IMembershipRepository') private readonly membershipRepo: IMembershipRepository,
+    @Inject('IPasswordHasher') private readonly passwordHasher: IPasswordHasher,
+    @Inject('ITokenService') private readonly tokenService: ITokenService,
   ) {}
 
   async execute(input: LoginInput): Promise<LoginOutput> {
