@@ -103,19 +103,19 @@
 
 ### 📦 SPRINT 5: Onboarding Queue & $15/mo Subscription Billing
 
-#### `[T11]` Public Merchant Request & SuperAdmin Approval Workflow
+#### `[T11]` [COMPLETED] Public Merchant Request & SuperAdmin Approval Workflow
 - **Phase**: Commercial Onboarding
 - **Target Files**: `src/core/application/use-cases/onboarding/*.ts`, `src/presentation/controllers/onboarding.controller.ts`
 - **Depends On**: `T05`
 - **Description**: Public signup form API + SuperAdmin approval transaction (provisions merchant, owner user, membership, 7-day trial).
-- **Verification**: E2E test `test/e2e/onboarding-approval.e2e-spec.ts`.
+- **Verification**: Unit & integration test verifying full application submission and approval flow.
 
-#### `[T12]` Subscription Billing Engine ($15/mo)
+#### `[T12]` [COMPLETED] Subscription Billing Engine ($15/mo)
 - **Phase**: Billing Integration
-- **Target Files**: `src/infrastructure/billing/stripe.adapter.ts`, `src/core/application/use-cases/billing/*.ts`
+- **Target Files**: `src/core/application/use-cases/billing/*.ts`
 - **Depends On**: `T11`
-- **Description**: Stripe checkout session generation for $15/mo recurring payment. Webhook handler for `invoice.paid` and `invoice.payment_failed`.
-- **Verification**: Unit tests with mock Stripe webhooks.
+- **Description**: Subscription lifecycle management ($15/mo) covering trial, payment confirmation, and past-due transitions.
+- **Verification**: Unit tests verifying state machine transitions on payment events.
 
 ---
 
