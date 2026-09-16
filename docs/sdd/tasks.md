@@ -49,19 +49,19 @@
 
 ### 📦 SPRINT 2: Authentication & Organization Memberships (ADR-008)
 
-#### `[T05]` Two-Stage Authentication Use Cases
+#### `[T05]` [COMPLETED] Two-Stage Authentication Use Cases
 - **Phase**: Application Layer
 - **Target Files**: `src/core/application/use-cases/auth/*.ts` (`LoginUseCase`, `SelectTenantUseCase`, `SwitchTenantUseCase`)
 - **Depends On**: `T04`
 - **Description**: Implement credential verification, multi-membership resolution, fast-path auto-select, and scoped JWT issuance.
 - **Verification**: Unit tests in `test/unit/auth-memberships.spec.ts` covering single-store, multi-store, and invalid switch attempts.
 
-#### `[T06]` Tri-Tier RBAC Guards (SuperAdmin, MerchantOwner, Cashier)
+#### `[T06]` [COMPLETED] Tri-Tier RBAC Guards (SuperAdmin, MerchantOwner, Cashier)
 - **Phase**: Presentation Layer
 - **Target Files**: `src/presentation/guards/roles.guard.ts`, `src/presentation/decorators/roles.decorator.ts`
 - **Depends On**: `T05`
 - **Description**: Implement role evaluation based on scoped JWT claims.
-- **Verification**: E2E test `test/e2e/auth-rbac.e2e-spec.ts` verifying that `CASHIER` cannot hit merchant admin routes.
+- **Verification**: Unit & E2E tests verifying that `CASHIER` cannot hit merchant admin routes while `MERCHANT_OWNER` and `SUPER_ADMIN` have appropriate authorization.
 
 ---
 
