@@ -205,7 +205,7 @@ export const SuperAdminPanel: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#0B0F19] text-gray-100 flex flex-col">
       {/* Header */}
-      <header className="h-16 border-b border-[#24324D] px-8 flex items-center justify-between bg-[#151D2F]">
+      <header className="border-b border-[#24324D] bg-[#151D2F] px-4 sm:px-8 py-3 h-auto min-h-16 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center space-x-3">
           <div className="p-2 bg-purple-500/10 text-purple-400 rounded-lg">
             <ShieldAlert className="w-5 h-5" />
@@ -223,7 +223,7 @@ export const SuperAdminPanel: React.FC = () => {
         </div>
       </header>
 
-      <main className="flex-1 max-w-7xl w-full mx-auto p-8 space-y-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
         {/* Payment Info Card */}
         <div className="bg-[#151D2F] border border-[#24324D] rounded-2xl p-6 shadow-xl flex items-center space-x-6">
           <div className="p-4 bg-emerald-500/10 text-emerald-400 rounded-xl">
@@ -240,7 +240,7 @@ export const SuperAdminPanel: React.FC = () => {
         </div>
 
         {/* Metrics Row */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <div className="bg-[#151D2F] border border-[#24324D] rounded-2xl p-6 shadow-xl">
             <div className="flex items-center justify-between text-gray-400 mb-3">
               <span className="text-xs uppercase font-extrabold tracking-wider">Comercios Activos</span>
@@ -271,13 +271,13 @@ export const SuperAdminPanel: React.FC = () => {
               <DollarSign className="w-5 h-5 text-emerald-400" />
               <h2 className="text-lg font-bold text-white">Reportes de Pagos de Suscripción (SIPAP)</h2>
             </div>
-            <div className="flex items-center space-x-2 bg-[#0B0F19] p-2 rounded-xl border border-[#24324D]">
+            <div className="flex flex-col sm:flex-row items-center gap-2 bg-[#0B0F19] p-2 rounded-xl border border-[#24324D]">
               <input
                 type="text"
                 value={simulationPayer}
                 onChange={(e) => setSimulationPayer(e.target.value)}
                 placeholder="Nombre del Pagador"
-                className="bg-transparent border-none outline-none text-xs text-white px-2 w-40"
+                className="bg-transparent border-none outline-none text-xs text-white px-2 w-full sm:w-40"
               />
               <button
                 onClick={handleSimulateTransfer}
@@ -295,7 +295,7 @@ export const SuperAdminPanel: React.FC = () => {
           )}
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full text-left text-xs min-w-[650px]">
               <thead className="bg-[#0B0F19] text-gray-400 uppercase font-mono">
                 <tr>
                   <th className="p-3">Comercio</th>
@@ -354,7 +354,7 @@ export const SuperAdminPanel: React.FC = () => {
             <h2 className="text-lg font-bold text-white">Solicitudes de Alta</h2>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full text-left text-xs min-w-[650px]">
               <thead className="bg-[#0B0F19] text-gray-400 uppercase font-mono">
                 <tr>
                   <th className="p-3">Comercio</th>
@@ -409,7 +409,7 @@ export const SuperAdminPanel: React.FC = () => {
             <h2 className="text-lg font-bold text-white">Suscripciones</h2>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full text-left text-xs min-w-[650px]">
               <thead className="bg-[#0B0F19] text-gray-400 uppercase font-mono">
                 <tr>
                   <th className="p-3">Comercio (Tenant)</th>

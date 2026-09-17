@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import {
   TrendingUp,
@@ -16,6 +16,7 @@ import {
   Clock,
   ShieldCheck,
   AlertCircle,
+  Search,
 } from 'lucide-react';
 
 interface MetricTransfer {
@@ -55,24 +56,35 @@ export const OwnerDashboard: React.FC = () => {
   const [reportSuccess, setReportSuccess] = useState<string | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
 
+  const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
+  
+  // Validation environment states
+  const [validationAmount, setValidationAmount] = useState('');
+  const [validationPayerName, setValidationPayerName] = useState('');
+  const [validationIsLoading, setValidationIsLoading] = useState(false);
+  const [validationResult, setValidationResult] = useState<any>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [claimIsLoading, setClaimIsLoading] = useState(false);
+
+  // Audit states
+  const [auditSearch, setAuditSearch] = useState('');
+  const [auditStatusFilter, setAuditStatusFilter] = useState<'ALL' | 'PENDING' | 'CLAIMED'>('ALL');
+
   const tenantSlug = activeTenant?.tenantId || 'kiosko-san-roque';
   const tenantSecret = 'sec_kiosko_san_roque_pilot_2026';
   const hostUrl = window.location.origin;
 
-  useEffect(() => {
-    const fetchSub = async () => {
-      if (!token) return;
-      try {
-        const res = await fetch('/api/v1/subscription/status', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setSubscription(data);
-        }
-      } catch(e) {}
-    };
-    fetchSub();
+  const fetchSub = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await fetch('/api/v1/subscription/status', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSubscription(data);
+      }
+    } catch(e) {}
   }, [token]);
 
   const fetchMetrics = useCallback(async () => {
@@ -92,14 +104,20 @@ export const OwnerDashboard: React.FC = () => {
       console.error('Failed to fetch real-time metrics', err);
     } finally {
       setIsLoadingMetrics(false);
+      setLastSyncTime(new Date());
     }
   }, [token]);
 
-  useEffect(() => {
+  const fetchAllData = useCallback(() => {
     fetchMetrics();
-    const interval = setInterval(fetchMetrics, 8000);
+    fetchSub();
+  }, [fetchMetrics, fetchSub]);
+
+  useEffect(() => {
+    fetchAllData();
+    const interval = setInterval(fetchAllData, 30000);
     return () => clearInterval(interval);
-  }, [fetchMetrics]);
+  }, [fetchAllData]);
 
   // Personalized Google Apps Script with user variables already injected!
   const personalizedGasScript = `/**
@@ -224,10 +242,79 @@ Estado: Transferencia acreditada en cuenta`,
     }
   };
 
+  const handleVerifyTransfer = async () => {
+    if (!token || !validationAmount) return;
+    setValidationIsLoading(true);
+    setValidationResult(null);
+    setValidationError(null);
+    try {
+      const res = await fetch('/api/v1/cashier/transfers/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ amount: Number(validationAmount), payerName: validationPayerName || undefined })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setValidationResult(data.match);
+      } else {
+        setValidationError('No se encontró ninguna transferencia pendiente que coincida con ese monto y nombre.');
+      }
+    } catch (e) {
+      setValidationError('Error de conexión al verificar transferencia.');
+    } finally {
+      setValidationIsLoading(false);
+    }
+  };
+
+  const handleClaimTransfer = async () => {
+    if (!token || !validationResult) return;
+    setClaimIsLoading(true);
+    try {
+      const res = await fetch('/api/v1/cashier/transfers/claim', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ transferId: validationResult.id || validationResult.operationId })
+      });
+      if (res.ok) {
+        setValidationResult({ ...validationResult, status: 'claimed' });
+        fetchAllData();
+      } else {
+        alert('Error al registrar cobro');
+      }
+    } catch (e) {
+      alert('Error de conexión');
+    } finally {
+      setClaimIsLoading(false);
+    }
+  };
+
+  const filteredTransfers = useMemo(() => {
+    if (!metrics?.recentTransfers) return [];
+    return metrics.recentTransfers.filter(tr => {
+      const matchesSearch = auditSearch === '' || 
+        tr.operationId.toLowerCase().includes(auditSearch.toLowerCase()) || 
+        tr.payerName.toLowerCase().includes(auditSearch.toLowerCase());
+      const matchesStatus = auditStatusFilter === 'ALL' || 
+        (auditStatusFilter === 'PENDING' && tr.status !== 'claimed') || 
+        (auditStatusFilter === 'CLAIMED' && tr.status === 'claimed');
+      return matchesSearch && matchesStatus;
+    });
+  }, [metrics?.recentTransfers, auditSearch, auditStatusFilter]);
+
+  const claimedCount = metrics?.recentTransfers?.filter(t => t.status === 'claimed').length || 0;
+  const pendingCount = metrics?.recentTransfers?.filter(t => t.status !== 'claimed').length || 0;
+  const totalCount = metrics?.recentTransfers?.length || 0;
+
   return (
     <div className="min-h-screen bg-[#0B0F19] text-gray-100 flex flex-col">
       {/* Top Bar */}
-      <header className="h-16 border-b border-[#24324D] px-8 flex items-center justify-between bg-[#151D2F]">
+      <header className="border-b border-[#24324D] bg-[#151D2F] px-4 sm:px-8 py-3 h-auto min-h-16 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center space-x-3">
           <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-lg">
             <Building2 className="w-5 h-5" />
@@ -235,15 +322,25 @@ Estado: Transferencia acreditada en cuenta`,
           <div>
             <div className="font-bold text-white flex items-center space-x-2">
               <span>{activeTenant?.merchantName} — Panel de Dueño</span>
+              <div className="flex items-center space-x-2 ml-2 px-2.5 py-0.5 bg-[#0B0F19] rounded-full border border-[#24324D]">
+                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                <span className="text-[10px] text-emerald-400 font-medium">En vivo (actualización continua)</span>
+              </div>
+            </div>
+            <div className="flex items-center space-x-4 mt-1">
+              <div className="text-xs text-gray-400">Dueño: {user?.fullName}</div>
+              <div className="text-[10px] text-gray-500 font-mono">
+                Última sincronización: {lastSyncTime.toLocaleTimeString()}
+              </div>
               <button
-                onClick={() => fetchMetrics()}
-                title="Actualizar métricas"
-                className="p-1 text-gray-400 hover:text-emerald-400 rounded transition-colors"
+                onClick={() => fetchAllData()}
+                className="flex items-center space-x-1.5 px-2 py-0.5 bg-[#24324D] hover:bg-[#2d3f63] text-gray-300 rounded text-[10px] transition-colors"
+                disabled={isLoadingMetrics}
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${isLoadingMetrics ? 'animate-spin text-emerald-400' : ''}`} />
+                <RefreshCw className={`w-3 h-3 ${isLoadingMetrics ? 'animate-spin text-emerald-400' : ''}`} />
+                <span>Sincronizar Ahora</span>
               </button>
             </div>
-            <div className="text-xs text-gray-400">Dueño: {user?.fullName}</div>
           </div>
         </div>
 
@@ -262,9 +359,9 @@ Estado: Transferencia acreditada en cuenta`,
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 max-w-6xl w-full mx-auto p-8 space-y-8">
+      <main className="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
         {/* Metric Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <div className="bg-[#151D2F] border border-[#24324D] rounded-2xl p-6 shadow-xl">
             <div className="flex items-center justify-between text-gray-400 mb-3">
               <span className="text-xs uppercase font-extrabold tracking-wider">Total Cobrado Hoy</span>
@@ -332,17 +429,17 @@ Estado: Transferencia acreditada en cuenta`,
               <label className="block text-xs font-bold text-gray-400 mb-1">
                 ¿Quién realizó la transferencia?
               </label>
-              <div className="flex space-x-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <input
                   type="text"
                   value={payerName}
                   onChange={(e) => setPayerName(e.target.value)}
                   placeholder="Ej: Franco Galeano o Distribuidora SRL"
-                  className="flex-1 bg-[#0B0F19] border border-[#24324D] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                  className="w-full sm:flex-1 bg-[#0B0F19] border border-[#24324D] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
                 />
                 <button
                   onClick={() => setPayerName(user?.fullName || 'Dueño')}
-                  className="px-3 py-2 bg-[#24324D] hover:bg-[#2d3f63] text-gray-300 text-xs rounded-xl transition-colors whitespace-nowrap"
+                  className="w-full sm:w-auto px-3 py-2 bg-[#24324D] hover:bg-[#2d3f63] text-gray-300 text-xs rounded-xl transition-colors whitespace-nowrap"
                 >
                   Fui yo ({user?.fullName || 'Dueño'})
                 </button>
@@ -369,9 +466,103 @@ Estado: Transferencia acreditada en cuenta`,
           </div>
         </div>
 
+        {/* Ambiente de Validación en Tiempo Real */}
+        <div className="bg-[#151D2F] border border-[#24324D] rounded-2xl p-6 shadow-xl space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Search className="w-5 h-5 text-indigo-400" />
+              <h2 className="text-lg font-bold text-white">Ambiente de Validación en Tiempo Real (Cotejo de Transferencias)</h2>
+            </div>
+          </div>
+          <div className="bg-[#0B0F19] rounded-xl p-6 border border-[#24324D]">
+            <div className="flex flex-col sm:flex-row gap-3 mb-4">
+              <div className="flex-1">
+                <label className="block text-xs font-bold text-gray-400 mb-1">Monto (Gs.)</label>
+                <input
+                  type="number"
+                  value={validationAmount}
+                  onChange={(e) => setValidationAmount(e.target.value)}
+                  placeholder="Ej: 26000"
+                  className="w-full bg-[#151D2F] border border-[#24324D] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                />
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs font-bold text-gray-400 mb-1">Nombre del Pagador (Opcional)</label>
+                <input
+                  type="text"
+                  value={validationPayerName}
+                  onChange={(e) => setValidationPayerName(e.target.value)}
+                  placeholder="Ej: Alejandra Chena"
+                  className="w-full bg-[#151D2F] border border-[#24324D] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                />
+              </div>
+            </div>
+            <button
+              onClick={handleVerifyTransfer}
+              disabled={validationIsLoading || !validationAmount}
+              className="w-full sm:w-auto px-4 py-2 bg-indigo-500 hover:bg-indigo-400 text-white font-bold text-xs rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+            >
+              <Search className="w-4 h-4" />
+              <span>{validationIsLoading ? 'Buscando...' : '🔍 Verificar Transferencia'}</span>
+            </button>
+
+            {validationError && (
+              <div className="mt-4 p-4 bg-red-900/20 border border-red-500/30 rounded-xl flex items-start space-x-3">
+                <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                <p className="text-red-400 text-sm">{validationError}</p>
+              </div>
+            )}
+
+            {validationResult && (
+              <div className="mt-4 p-4 bg-emerald-900/20 border border-emerald-500/30 rounded-xl space-y-4">
+                <div className="flex items-start space-x-3">
+                  <Check className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                  <div>
+                    <h3 className="text-emerald-400 font-bold text-sm mb-2">¡Transferencia Encontrada!</h3>
+                    <div className="grid grid-cols-2 gap-4 text-xs">
+                      <div>
+                        <span className="text-gray-400 block mb-1">Operación ID</span>
+                        <span className="text-white font-mono">{validationResult.operationId}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-400 block mb-1">Pagador</span>
+                        <span className="text-white font-semibold">{validationResult.payerName}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-400 block mb-1">Banco</span>
+                        <span className="text-white">{validationResult.payerBank || 'SIPAP'}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-400 block mb-1">Monto</span>
+                        <span className="text-white font-mono font-bold text-emerald-400">
+                          Gs. {validationResult.amount?.toLocaleString('es-PY')}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                {validationResult.status !== 'claimed' ? (
+                  <button
+                    onClick={handleClaimTransfer}
+                    disabled={claimIsLoading}
+                    className="w-full py-2 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold text-xs rounded-xl transition-colors disabled:opacity-50"
+                  >
+                    {claimIsLoading ? 'Registrando...' : '✓ Registrar Cobro en Caja'}
+                  </button>
+                ) : (
+                  <div className="w-full py-2 bg-[#24324D] text-gray-300 font-bold text-xs rounded-xl text-center">
+                    Transferencia ya cobrada
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* 1-Click Interactive Google Connection Wizard */}
         <div className="bg-[#151D2F] border-2 border-emerald-500/40 rounded-3xl p-8 shadow-2xl space-y-6">
-          <div className="flex items-start justify-between">
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className="p-3 bg-emerald-500/20 text-emerald-400 rounded-2xl">
                 <Zap className="w-7 h-7" />
@@ -386,10 +577,10 @@ Estado: Transferencia acreditada en cuenta`,
               </div>
             </div>
 
-            <div className="flex space-x-3">
+            <div className="flex flex-col sm:flex-row w-full sm:w-auto gap-2">
               <button
                 onClick={handleCopyPersonalizedScript}
-                className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/20 flex items-center space-x-2 transition-all"
+                className="w-full sm:w-auto px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/20 flex items-center justify-center space-x-2 transition-all"
               >
                 {copiedScript ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                 <span>{copiedScript ? '¡Script Copiado al Portapapeles!' : '1. Copiar Mi Script Personalizado'}</span>
@@ -399,7 +590,7 @@ Estado: Transferencia acreditada en cuenta`,
                 href="https://script.new"
                 target="_blank"
                 rel="noreferrer"
-                className="px-5 py-2.5 bg-[#0B0F19] hover:bg-[#1A253C] border border-[#24324D] hover:border-emerald-500/40 text-white font-bold text-xs rounded-xl flex items-center space-x-2 transition-all"
+                className="w-full sm:w-auto px-5 py-2.5 bg-[#0B0F19] hover:bg-[#1A253C] border border-[#24324D] hover:border-emerald-500/40 text-white font-bold text-xs rounded-xl flex items-center justify-center space-x-2 transition-all"
               >
                 <span>2. Abrir Google Apps Script</span>
                 <ExternalLink className="w-4 h-4 text-emerald-400" />
@@ -408,7 +599,7 @@ Estado: Transferencia acreditada en cuenta`,
           </div>
 
           {/* Step by step cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
             <div className="bg-[#0B0F19]/80 border border-[#24324D] rounded-2xl p-4 flex flex-col justify-between">
               <div className="space-y-2">
                 <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold flex items-center justify-center">
@@ -488,14 +679,45 @@ Estado: Transferencia acreditada en cuenta`,
               <Clock className="w-5 h-5 text-emerald-400" />
               <h2 className="text-lg font-bold text-white">Auditoría de Transferencias en Vivo</h2>
             </div>
-            <div className="text-xs text-gray-400">
-              {metrics?.recentTransfers?.length ?? 0} operaciones registradas
+          </div>
+          
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-[#0B0F19] p-4 rounded-xl border border-[#24324D]">
+            <div className="relative w-full sm:w-64">
+              <Search className="w-4 h-4 absolute left-3 top-2.5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Buscar ID o Pagador..."
+                value={auditSearch}
+                onChange={(e) => setAuditSearch(e.target.value)}
+                className="w-full bg-[#151D2F] border border-[#24324D] rounded-lg pl-9 pr-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 transition-colors"
+              />
+            </div>
+            
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setAuditStatusFilter('ALL')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${auditStatusFilter === 'ALL' ? 'bg-[#24324D] text-white' : 'text-gray-400 hover:text-white'}`}
+              >
+                Todas ({totalCount})
+              </button>
+              <button
+                onClick={() => setAuditStatusFilter('PENDING')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${auditStatusFilter === 'PENDING' ? 'bg-amber-500/20 text-amber-400' : 'text-gray-400 hover:text-white'}`}
+              >
+                ⏳ Pendientes ({pendingCount})
+              </button>
+              <button
+                onClick={() => setAuditStatusFilter('CLAIMED')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${auditStatusFilter === 'CLAIMED' ? 'bg-emerald-500/20 text-emerald-400' : 'text-gray-400 hover:text-white'}`}
+              >
+                ✓ Cobradas ({claimedCount})
+              </button>
             </div>
           </div>
 
-          {metrics?.recentTransfers && metrics.recentTransfers.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+          {filteredTransfers.length > 0 ? (
+            <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+              <table className="w-full text-left text-xs min-w-[600px]">
                 <thead className="bg-[#0B0F19] text-gray-400 uppercase font-mono">
                   <tr>
                     <th className="p-3">Operación</th>
@@ -507,7 +729,7 @@ Estado: Transferencia acreditada en cuenta`,
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#24324D]">
-                  {metrics.recentTransfers.map((tr) => (
+                  {filteredTransfers.map((tr) => (
                     <tr key={tr.id} className="hover:bg-[#1A253C]/40 transition-colors">
                       <td className="p-3 font-mono text-gray-300 font-semibold">{tr.operationId}</td>
                       <td className="p-3 font-semibold text-white">{tr.payerName}</td>
@@ -548,8 +770,8 @@ Estado: Transferencia acreditada en cuenta`,
             </button>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+          <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+            <table className="w-full text-left text-xs min-w-[500px]">
               <thead className="bg-[#0B0F19] text-gray-400 uppercase font-mono">
                 <tr>
                   <th className="p-3">Nombre</th>

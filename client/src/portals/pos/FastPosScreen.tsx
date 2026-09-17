@@ -189,7 +189,7 @@ export const FastPosScreen: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#0B0F19] text-gray-100 flex flex-col">
       {/* Top Navbar */}
-      <header className="h-16 border-b border-[#24324D] px-6 flex items-center justify-between bg-[#151D2F]">
+      <header className="border-b border-[#24324D] bg-[#151D2F] px-3 sm:px-6 py-2.5 h-auto min-h-14 flex items-center justify-between gap-2">
         <div className="flex items-center space-x-3">
           <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-lg">
             <Zap className="w-5 h-5" />
@@ -231,21 +231,21 @@ export const FastPosScreen: React.FC = () => {
         if (status === 'cancelled' || status === 'past_due') {
           return (
             <div className="mx-4 mt-2 px-4 py-3 rounded-xl text-sm font-mono bg-red-500/10 border border-red-500/30 text-red-300 text-center">
-              ⚠️ Suscripción vencida. Transferí Gs. 150.000 a Alias: 5644334 (Franco Girala) para reactivar.
+              ⚠️ La suscripción de este comercio está vencida. Avisale al dueño o administrador para reactivar el servicio.
             </div>
           );
         }
         if (daysRemaining <= 5 && status === 'trial') {
           return (
             <div className="mx-4 mt-2 px-4 py-3 rounded-xl text-sm font-mono bg-amber-500/10 border border-amber-500/30 text-amber-300 text-center">
-              ⏳ Tu período de prueba termina en {daysRemaining} días. Transferí Gs. 150.000 a Alias: 5644334 (Franco Girala) para continuar.
+              ⏳ El período de prueba de este comercio termina en {daysRemaining} días. Avisale al dueño o administrador.
             </div>
           );
         }
         if (daysRemaining <= 5 && status === 'active') {
           return (
             <div className="mx-4 mt-2 px-4 py-3 rounded-xl text-sm font-mono bg-amber-500/10 border border-amber-500/30 text-amber-300 text-center">
-              ⏳ Tu suscripción vence en {daysRemaining} días. Renová transfiriendo Gs. 150.000 a Alias: 5644334 (Franco Girala).
+              ⏳ La suscripción de este comercio vence en {daysRemaining} días. Avisale al dueño o administrador.
             </div>
           );
         }
@@ -253,9 +253,9 @@ export const FastPosScreen: React.FC = () => {
       })()}
 
       {/* Main POS Workspace */}
-      <main className="flex-1 max-w-3xl w-full mx-auto p-6 flex flex-col justify-center">
+      <main className="flex-1 max-w-xl mx-auto w-full p-3 sm:p-6 flex flex-col justify-center">
         {/* Verification Form */}
-        <div className="bg-[#151D2F] border border-[#24324D] rounded-3xl p-8 shadow-2xl">
+        <div className="bg-[#151D2F] border border-[#24324D] rounded-2xl sm:rounded-3xl p-4 sm:p-8 shadow-2xl">
           <form onSubmit={handleSearch} className="space-y-6">
             <div>
               <label className="block text-xs font-extrabold uppercase tracking-wider text-emerald-400 mb-2">
@@ -269,7 +269,7 @@ export const FastPosScreen: React.FC = () => {
                   required
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  className="w-full bg-[#0B0F19] border-2 border-[#24324D] focus:border-emerald-500 rounded-2xl pl-16 pr-6 py-3.5 text-3xl font-mono font-extrabold text-white tracking-wide focus:outline-none transition-colors"
+                  className="w-full bg-[#0B0F19] border-2 border-[#24324D] focus:border-emerald-500 rounded-2xl pl-16 pr-6 py-3.5 text-2xl sm:text-4xl font-mono font-extrabold text-white tracking-wide focus:outline-none transition-colors"
                   placeholder="26.000"
                 />
               </div>
@@ -292,7 +292,7 @@ export const FastPosScreen: React.FC = () => {
               <button
                 type="submit"
                 disabled={searching || subscription?.status === 'cancelled' || subscription?.status === 'past_due'}
-                className="flex-1 py-4 bg-emerald-500 hover:bg-emerald-400 text-gray-950 text-lg font-extrabold rounded-2xl shadow-xl shadow-emerald-500/20 hover:shadow-emerald-500/30 transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 py-3.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 text-base sm:text-lg font-extrabold rounded-2xl shadow-xl shadow-emerald-500/20 hover:shadow-emerald-500/30 transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Search className="w-5 h-5" />
                 <span>Verificar Transferencia</span>
@@ -312,7 +312,7 @@ export const FastPosScreen: React.FC = () => {
 
         {/* State Display: Match Success Card */}
         {match && (
-          <div className="mt-6 bg-emerald-950/40 border-2 border-emerald-500 rounded-3xl p-8 shadow-2xl shadow-emerald-500/10 animate-fade-in">
+          <div className="mt-6 bg-emerald-950/40 border-2 border-emerald-500 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-2xl shadow-emerald-500/10 animate-fade-in">
             <div className="flex items-start justify-between">
               <div className="flex items-center space-x-4">
                 <div className="p-3 bg-emerald-500 text-gray-950 rounded-2xl">
@@ -368,7 +368,7 @@ export const FastPosScreen: React.FC = () => {
 
         {/* State Display: Replay Attack Warning */}
         {replayAlert && (
-          <div className="mt-6 bg-red-950/60 border-2 border-red-500 rounded-3xl p-8 shadow-2xl shadow-red-500/20 animate-shake">
+          <div className="mt-6 bg-red-950/60 border-2 border-red-500 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-2xl shadow-red-500/20 animate-shake">
             <div className="flex items-start space-x-4">
               <div className="p-3 bg-red-500 text-white rounded-2xl animate-pulse">
                 <AlertTriangle className="w-8 h-8" />
