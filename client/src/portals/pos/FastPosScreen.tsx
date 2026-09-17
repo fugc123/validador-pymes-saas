@@ -24,8 +24,14 @@ interface TransferResult {
   status: string;
 }
 
+interface SubscriptionStatus {
+  status: string;
+  daysRemaining: number;
+}
+
 export const FastPosScreen: React.FC = () => {
   const { user, activeTenant, logout, switchTenant, availableMemberships, token } = useAuth();
+  const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
   const [amount, setAmount] = useState<string>('');
   const [payerName, setPayerName] = useState<string>('');
   const [searching, setSearching] = useState(false);
@@ -39,6 +45,22 @@ export const FastPosScreen: React.FC = () => {
   useEffect(() => {
     amountInputRef.current?.focus();
   }, []);
+
+  useEffect(() => {
+    const fetchSub = async () => {
+      if (!token) return;
+      try {
+        const res = await fetch('/api/v1/subscription/status', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setSubscription(data);
+        }
+      } catch(e) {}
+    };
+    fetchSub();
+  }, [token]);
 
   const handleSearch = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -204,6 +226,32 @@ export const FastPosScreen: React.FC = () => {
         </div>
       </header>
 
+      {subscription && (() => {
+        const { status, daysRemaining } = subscription;
+        if (status === 'cancelled' || status === 'past_due') {
+          return (
+            <div className="mx-4 mt-2 px-4 py-3 rounded-xl text-sm font-mono bg-red-500/10 border border-red-500/30 text-red-300 text-center">
+              ⚠️ Suscripción vencida. Transferí Gs. 150.000 a Alias: 5644334 (Franco Girala) para reactivar.
+            </div>
+          );
+        }
+        if (daysRemaining <= 5 && status === 'trial') {
+          return (
+            <div className="mx-4 mt-2 px-4 py-3 rounded-xl text-sm font-mono bg-amber-500/10 border border-amber-500/30 text-amber-300 text-center">
+              ⏳ Tu período de prueba termina en {daysRemaining} días. Transferí Gs. 150.000 a Alias: 5644334 (Franco Girala) para continuar.
+            </div>
+          );
+        }
+        if (daysRemaining <= 5 && status === 'active') {
+          return (
+            <div className="mx-4 mt-2 px-4 py-3 rounded-xl text-sm font-mono bg-amber-500/10 border border-amber-500/30 text-amber-300 text-center">
+              ⏳ Tu suscripción vence en {daysRemaining} días. Renová transfiriendo Gs. 150.000 a Alias: 5644334 (Franco Girala).
+            </div>
+          );
+        }
+        return null;
+      })()}
+
       {/* Main POS Workspace */}
       <main className="flex-1 max-w-3xl w-full mx-auto p-6 flex flex-col justify-center">
         {/* Verification Form */}
@@ -243,8 +291,8 @@ export const FastPosScreen: React.FC = () => {
             <div className="flex space-x-3 pt-2">
               <button
                 type="submit"
-                disabled={searching}
-                className="flex-1 py-4 bg-emerald-500 hover:bg-emerald-400 text-gray-950 text-lg font-extrabold rounded-2xl shadow-xl shadow-emerald-500/20 hover:shadow-emerald-500/30 transition-all flex items-center justify-center space-x-2"
+                disabled={searching || subscription?.status === 'cancelled' || subscription?.status === 'past_due'}
+                className="flex-1 py-4 bg-emerald-500 hover:bg-emerald-400 text-gray-950 text-lg font-extrabold rounded-2xl shadow-xl shadow-emerald-500/20 hover:shadow-emerald-500/30 transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Search className="w-5 h-5" />
                 <span>Verificar Transferencia</span>

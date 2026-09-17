@@ -288,6 +288,9 @@ export class InMemoryMerchantRequestRepository implements IMerchantRequestReposi
   async findPending(): Promise<MerchantRequest[]> {
     return this.requests.filter((r) => r.isPending());
   }
+  async findAll(): Promise<MerchantRequest[]> {
+    return [...this.requests.values()];
+  }
 }
 
 @Injectable()
@@ -309,5 +312,8 @@ export class InMemorySubscriptionRepository implements ISubscriptionRepository {
   }
   async findByTenantId(tenantId: string): Promise<Subscription | null> {
     return this.subs.find((s) => s.tenantId === tenantId) || null;
+  }
+  async findAll(): Promise<Subscription[]> {
+    return [...this.subs.values()];
   }
 }

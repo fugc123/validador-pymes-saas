@@ -1,8 +1,10 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
+  Inject,
   Param,
   Post,
   UseGuards,
@@ -10,6 +12,7 @@ import {
 import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
 import { SubmitMerchantRequestUseCase } from '../../core/application/use-cases/onboarding/submit-merchant-request.use-case';
 import { ApproveMerchantRequestUseCase } from '../../core/application/use-cases/onboarding/approve-merchant-request.use-case';
+import { IMerchantRequestRepository } from '../../core/application/ports/onboarding.ports';
 import { Roles } from '../decorators/roles.decorator';
 import { RolesGuard } from '../guards/roles.guard';
 
@@ -40,6 +43,8 @@ export class OnboardingController {
   constructor(
     private readonly submitUseCase: SubmitMerchantRequestUseCase,
     private readonly approveUseCase: ApproveMerchantRequestUseCase,
+    @Inject('IMerchantRequestRepository')
+    private readonly requestRepo: IMerchantRequestRepository,
   ) {}
 
   @Post('request')
@@ -54,5 +59,12 @@ export class OnboardingController {
   @HttpCode(HttpStatus.OK)
   async approveRequest(@Param('id') requestId: string) {
     return this.approveUseCase.execute({ requestId });
+  }
+
+  @Get('superadmin/merchant-requests')
+  @Roles('SUPER_ADMIN')
+  @UseGuards(RolesGuard)
+  async listRequests() {
+    return this.requestRepo.findAll();
   }
 }

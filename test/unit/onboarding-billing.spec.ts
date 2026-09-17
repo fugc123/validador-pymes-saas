@@ -26,6 +26,7 @@ describe('Merchant Onboarding & Subscription Billing Lifecycle (T11, T12)', () =
       save: jest.fn().mockImplementation(async (r) => r),
       findById: jest.fn(),
       findPending: jest.fn(),
+      findAll: jest.fn(),
     };
     mockMerchantRepo = {
       save: jest.fn().mockImplementation(async (m) => m),
@@ -45,6 +46,7 @@ describe('Merchant Onboarding & Subscription Billing Lifecycle (T11, T12)', () =
     mockSubRepo = {
       save: jest.fn().mockImplementation(async (s) => s),
       findByTenantId: jest.fn(),
+      findAll: jest.fn(),
     };
   });
 

@@ -7,6 +7,7 @@ import { WebhookController } from './presentation/controllers/webhook.controller
 import { CashierController } from './presentation/controllers/cashier.controller';
 import { OnboardingController } from './presentation/controllers/onboarding.controller';
 import { MerchantController } from './presentation/controllers/merchant.controller';
+import { SubscriptionController } from './presentation/controllers/subscription.controller';
 
 // Use Cases
 import { LoginUseCase } from './core/application/use-cases/auth/login.use-case';
@@ -49,6 +50,7 @@ import { AuthMiddleware } from './presentation/middlewares/auth.middleware';
     CashierController,
     OnboardingController,
     MerchantController,
+    SubscriptionController,
   ],
   providers: [
     BankParserFactory,

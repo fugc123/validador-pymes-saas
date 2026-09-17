@@ -37,16 +37,38 @@ interface MetricsData {
   recentTransfers: MetricTransfer[];
 }
 
+interface SubscriptionStatus {
+  status: string;
+  daysRemaining: number;
+}
+
 export const OwnerDashboard: React.FC = () => {
   const { user, activeTenant, logout, token } = useAuth();
   const [copiedScript, setCopiedScript] = useState(false);
   const [testStatus, setTestStatus] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<MetricsData | null>(null);
   const [isLoadingMetrics, setIsLoadingMetrics] = useState(false);
+  const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
 
   const tenantSlug = activeTenant?.tenantId || 'kiosko-san-roque';
   const tenantSecret = 'sec_kiosko_san_roque_pilot_2026';
   const hostUrl = window.location.origin;
+
+  useEffect(() => {
+    const fetchSub = async () => {
+      if (!token) return;
+      try {
+        const res = await fetch('/api/v1/subscription/status', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setSubscription(data);
+        }
+      } catch(e) {}
+    };
+    fetchSub();
+  }, [token]);
 
   const fetchMetrics = useCallback(async () => {
     if (!token) return;
@@ -236,14 +258,27 @@ Estado: Transferencia acreditada en cuenta`,
             </div>
           </div>
 
-          <div className="bg-[#151D2F] border border-[#24324D] rounded-2xl p-6 shadow-xl">
+          <div className={`bg-[#151D2F] border rounded-2xl p-6 shadow-xl ${subscription?.status === 'past_due' || subscription?.status === 'cancelled' ? 'border-red-500/50 bg-red-900/10' : 'border-[#24324D]'}`}>
             <div className="flex items-center justify-between text-gray-400 mb-3">
               <span className="text-xs uppercase font-extrabold tracking-wider">Próxima Facturación</span>
               <CreditCard className="w-5 h-5 text-amber-400" />
             </div>
             <div className="text-3xl font-mono font-extrabold text-white">Gs. 150.000</div>
-            <div className="text-xs text-gray-400 mt-2">
-              <span className="text-emerald-400 font-semibold">Trial activo por 7 días</span> (0% comisiones)
+            <div className="text-xs mt-2 space-y-1">
+              {subscription ? (
+                <>
+                  <div>
+                    {subscription.status === 'trial' && <span className="text-blue-400 font-semibold">Trial (Faltan {subscription.daysRemaining} días)</span>}
+                    {subscription.status === 'active' && <span className="text-emerald-400 font-semibold">Activo (Vence en {subscription.daysRemaining} días)</span>}
+                    {(subscription.status === 'past_due' || subscription.status === 'cancelled') && <span className="text-red-400 font-bold">Vencido</span>}
+                  </div>
+                  <div className={subscription.status === 'past_due' || subscription.status === 'cancelled' ? 'text-red-300 font-medium' : 'text-gray-400'}>
+                    Transferir Gs. 150.000 a Alias: 5644334 (Franco Girala)
+                  </div>
+                </>
+              ) : (
+                <div className="text-gray-400">Cargando estado...</div>
+              )}
             </div>
           </div>
         </div>
