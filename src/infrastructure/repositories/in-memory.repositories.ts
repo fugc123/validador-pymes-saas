@@ -106,6 +106,13 @@ export class InMemoryMerchantRepository implements IMerchantRepository {
       webhookSecret: 'sec_cajasegura_admin_2026',
       status: 'active',
     }),
+    new Merchant({
+      id: 'farmacia-central',
+      name: 'Farmacia Central',
+      slug: 'farmacia-central',
+      webhookSecret: 'sec_farmacia_central_2026',
+      status: 'active',
+    }),
   ];
 
   async findById(id: string): Promise<Merchant | null> {
@@ -155,6 +162,21 @@ export class InMemoryMembershipRepository implements IMembershipRepository {
         webhookSecret: 'sec_kiosko_san_roque_pilot_2026',
       }),
     },
+    {
+      membership: new MerchantMembership({
+        id: 'mem-franco-cashier-2',
+        userId: 'usr-franco-1',
+        merchantId: 'farmacia-central',
+        role: 'CASHIER',
+        isActive: true,
+      }),
+      merchant: new Merchant({
+        id: 'farmacia-central',
+        name: 'Farmacia Central',
+        slug: 'farmacia-central',
+        webhookSecret: 'sec_farmacia_central_2026',
+      }),
+    },
   ];
 
   async findActiveByUser(userId: string): Promise<UserMembershipDetail[]> {
@@ -199,6 +221,16 @@ export class InMemoryTransferRepository implements ITransferRepository {
       payerName: 'ALEJANDRA CHENA',
       payerBank: 'Banco Itaú',
       amount: 26000,
+      status: 'pending',
+    }),
+    new Transfer({
+      id: 'tr-sample-fc-1',
+      tenantId: 'farmacia-central',
+      operationId: 'OP-77890',
+      operationDate: 'Hoy 16:15',
+      payerName: 'LUCAS GONZALEZ',
+      payerBank: 'Banco Familiar',
+      amount: 45000,
       status: 'pending',
     }),
   ];
@@ -310,6 +342,12 @@ export class InMemorySubscriptionRepository implements ISubscriptionRepository {
       tenantId: 'kiosko-san-roque',
       status: 'trial',
       currentPeriodEnd: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    }),
+    new Subscription({
+      id: 'sub-fc-1',
+      tenantId: 'farmacia-central',
+      status: 'trial',
+      currentPeriodEnd: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
     }),
   ];
 
