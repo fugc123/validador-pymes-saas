@@ -1,0 +1,10 @@
+# robots.txt for CajaSegura (cajasegura.com.py)
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /portals/
+
+# Crawl-delay for polite crawling
+Crawl-delay: 1
+
+Sitemap: https://cajasegura.com.py/sitemap.xml

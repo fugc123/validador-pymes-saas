@@ -1,0 +1,17 @@
+{
+  "name": "CajaSegura — Validador Anti-Fraude SIPAP",
+  "short_name": "CajaSegura",
+  "description": "Validación instantánea de transferencias bancarias SIPAP en tiempo real para comercios en Paraguay.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0B0F19",
+  "theme_color": "#0B0F19",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
