@@ -1,0 +1,16 @@
+spec_version: "0.1.0"
+name: validador-pymes-saas
+version: 1.0.0
+description: "CajaSegura — Multi-tenant SIPAP transfer validation & anti-replay POS SaaS for Paraguayan retail PYMEs"
+license: UNLICENSED
+framework:
+  backend: nestjs-10
+  frontend: react-18-vite
+skills:
+  - hexagonal-architecture
+  - nestjs-patterns
+  - react-patterns
+  - security-review
+  - tdd-workflow
+  - docker-patterns
+  - sipap-transfer-validation

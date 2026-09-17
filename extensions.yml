@@ -1,0 +1,32 @@
+# extensions.yml — Toolchains and Editor Extensions for CajaSegura
+version: "1.0.0"
+
+extensions:
+  vscode:
+    - id: dbaeumer.vscode-eslint
+      description: "ESLint integration for code quality"
+    - id: esbenp.prettier-vscode
+      description: "Prettier code formatter"
+    - id: bradlc.vscode-tailwindcss
+      description: "Tailwind CSS IntelliSense"
+    - id: firsttris.vscode-jest-runner
+      description: "Jest unit test runner"
+    - id: bierner.markdown-preview-github-styles
+      description: "GitHub markdown styling preview"
+
+toolchains:
+  node: ">=20.0.0"
+  npm: ">=10.0.0"
+  go: ">=1.25.0"
+  docker: ">=24.0.0"
+
+skills:
+  directory: ".agents/skills"
+  active:
+    - hexagonal-architecture
+    - nestjs-patterns
+    - react-patterns
+    - security-review
+    - tdd-workflow
+    - docker-patterns
+    - sipap-transfer-validation
