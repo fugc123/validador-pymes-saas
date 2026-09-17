@@ -84,6 +84,7 @@ export class IngestWebhookUseCase {
     }
 
     const transfer = new Transfer({
+      id: `tr-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       tenantId,
       operationId: parsed.operationId,
       receiptNumber: parsed.receiptNumber,

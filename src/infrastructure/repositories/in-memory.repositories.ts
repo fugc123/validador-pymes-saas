@@ -16,7 +16,7 @@ import {
   TempTokenPayload,
   UserMembershipDetail,
 } from '../../core/application/ports/auth.ports';
-import { ITransferRepository } from '../../core/application/ports/transfer.ports';
+import { ITransferRepository, MerchantMetrics } from '../../core/application/ports/transfer.ports';
 import {
   IMerchantRequestRepository,
   ISubscriptionRepository,
@@ -219,7 +219,11 @@ export class InMemoryTransferRepository implements ITransferRepository {
     });
   }
   async findById(tenantId: string, id: string): Promise<Transfer | null> {
-    return this.transfers.find((t) => t.tenantId === tenantId && t.id === id) || null;
+    return (
+      this.transfers.find(
+        (t) => t.tenantId === tenantId && (t.id === id || t.operationId === id),
+      ) || null
+    );
   }
   async updateClaimed(
     tenantId: string,
@@ -227,10 +231,45 @@ export class InMemoryTransferRepository implements ITransferRepository {
     cashierUserId: string,
     claimTime: Date,
   ): Promise<boolean> {
-    const transfer = this.transfers.find((t) => t.tenantId === tenantId && t.id === transferId);
+    const transfer = this.transfers.find(
+      (t) => t.tenantId === tenantId && (t.id === transferId || t.operationId === transferId),
+    );
     if (!transfer || !transfer.isPending()) return false;
     transfer.claim(cashierUserId, claimTime);
     return true;
+  }
+
+  async getMetricsByTenant(tenantId: string): Promise<MerchantMetrics> {
+    const tenantTransfers = this.transfers.filter((t) => t.tenantId === tenantId);
+    const claimedTransfers = tenantTransfers.filter((t) => t.isClaimed());
+    const pendingTransfers = tenantTransfers.filter((t) => t.isPending());
+
+    const totalCollectedToday = claimedTransfers.reduce((sum, t) => sum + t.amount, 0);
+    const countValidatedToday = claimedTransfers.length;
+    const pendingUnclaimedCount = pendingTransfers.length;
+
+    const uniqueCashiers = new Set(
+      claimedTransfers.map((t) => t.claimedByUserId).filter((id): id is string => Boolean(id)),
+    );
+
+    const recentTransfers = tenantTransfers.slice(0, 10).map((t) => ({
+      id: t.id || t.operationId,
+      operationId: t.operationId,
+      amount: t.amount,
+      payerName: t.payerName,
+      payerBank: t.payerBank,
+      status: t.status,
+      claimedAt: t.claimedAt ? t.claimedAt.toISOString() : null,
+      operationDate: t.operationDate,
+    }));
+
+    return {
+      totalCollectedToday,
+      countValidatedToday,
+      pendingUnclaimedCount,
+      activeCashiersCount: uniqueCashiers.size || 1,
+      recentTransfers,
+    };
   }
 }
 

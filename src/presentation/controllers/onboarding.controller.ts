@@ -7,16 +7,31 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
 import { SubmitMerchantRequestUseCase } from '../../core/application/use-cases/onboarding/submit-merchant-request.use-case';
 import { ApproveMerchantRequestUseCase } from '../../core/application/use-cases/onboarding/approve-merchant-request.use-case';
 import { Roles } from '../decorators/roles.decorator';
 import { RolesGuard } from '../guards/roles.guard';
 
 export class SubmitMerchantRequestDto {
+  @IsString()
+  @IsNotEmpty()
   businessName!: string;
+
+  @IsString()
+  @IsNotEmpty()
   ownerName!: string;
+
+  @IsEmail()
+  @IsNotEmpty()
   email!: string;
+
+  @IsString()
+  @IsNotEmpty()
   phone!: string;
+
+  @IsString()
+  @IsNotEmpty()
   city!: string;
 }
 

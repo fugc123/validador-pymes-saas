@@ -1,20 +1,36 @@
 import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
 import { LoginUseCase } from '../../core/application/use-cases/auth/login.use-case';
 import { SelectTenantUseCase } from '../../core/application/use-cases/auth/select-tenant.use-case';
 import { SwitchTenantUseCase } from '../../core/application/use-cases/auth/switch-tenant.use-case';
 
 export class LoginDto {
+  @IsEmail()
+  @IsNotEmpty()
   email!: string;
+
+  @IsString()
+  @IsNotEmpty()
   password!: string;
 }
 
 export class SelectTenantDto {
+  @IsString()
+  @IsNotEmpty()
   userId!: string;
+
+  @IsString()
+  @IsNotEmpty()
   tenantId!: string;
 }
 
 export class SwitchTenantDto {
+  @IsString()
+  @IsNotEmpty()
   userId!: string;
+
+  @IsString()
+  @IsNotEmpty()
   targetTenantId!: string;
 }
 

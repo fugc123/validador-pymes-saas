@@ -97,6 +97,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const selectTenant = async (tenantId: string) => {
     const selected = availableMemberships.find((m) => m.tenantId === tenantId);
+
+    if (user) {
+      const res = await fetch('/api/v1/auth/select-tenant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, tenantId }),
+      }).catch(() => null);
+
+      if (res && res.ok) {
+        const data = await res.json();
+        const newActive: ActiveTenant = {
+          tenantId: data.activeTenant.tenantId,
+          merchantName: data.activeTenant.merchantName,
+          role: data.activeTenant.role,
+        };
+        setActiveTenant(newActive);
+        setToken(data.accessToken);
+        localStorage.setItem('token', data.accessToken);
+        localStorage.setItem('activeTenant', JSON.stringify(newActive));
+        setIsSelectingTenant(false);
+        return;
+      }
+    }
+
     if (selected) {
       const newActive: ActiveTenant = {
         tenantId: selected.tenantId,

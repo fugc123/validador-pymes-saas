@@ -7,11 +7,20 @@ import {
   Param,
   Post,
 } from '@nestjs/common';
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { IngestWebhookUseCase } from '../../core/application/use-cases/ingest-webhook.use-case';
 
 export class WebhookPayloadDto {
+  @IsString()
+  @IsNotEmpty()
   text!: string;
+
+  @IsOptional()
+  @IsString()
   html?: string;
+
+  @IsOptional()
+  @IsString()
   subject?: string;
 }
 

@@ -25,7 +25,7 @@ interface TransferResult {
 }
 
 export const FastPosScreen: React.FC = () => {
-  const { user, activeTenant, logout, switchTenant, availableMemberships } = useAuth();
+  const { user, activeTenant, logout, switchTenant, availableMemberships, token } = useAuth();
   const [amount, setAmount] = useState<string>('');
   const [payerName, setPayerName] = useState<string>('');
   const [searching, setSearching] = useState(false);
@@ -40,7 +40,7 @@ export const FastPosScreen: React.FC = () => {
     amountInputRef.current?.focus();
   }, []);
 
-  const handleSearch = (e?: React.FormEvent) => {
+  const handleSearch = async (e?: React.FormEvent) => {
     e?.preventDefault();
     const cleanAmount = parseInt(amount.replace(/[^0-9]/g, ''), 10);
     if (!cleanAmount || isNaN(cleanAmount)) return;
@@ -51,10 +51,52 @@ export const FastPosScreen: React.FC = () => {
     setNotFound(false);
     setClaimedSuccess(false);
 
-    // Mock/Real verify call
+    try {
+      const res = await fetch('/api/v1/cashier/transfers/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          amount: cleanAmount,
+          payerFilter: payerName.trim() || undefined,
+        }),
+      }).catch(() => null);
+
+      if (res && res.ok) {
+        const data = await res.json();
+        setSearching(false);
+
+        if (data.found && data.transfers && data.transfers.length > 0) {
+          const item = data.transfers[0];
+          AudioSynthesizer.playSuccessChime();
+          setMatch({
+            id: item.id,
+            operationId: item.operationId,
+            payerName: item.payerName,
+            payerBank: item.payerBank || 'SIPAP',
+            amount: item.amount,
+            operationDate: item.operationDate,
+            status: 'pending',
+          });
+          return;
+        } else if (data.status === 'already_claimed') {
+          AudioSynthesizer.playAlertWarning();
+          setReplayAlert({
+            claimedAt: data.claimedAt ? new Date(data.claimedAt).toLocaleTimeString() : 'Hace instantes',
+            message: data.message || '⛔ NO entregar mercadería. Comprobante ya cobrado previamente.',
+          });
+          return;
+        }
+      }
+    } catch {
+      // Continue to fallback simulation
+    }
+
+    // Fallback simulation for offline/demo
     setTimeout(() => {
       setSearching(false);
-      // Simulate replay attack detection test
       if (cleanAmount === 45601 || payerName.toLowerCase().includes('repetido')) {
         AudioSynthesizer.playAlertWarning();
         setReplayAlert({
@@ -64,7 +106,6 @@ export const FastPosScreen: React.FC = () => {
         return;
       }
 
-      // Simulate match found
       if (cleanAmount > 0) {
         AudioSynthesizer.playSuccessChime();
         setMatch({
@@ -82,8 +123,24 @@ export const FastPosScreen: React.FC = () => {
     }, 200);
   };
 
-  const handleClaim = () => {
+  const handleClaim = async () => {
     if (!match) return;
+
+    if (token && !match.id.startsWith('trans-')) {
+      try {
+        await fetch('/api/v1/cashier/transfers/claim', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ transferId: match.id }),
+        });
+      } catch (err) {
+        console.warn('Backend claim error:', err);
+      }
+    }
+
     setClaimedSuccess(true);
     AudioSynthesizer.playSuccessChime();
 

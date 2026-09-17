@@ -2,7 +2,10 @@ import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { ShieldCheck, Store, Lock, Mail, ArrowRight, Sparkles } from 'lucide-react';
 
-export const LoginView: React.FC<{ onNavigateToRegister: () => void }> = ({ onNavigateToRegister }) => {
+export const LoginView: React.FC<{
+  onNavigateToRegister: () => void;
+  onBackToLanding?: () => void;
+}> = ({ onNavigateToRegister, onBackToLanding }) => {
   const { login, isSelectingTenant, availableMemberships, selectTenant } = useAuth();
   const [email, setEmail] = useState('franco@kiosko.com');
   const [password, setPassword] = useState('password123');
@@ -59,33 +62,42 @@ export const LoginView: React.FC<{ onNavigateToRegister: () => void }> = ({ onNa
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-[#0B0F19]">
       <div className="max-w-md w-full">
+        {onBackToLanding && (
+          <button
+            onClick={onBackToLanding}
+            className="mb-4 text-xs font-bold text-gray-400 hover:text-white flex items-center space-x-1.5 transition-colors"
+          >
+            <span>← Volver a CajaSegura</span>
+          </button>
+        )}
+
         {/* Header Branding */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-emerald-400 mb-4 shadow-lg shadow-emerald-500/5">
+          <div className="inline-flex p-3 bg-emerald-500/10 rounded-2xl text-emerald-400 mb-4 shadow-lg shadow-emerald-500/10">
             <ShieldCheck className="w-10 h-10" />
           </div>
-          <h1 className="text-3xl font-extrabold text-white tracking-tight">Validador PYME</h1>
-          <p className="text-sm text-gray-400 mt-2">
+          <h1 className="text-2xl font-extrabold text-white">CajaSegura — Validador PYME</h1>
+          <p className="text-xs text-gray-400 mt-1">
             Verificación SIPAP en tiempo real & Anti-Replay para Comercios
           </p>
         </div>
 
         {/* Card */}
         <div className="bg-[#151D2F] border border-[#24324D] rounded-2xl p-8 shadow-2xl">
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
                 Correo Electrónico
               </label>
               <div className="relative">
-                <Mail className="w-5 h-5 text-gray-500 absolute left-3.5 top-3" />
+                <Mail className="w-4 h-4 text-gray-500 absolute left-4 top-3.5" />
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full bg-[#0B0F19] border border-[#24324D] rounded-xl pl-11 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
-                  placeholder="ejemplo@comercio.com"
+                  className="w-full bg-[#0B0F19] border border-[#24324D] focus:border-emerald-500 rounded-xl pl-11 pr-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none transition-colors"
+                  placeholder="admin@comercio.com"
                 />
               </div>
             </div>
@@ -95,14 +107,14 @@ export const LoginView: React.FC<{ onNavigateToRegister: () => void }> = ({ onNa
                 Contraseña
               </label>
               <div className="relative">
-                <Lock className="w-5 h-5 text-gray-500 absolute left-3.5 top-3" />
+                <Lock className="w-4 h-4 text-gray-500 absolute left-4 top-3.5" />
                 <input
                   type="password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-[#0B0F19] border border-[#24324D] rounded-xl pl-11 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
-                  placeholder="••••••••"
+                  className="w-full bg-[#0B0F19] border border-[#24324D] focus:border-emerald-500 rounded-xl pl-11 pr-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none transition-colors"
+                  placeholder="••••••••••••"
                 />
               </div>
             </div>
@@ -110,10 +122,10 @@ export const LoginView: React.FC<{ onNavigateToRegister: () => void }> = ({ onNa
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 px-4 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold rounded-xl shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30 transition-all flex items-center justify-center space-x-2"
+              className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold rounded-xl shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30 transition-all flex items-center justify-center space-x-2 text-sm mt-2"
             >
               {loading ? (
-                <span>Ingresando...</span>
+                <span>Validando credenciales...</span>
               ) : (
                 <>
                   <span>Ingresar al Sistema</span>
@@ -131,7 +143,7 @@ export const LoginView: React.FC<{ onNavigateToRegister: () => void }> = ({ onNa
               className="mt-2 text-xs font-bold text-emerald-400 hover:text-emerald-300 inline-flex items-center space-x-1"
             >
               <Sparkles className="w-3.5 h-3.5 mr-1" />
-              <span>Solicitar prueba gratuita de 7 días ($15/mes)</span>
+              <span>Solicitar prueba gratuita de 7 días (Gs. 150.000/mes)</span>
             </button>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 
 // Controllers
@@ -6,6 +6,7 @@ import { AuthController } from './presentation/controllers/auth.controller';
 import { WebhookController } from './presentation/controllers/webhook.controller';
 import { CashierController } from './presentation/controllers/cashier.controller';
 import { OnboardingController } from './presentation/controllers/onboarding.controller';
+import { MerchantController } from './presentation/controllers/merchant.controller';
 
 // Use Cases
 import { LoginUseCase } from './core/application/use-cases/auth/login.use-case';
@@ -14,6 +15,7 @@ import { SwitchTenantUseCase } from './core/application/use-cases/auth/switch-te
 import { IngestWebhookUseCase } from './core/application/use-cases/ingest-webhook.use-case';
 import { VerifyTransferUseCase } from './core/application/use-cases/transfers/verify-transfer.use-case';
 import { ClaimTransferUseCase } from './core/application/use-cases/transfers/claim-transfer.use-case';
+import { GetMerchantMetricsUseCase } from './core/application/use-cases/transfers/get-merchant-metrics.use-case';
 import { SubmitMerchantRequestUseCase } from './core/application/use-cases/onboarding/submit-merchant-request.use-case';
 import { ApproveMerchantRequestUseCase } from './core/application/use-cases/onboarding/approve-merchant-request.use-case';
 import { SubscriptionBillingUseCase } from './core/application/use-cases/billing/subscription-billing.use-case';
@@ -32,6 +34,8 @@ import {
   InMemorySubscriptionRepository,
 } from './infrastructure/repositories/in-memory.repositories';
 
+import { AuthMiddleware } from './presentation/middlewares/auth.middleware';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -44,6 +48,7 @@ import {
     WebhookController,
     CashierController,
     OnboardingController,
+    MerchantController,
   ],
   providers: [
     BankParserFactory,
@@ -54,6 +59,7 @@ import {
     IngestWebhookUseCase,
     VerifyTransferUseCase,
     ClaimTransferUseCase,
+    GetMerchantMetricsUseCase,
     SubmitMerchantRequestUseCase,
     ApproveMerchantRequestUseCase,
     SubscriptionBillingUseCase,
@@ -77,4 +83,8 @@ import {
     InMemorySubscriptionRepository,
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(AuthMiddleware).forRoutes('*');
+  }
+}

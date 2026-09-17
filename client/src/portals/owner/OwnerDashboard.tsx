@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import {
   TrendingUp,
@@ -11,19 +11,68 @@ import {
   Sparkles,
   ExternalLink,
   PlayCircle,
-  HelpCircle,
-  ShieldCheck,
   Zap,
+  RefreshCw,
+  Clock,
+  ShieldCheck,
+  AlertCircle,
 } from 'lucide-react';
 
+interface MetricTransfer {
+  id: string;
+  operationId: string;
+  amount: number;
+  payerName: string;
+  payerBank?: string;
+  status: string;
+  claimedAt: string | null;
+  operationDate: string;
+}
+
+interface MetricsData {
+  totalCollectedToday: number;
+  countValidatedToday: number;
+  pendingUnclaimedCount: number;
+  activeCashiersCount: number;
+  recentTransfers: MetricTransfer[];
+}
+
 export const OwnerDashboard: React.FC = () => {
-  const { user, activeTenant, logout } = useAuth();
+  const { user, activeTenant, logout, token } = useAuth();
   const [copiedScript, setCopiedScript] = useState(false);
   const [testStatus, setTestStatus] = useState<string | null>(null);
+  const [metrics, setMetrics] = useState<MetricsData | null>(null);
+  const [isLoadingMetrics, setIsLoadingMetrics] = useState(false);
 
   const tenantSlug = activeTenant?.tenantId || 'kiosko-san-roque';
   const tenantSecret = 'sec_kiosko_san_roque_pilot_2026';
   const hostUrl = window.location.origin;
+
+  const fetchMetrics = useCallback(async () => {
+    if (!token) return;
+    setIsLoadingMetrics(true);
+    try {
+      const res = await fetch('/api/v1/merchant/metrics', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMetrics(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch real-time metrics', err);
+    } finally {
+      setIsLoadingMetrics(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    fetchMetrics();
+    const interval = setInterval(fetchMetrics, 8000);
+    return () => clearInterval(interval);
+  }, [fetchMetrics]);
 
   // Personalized Google Apps Script with user variables already injected!
   const personalizedGasScript = `/**
@@ -110,8 +159,10 @@ Estado: Transferencia acreditada en cuenta`,
 
       if (res && res.ok) {
         setTestStatus('✅ ¡Transferencia de Gs. 25.000 recibida con éxito! Ya podés verla en la pantalla de cobro del Cajero.');
+        await fetchMetrics();
       } else {
         setTestStatus('✅ Simulación enviada (Modo de demostración activo).');
+        await fetchMetrics();
       }
     } catch (e) {
       setTestStatus('✅ Simulación enviada.');
@@ -127,7 +178,16 @@ Estado: Transferencia acreditada en cuenta`,
             <Building2 className="w-5 h-5" />
           </div>
           <div>
-            <div className="font-bold text-white">{activeTenant?.merchantName} — Panel de Dueño</div>
+            <div className="font-bold text-white flex items-center space-x-2">
+              <span>{activeTenant?.merchantName} — Panel de Dueño</span>
+              <button
+                onClick={() => fetchMetrics()}
+                title="Actualizar métricas"
+                className="p-1 text-gray-400 hover:text-emerald-400 rounded transition-colors"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoadingMetrics ? 'animate-spin text-emerald-400' : ''}`} />
+              </button>
+            </div>
             <div className="text-xs text-gray-400">Dueño: {user?.fullName}</div>
           </div>
         </div>
@@ -135,7 +195,7 @@ Estado: Transferencia acreditada en cuenta`,
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 rounded-full text-xs text-emerald-400 font-semibold">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Plan PYME: 7 Días de Prueba ($15/mes)</span>
+            <span>Plan PYME: 7 Días de Prueba (Gs. 150.000/mes)</span>
           </div>
           <button
             onClick={logout}
@@ -155,17 +215,25 @@ Estado: Transferencia acreditada en cuenta`,
               <span className="text-xs uppercase font-extrabold tracking-wider">Total Cobrado Hoy</span>
               <TrendingUp className="w-5 h-5 text-emerald-400" />
             </div>
-            <div className="text-3xl font-mono font-extrabold text-white">Gs. 4.850.000</div>
-            <div className="text-xs text-emerald-400 font-semibold mt-2">+18 transferencias validadas</div>
+            <div className="text-3xl font-mono font-extrabold text-white">
+              {metrics ? `Gs. ${metrics.totalCollectedToday.toLocaleString('es-PY')}` : 'Gs. 0'}
+            </div>
+            <div className="text-xs text-emerald-400 font-semibold mt-2">
+              +{metrics?.countValidatedToday ?? 0} transferencias validadas hoy
+            </div>
           </div>
 
           <div className="bg-[#151D2F] border border-[#24324D] rounded-2xl p-6 shadow-xl">
             <div className="flex items-center justify-between text-gray-400 mb-3">
-              <span className="text-xs uppercase font-extrabold tracking-wider">Cajeros Habilitados</span>
+              <span className="text-xs uppercase font-extrabold tracking-wider">Caja & Cajeros</span>
               <Users className="w-5 h-5 text-indigo-400" />
             </div>
-            <div className="text-3xl font-mono font-extrabold text-white">2 Cajeros</div>
-            <div className="text-xs text-gray-400 mt-2">Kiosko San Roque</div>
+            <div className="text-3xl font-mono font-extrabold text-white">
+              {metrics?.activeCashiersCount ?? 1} {metrics?.activeCashiersCount === 1 ? 'Cajero' : 'Cajeros'}
+            </div>
+            <div className="text-xs text-indigo-400 mt-2 font-medium">
+              {metrics?.pendingUnclaimedCount ? `${metrics.pendingUnclaimedCount} pago(s) en espera de cobro` : 'Sin cobros pendientes'}
+            </div>
           </div>
 
           <div className="bg-[#151D2F] border border-[#24324D] rounded-2xl p-6 shadow-xl">
@@ -173,8 +241,10 @@ Estado: Transferencia acreditada en cuenta`,
               <span className="text-xs uppercase font-extrabold tracking-wider">Próxima Facturación</span>
               <CreditCard className="w-5 h-5 text-amber-400" />
             </div>
-            <div className="text-3xl font-mono font-extrabold text-white">$15 USD</div>
-            <div className="text-xs text-gray-400 mt-2">Trial activo por 7 días</div>
+            <div className="text-3xl font-mono font-extrabold text-white">Gs. 150.000</div>
+            <div className="text-xs text-gray-400 mt-2">
+              <span className="text-emerald-400 font-semibold">Trial activo por 7 días</span> (0% comisiones)
+            </div>
           </div>
         </div>
 
@@ -218,57 +288,65 @@ Estado: Transferencia acreditada en cuenta`,
 
           {/* Step by step cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-2">
-            <div className="bg-[#0B0F19] border border-[#24324D] rounded-2xl p-4">
-              <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold flex items-center justify-center mb-3">
-                1
+            <div className="bg-[#0B0F19]/80 border border-[#24324D] rounded-2xl p-4 flex flex-col justify-between">
+              <div className="space-y-2">
+                <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold flex items-center justify-center">
+                  1
+                </div>
+                <div className="font-bold text-sm text-white">Hacé clic en Abrir Google Apps Script</div>
+                <div className="text-xs text-gray-400">
+                  Se abrirá el editor oficial de Google en una pestaña nueva listo para usar.
+                </div>
               </div>
-              <h3 className="text-xs font-bold text-white">Pegar el Código</h3>
-              <p className="text-[11px] text-gray-400 mt-1">
-                Hacé clic en <b>"2. Abrir Google Apps Script"</b>, borrá todo el texto que aparezca y pegá (Ctrl + V) lo copiado.
-              </p>
             </div>
 
-            <div className="bg-[#0B0F19] border border-[#24324D] rounded-2xl p-4">
-              <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold flex items-center justify-center mb-3">
-                2
+            <div className="bg-[#0B0F19]/80 border border-[#24324D] rounded-2xl p-4 flex flex-col justify-between">
+              <div className="space-y-2">
+                <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold flex items-center justify-center">
+                  2
+                </div>
+                <div className="font-bold text-sm text-white">Pegá el Script Copiado</div>
+                <div className="text-xs text-gray-400">
+                  Borrá el texto por defecto en Google y pegá el código personalizado con <kbd className="bg-gray-800 px-1 rounded">Ctrl+V</kbd>.
+                </div>
               </div>
-              <h3 className="text-xs font-bold text-white">Guardar y Ejecutar</h3>
-              <p className="text-[11px] text-gray-400 mt-1">
-                Guardá (Ctrl + S) y hacé clic en <b>"Ejecutar"</b> arriba para conceder el permiso de lectura a tu propio Gmail.
-              </p>
             </div>
 
-            <div className="bg-[#0B0F19] border border-[#24324D] rounded-2xl p-4">
-              <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold flex items-center justify-center mb-3">
-                3
+            <div className="bg-[#0B0F19]/80 border border-[#24324D] rounded-2xl p-4 flex flex-col justify-between">
+              <div className="space-y-2">
+                <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold flex items-center justify-center">
+                  3
+                </div>
+                <div className="font-bold text-sm text-white">Configurá el Disparador (Trigger)</div>
+                <div className="text-xs text-gray-400">
+                  Hacé clic en el reloj 🕒 de la izquierda y añadí un activador para ejecutar cada 1 minuto.
+                </div>
               </div>
-              <h3 className="text-xs font-bold text-white">Crear el Activador</h3>
-              <p className="text-[11px] text-gray-400 mt-1">
-                En el menú izquierdo hacé clic en el ícono de <b>Reloj (Activadores)</b> ➔ <b>+ Añadir activador</b>.
-              </p>
             </div>
 
-            <div className="bg-[#0B0F19] border border-[#24324D] rounded-2xl p-4">
-              <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold flex items-center justify-center mb-3">
-                4
+            <div className="bg-[#0B0F19]/80 border border-[#24324D] rounded-2xl p-4 flex flex-col justify-between">
+              <div className="space-y-2">
+                <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold flex items-center justify-center">
+                  4
+                </div>
+                <div className="font-bold text-sm text-white">¡Listo y Seguro!</div>
+                <div className="text-xs text-gray-400">
+                  Cero contraseñas compartidas. Los avisos de SIPAP llegan en menos de 2 segundos a tus cajeros.
+                </div>
               </div>
-              <h3 className="text-xs font-bold text-white">Cada 1 Minuto</h3>
-              <p className="text-[11px] text-gray-400 mt-1">
-                Elegí: <i>Según el tiempo</i> ➔ <i>Temporizador de minutos</i> ➔ <i>Cada minuto</i> y Guardar. ¡Listo!
-              </p>
             </div>
           </div>
 
-          {/* Test Simulator Bar */}
-          <div className="pt-4 border-t border-[#24324D] flex items-center justify-between">
+          {/* Test Payment Simulator Banner */}
+          <div className="pt-4 border-t border-[#24324D] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center space-x-2 text-xs text-gray-400">
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              <span>Privacidad 100% garantizada: Tus correos personales nunca salen de tu cuenta.</span>
+              <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>¿Querés verificar que tu caja reciba alertas ahora mismo? Podés emitir un pago simulado:</span>
             </div>
 
             <button
               onClick={handleSimulateTestPayment}
-              className="px-4 py-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-colors"
+              className="px-4 py-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-colors shrink-0"
             >
               <PlayCircle className="w-4 h-4" />
               <span>Enviar Pago de Prueba al POS</span>
@@ -278,6 +356,64 @@ Estado: Transferencia acreditada en cuenta`,
           {testStatus && (
             <div className="p-3 bg-indigo-950/60 border border-indigo-500/40 rounded-xl text-xs text-indigo-300 font-mono">
               {testStatus}
+            </div>
+          )}
+        </div>
+
+        {/* Live Transactions & Audit Table */}
+        <div className="bg-[#151D2F] border border-[#24324D] rounded-2xl p-6 shadow-xl space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Clock className="w-5 h-5 text-emerald-400" />
+              <h2 className="text-lg font-bold text-white">Auditoría de Transferencias en Vivo</h2>
+            </div>
+            <div className="text-xs text-gray-400">
+              {metrics?.recentTransfers?.length ?? 0} operaciones registradas
+            </div>
+          </div>
+
+          {metrics?.recentTransfers && metrics.recentTransfers.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#0B0F19] text-gray-400 uppercase font-mono">
+                  <tr>
+                    <th className="p-3">Operación</th>
+                    <th className="p-3">Cliente Pagador</th>
+                    <th className="p-3">Banco / Origen</th>
+                    <th className="p-3">Monto</th>
+                    <th className="p-3">Fecha / Hora</th>
+                    <th className="p-3 text-right">Estado</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#24324D]">
+                  {metrics.recentTransfers.map((tr) => (
+                    <tr key={tr.id} className="hover:bg-[#1A253C]/40 transition-colors">
+                      <td className="p-3 font-mono text-gray-300 font-semibold">{tr.operationId}</td>
+                      <td className="p-3 font-semibold text-white">{tr.payerName}</td>
+                      <td className="p-3 text-gray-400">{tr.payerBank || 'SIPAP'}</td>
+                      <td className="p-3 font-mono font-bold text-emerald-400">
+                        Gs. {tr.amount.toLocaleString('es-PY')}
+                      </td>
+                      <td className="p-3 text-gray-400 font-mono">{tr.operationDate}</td>
+                      <td className="p-3 text-right">
+                        {tr.status === 'claimed' ? (
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-mono text-[10px] font-bold">
+                            ✓ Cobrado en Caja
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-mono text-[10px] font-bold">
+                            ⏳ Pendiente
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="p-8 text-center text-gray-500 text-xs bg-[#0B0F19]/40 rounded-xl">
+              No hay transferencias registradas todavía. Emití un pago de prueba arriba para comenzar.
             </div>
           )}
         </div>

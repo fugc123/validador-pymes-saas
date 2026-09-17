@@ -12,15 +12,23 @@ import { ClaimTransferUseCase } from '../../core/application/use-cases/transfers
 import { Roles } from '../decorators/roles.decorator';
 import { RolesGuard } from '../guards/roles.guard';
 import { TenantGuard } from '../guards/tenant.guard';
+import { IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContextInterceptor } from '../interceptors/tenant-context.interceptor';
 import { TenantContext } from '../interceptors/tenant-context.service';
 
 export class VerifyTransferDto {
+  @IsNumber()
+  @IsNotEmpty()
   amount!: number;
+
+  @IsOptional()
+  @IsString()
   payerFilter?: string;
 }
 
 export class ClaimTransferDto {
+  @IsString()
+  @IsNotEmpty()
   transferId!: string;
 }
 

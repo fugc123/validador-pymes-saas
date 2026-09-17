@@ -25,6 +25,7 @@ describe('Cashier Fast-POS & Anti-Replay Invariants (T09, T10)', () => {
       findPendingByAmountAndPayer: jest.fn(),
       findById: jest.fn(),
       updateClaimed: jest.fn(),
+      getMetricsByTenant: jest.fn(),
     };
   });
 

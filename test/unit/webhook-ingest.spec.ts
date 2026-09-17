@@ -38,6 +38,7 @@ Fecha y hora transferencia 16/09/2026 15:30:00 h`;
       findPendingByAmountAndPayer: jest.fn(),
       findById: jest.fn(),
       updateClaimed: jest.fn(),
+      getMetricsByTenant: jest.fn(),
     };
   });
 
