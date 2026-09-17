@@ -87,3 +87,22 @@ Every feature, refactor, analysis, or architectural evolution in this project MU
    - Zero-Knowledge search by exact amount + customer name within 45m window.
    - One-click "Confirm & Claim" with audio chime feedback.
    - Zero access to merchant financials, personal emails, or other stores.
+
+---
+
+## 🛠 Developer Guide & Essential Information
+
+For detailed project architecture, test accounts, and essential commands, please see [CLAUDE.md](./CLAUDE.md).
+
+### Test Accounts & Seeded Users
+- `admin@validador.com` / `password123`: Global SuperAdmin.
+- `franco@kiosko.com` / `password123`: Multi-tenant user (`MERCHANT_OWNER` in Kiosko San Roque, `CASHIER` in Farmacia Central).
+- `carlos@kiosko.com` / `password123`: Cashier at Kiosko San Roque.
+
+### Essential Commands
+- Run tests: `npm test` or `npx jest` (11 suites, 69 unit tests passing 100%).
+- Backend build: `npm run build` or `npx nest build`.
+- Backend dev server: `node dist/main.js` (port 3000, global prefix `/api/v1`).
+- Frontend dev server: `npm --prefix client run dev` (port 5173, proxies `/api` to 3000).
+- Frontend build: `npm --prefix client run build`.
+
