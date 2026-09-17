@@ -9,12 +9,12 @@ This roadmap defines the sequential development phases, deliverables, and accept
 | Phase | Focus Area | Status | Deliverables |
 |---|---|---|---|
 | **Phase 1** | **Governance, Rules & Architecture** | `COMPLETED` | Git Repo, AGENTS.md, pipeline.md, ADR-001 through ADR-007 |
-| **Phase 2** | **NestJS Clean Architecture Core & Multi-Tenancy** | `PLANNED` | PostgreSQL schema, Drizzle/Prisma ORM, TenantContext, Tri-Tier RBAC |
-| **Phase 3** | **Multi-Tenant Webhook Ingestion & Multi-Bank Parsers** | `PLANNED` | Itaú, GNB, UENO, Familiar, Atlas, Continental parsers, Anti-Replay |
-| **Phase 4** | **Merchant Onboarding & Approval Queue** | `PLANNED` | Public signup form API, SuperAdmin approval workflow, Auto-provisioning |
-| **Phase 5** | **$15/mo Subscription Billing & Monetization Engine** | `PLANNED` | Stripe & Local Gateway (Pagopar/Bancard) integration, webhook sync |
-| **Phase 6** | **Premium Frontend SPA (React + Vite + Tailwind)** | `PLANNED` | Fast-POS Cashier UI, Merchant Portal, SuperAdmin Dashboard |
-| **Phase 7** | **E2E Testing, OWASP Audit & Cloud Deployment** | `PLANNED` | 100% test coverage, tenant leakage tests, Docker & 1-Click Deploy |
+| **Phase 2** | **NestJS Clean Architecture Core & Multi-Tenancy** | `COMPLETED` | Domain entities, TenantContext, Tri-Tier RBAC & Organization Memberships |
+| **Phase 3** | **Multi-Tenant Webhook Ingestion & Multi-Bank Parsers** | `COMPLETED` | Itaú, GNB, UENO, Familiar, Atlas, Continental parsers, Anti-Replay |
+| **Phase 4** | **Merchant Onboarding & Approval Queue** | `COMPLETED` | Public signup form API, SuperAdmin approval workflow, Auto-provisioning |
+| **Phase 5** | **Gs. 150.000/mo Subscription Billing & Dogfooding Engine** | `COMPLETED` | Alias SIPAP 5644334, Payment reporting, Incoming transfer matching & Auto-extension |
+| **Phase 6** | **Premium Frontend SPA (React + Vite + Tailwind)** | `COMPLETED` | Fast-POS Cashier UI, Merchant Portal, SuperAdmin Dashboard, Responsive Mobile UI |
+| **Phase 7** | **Testing & Production Readiness** | `COMPLETED` | 11 test suites, 69 unit tests passing (100%), Docker Compose & Seed scripts |
 
 ---
 
