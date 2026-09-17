@@ -31,10 +31,22 @@ interface Subscription {
   currentPeriodEnd: string;
 }
 
+interface PaymentReport {
+  id: string;
+  tenantId: string;
+  merchantName: string;
+  payerName: string;
+  status: 'pending' | 'matched';
+  createdAt: string;
+}
+
 export const SuperAdminPanel: React.FC = () => {
   const { user, logout, token } = useAuth();
   const [requests, setRequests] = useState<MerchantRequest[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [paymentReports, setPaymentReports] = useState<PaymentReport[]>([]);
+  const [reportActionMessage, setReportActionMessage] = useState<{ type: 'success' | 'warning', text: string } | null>(null);
+  const [simulationPayer, setSimulationPayer] = useState('Franco Galeano');
 
   const fetchRequests = async () => {
     if (!token) return;
@@ -66,9 +78,29 @@ export const SuperAdminPanel: React.FC = () => {
     }
   };
 
+  const fetchPaymentReports = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch('/api/v1/subscription/payment-reports', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPaymentReports(data);
+        const firstPending = data.find((r: PaymentReport) => r.status === 'pending');
+        if (firstPending) {
+          setSimulationPayer(firstPending.payerName);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   useEffect(() => {
     fetchRequests();
     fetchSubscriptions();
+    fetchPaymentReports();
   }, [token]);
 
   const handleApprove = async (id: string) => {
@@ -115,6 +147,48 @@ export const SuperAdminPanel: React.FC = () => {
       fetchSubscriptions();
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleValidateReport = async (reportId: string) => {
+    if (!token) return;
+    setReportActionMessage(null);
+    try {
+      const res = await fetch(`/api/v1/subscription/validate-payment-report/${reportId}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await res.json();
+      if (res.ok && data.matched) {
+        setReportActionMessage({ type: 'success', text: `¡Validación Exitosa! Se acreditó el pago y se renovó la suscripción por 30 días.` });
+        fetchPaymentReports();
+        fetchSubscriptions();
+      } else {
+        setReportActionMessage({ type: 'warning', text: data.message || 'No se encontró la transferencia correspondiente en SIPAP aún.' });
+      }
+    } catch (err) {
+      setReportActionMessage({ type: 'warning', text: 'Error al intentar validar.' });
+    }
+  };
+
+  const handleSimulateTransfer = async () => {
+    if (!token || !simulationPayer.trim()) return;
+    setReportActionMessage(null);
+    try {
+      const res = await fetch(`/api/v1/subscription/simulate-incoming-transfer`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ payerName: simulationPayer }),
+      });
+      if (res.ok) {
+        setReportActionMessage({ type: 'success', text: `Transferencia entrante simulada en cuenta de Franco. Ahora hacé clic en 'Validar Recepción SIPAP'.` });
+      }
+    } catch (err) {
+      setReportActionMessage({ type: 'warning', text: 'Error al simular la transferencia.' });
     }
   };
 
@@ -187,6 +261,89 @@ export const SuperAdminPanel: React.FC = () => {
               <Users className="w-5 h-5 text-amber-400" />
             </div>
             <div className="text-3xl font-mono font-extrabold text-white">{pendingRequests}</div>
+          </div>
+        </div>
+
+        {/* Payment Reports Card */}
+        <div className="bg-[#151D2F] border border-[#24324D] rounded-2xl p-6 shadow-xl space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center space-x-2">
+              <DollarSign className="w-5 h-5 text-emerald-400" />
+              <h2 className="text-lg font-bold text-white">Reportes de Pagos de Suscripción (SIPAP)</h2>
+            </div>
+            <div className="flex items-center space-x-2 bg-[#0B0F19] p-2 rounded-xl border border-[#24324D]">
+              <input
+                type="text"
+                value={simulationPayer}
+                onChange={(e) => setSimulationPayer(e.target.value)}
+                placeholder="Nombre del Pagador"
+                className="bg-transparent border-none outline-none text-xs text-white px-2 w-40"
+              />
+              <button
+                onClick={handleSimulateTransfer}
+                className="px-3 py-1.5 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 border border-indigo-500/30 rounded-lg text-xs font-bold transition-colors whitespace-nowrap"
+              >
+                Simular Transferencia Bancaria (Demo)
+              </button>
+            </div>
+          </div>
+          
+          {reportActionMessage && (
+            <div className={`p-3 border rounded-xl text-xs font-medium ${reportActionMessage.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-400'}`}>
+              {reportActionMessage.text}
+            </div>
+          )}
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-[#0B0F19] text-gray-400 uppercase font-mono">
+                <tr>
+                  <th className="p-3">Comercio</th>
+                  <th className="p-3">Pagador Reportado</th>
+                  <th className="p-3">Monto</th>
+                  <th className="p-3">Fecha</th>
+                  <th className="p-3">Estado</th>
+                  <th className="p-3 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#24324D]">
+                {paymentReports.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="p-4 text-center text-gray-500">No hay reportes de pago.</td>
+                  </tr>
+                ) : (
+                  paymentReports.map(r => (
+                    <tr key={r.id} className="hover:bg-[#1A253C]/40 transition-colors">
+                      <td className="p-3 font-semibold text-white">{r.merchantName}</td>
+                      <td className="p-3 text-gray-300 font-medium">{r.payerName}</td>
+                      <td className="p-3 text-emerald-400 font-mono font-bold">Gs. 150.000</td>
+                      <td className="p-3 text-gray-400">{new Date(r.createdAt).toLocaleString()}</td>
+                      <td className="p-3">
+                        {r.status === 'pending' ? (
+                          <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-mono text-[10px] font-bold">
+                            ⏳ Pendiente de Validación
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-mono text-[10px] font-bold">
+                            ✓ Acreditado (+30 Días)
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3 text-right">
+                        {r.status === 'pending' && (
+                          <button
+                            onClick={() => handleValidateReport(r.id)}
+                            className="px-3 py-1 bg-emerald-500 hover:bg-emerald-400 text-gray-950 rounded-lg text-xs font-bold transition-colors shadow-lg shadow-emerald-500/20"
+                          >
+                            🔍 Validar Recepción SIPAP
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
 

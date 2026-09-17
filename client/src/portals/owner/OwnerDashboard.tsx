@@ -50,6 +50,11 @@ export const OwnerDashboard: React.FC = () => {
   const [isLoadingMetrics, setIsLoadingMetrics] = useState(false);
   const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
 
+  const [payerName, setPayerName] = useState('');
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
+  const [reportSuccess, setReportSuccess] = useState<string | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
+
   const tenantSlug = activeTenant?.tenantId || 'kiosko-san-roque';
   const tenantSecret = 'sec_kiosko_san_roque_pilot_2026';
   const hostUrl = window.location.origin;
@@ -156,6 +161,34 @@ function procesarTransferenciasBancarias() {
     navigator.clipboard.writeText(personalizedGasScript);
     setCopiedScript(true);
     setTimeout(() => setCopiedScript(false), 3000);
+  };
+
+  const handleReportPayment = async () => {
+    if (!token || !payerName.trim()) return;
+    setIsSubmittingReport(true);
+    setReportSuccess(null);
+    setReportError(null);
+    try {
+      const res = await fetch('/api/v1/subscription/report-payment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ payerName })
+      });
+      if (res.ok) {
+        setReportSuccess(`✅ Transferencia informada a nombre de '${payerName}'. Cuando Franco valide la recepción en su cuenta SIPAP, tu suscripción se renovará automáticamente por 30 días.`);
+        setPayerName('');
+      } else {
+        const err = await res.json();
+        setReportError(err.message || 'Error al informar el pago');
+      }
+    } catch (e) {
+      setReportError('Error de red al informar el pago');
+    } finally {
+      setIsSubmittingReport(false);
+    }
   };
 
   const handleSimulateTestPayment = async () => {
@@ -272,14 +305,67 @@ Estado: Transferencia acreditada en cuenta`,
                     {subscription.status === 'active' && <span className="text-emerald-400 font-semibold">Activo (Vence en {subscription.daysRemaining} días)</span>}
                     {(subscription.status === 'past_due' || subscription.status === 'cancelled') && <span className="text-red-400 font-bold">Vencido</span>}
                   </div>
-                  <div className={subscription.status === 'past_due' || subscription.status === 'cancelled' ? 'text-red-300 font-medium' : 'text-gray-400'}>
-                    Transferir Gs. 150.000 a Alias: 5644334 (Franco Girala)
+                  <div className={subscription.status === 'past_due' || subscription.status === 'cancelled' ? 'text-red-300 font-medium mt-3' : 'text-gray-400 mt-3'}>
+                    <div className="font-semibold mb-1.5 text-white/80">Datos para Transferencia:</div>
+                    <div className="grid grid-cols-1 gap-1 text-[11px]">
+                      <div>Alias: <span className="text-white font-mono font-bold">5644334</span></div>
+                      <div>Titular: <span className="text-white font-bold">Franco Girala</span></div>
+                      <div>Monto Mensual: <span className="text-emerald-400 font-mono font-bold">Gs. 150.000</span></div>
+                    </div>
                   </div>
                 </>
               ) : (
                 <div className="text-gray-400">Cargando estado...</div>
               )}
             </div>
+          </div>
+        </div>
+
+        {/* Informar Pago de Suscripción Card */}
+        <div className="bg-[#151D2F] border border-[#24324D] rounded-2xl p-6 shadow-xl">
+          <div className="flex items-center space-x-2 mb-4">
+            <Check className="w-5 h-5 text-emerald-400" />
+            <h2 className="text-lg font-bold text-white">Informar Pago de Suscripción</h2>
+          </div>
+          <div className="space-y-4 max-w-xl">
+            <div>
+              <label className="block text-xs font-bold text-gray-400 mb-1">
+                ¿Quién realizó la transferencia?
+              </label>
+              <div className="flex space-x-2">
+                <input
+                  type="text"
+                  value={payerName}
+                  onChange={(e) => setPayerName(e.target.value)}
+                  placeholder="Ej: Franco Galeano o Distribuidora SRL"
+                  className="flex-1 bg-[#0B0F19] border border-[#24324D] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                />
+                <button
+                  onClick={() => setPayerName(user?.fullName || 'Dueño')}
+                  className="px-3 py-2 bg-[#24324D] hover:bg-[#2d3f63] text-gray-300 text-xs rounded-xl transition-colors whitespace-nowrap"
+                >
+                  Fui yo ({user?.fullName || 'Dueño'})
+                </button>
+              </div>
+            </div>
+            <button
+              onClick={handleReportPayment}
+              disabled={isSubmittingReport || !payerName.trim()}
+              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold text-xs rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmittingReport ? 'Notificando...' : 'Notificar Transferencia'}
+            </button>
+            
+            {reportSuccess && (
+              <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 text-xs">
+                {reportSuccess}
+              </div>
+            )}
+            {reportError && (
+              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs">
+                {reportError}
+              </div>
+            )}
           </div>
         </div>
 

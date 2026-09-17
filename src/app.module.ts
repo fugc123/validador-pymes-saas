@@ -33,6 +33,7 @@ import {
   InMemoryTransferRepository,
   InMemoryMerchantRequestRepository,
   InMemorySubscriptionRepository,
+  InMemoryPaymentReportRepository,
 } from './infrastructure/repositories/in-memory.repositories';
 
 import { AuthMiddleware } from './presentation/middlewares/auth.middleware';
@@ -74,6 +75,7 @@ import { AuthMiddleware } from './presentation/middlewares/auth.middleware';
     { provide: 'ITransferRepository', useClass: InMemoryTransferRepository },
     { provide: 'IMerchantRequestRepository', useClass: InMemoryMerchantRequestRepository },
     { provide: 'ISubscriptionRepository', useClass: InMemorySubscriptionRepository },
+    { provide: 'IPaymentReportRepository', useClass: InMemoryPaymentReportRepository },
     // Concrete classes bindings
     InMemoryUserRepository,
     InMemoryMerchantRepository,
@@ -83,6 +85,7 @@ import { AuthMiddleware } from './presentation/middlewares/auth.middleware';
     InMemoryTransferRepository,
     InMemoryMerchantRequestRepository,
     InMemorySubscriptionRepository,
+    InMemoryPaymentReportRepository,
   ],
 })
 export class AppModule implements NestModule {

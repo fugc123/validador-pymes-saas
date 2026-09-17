@@ -8,11 +8,15 @@ import {
   Post,
   Req,
   UseGuards,
+  NotFoundException,
+  Param,
 } from '@nestjs/common';
 import { IsNotEmpty, IsString } from 'class-validator';
 import { SubscriptionBillingUseCase } from '../../core/application/use-cases/billing/subscription-billing.use-case';
-import { ISubscriptionRepository } from '../../core/application/ports/onboarding.ports';
+import { ISubscriptionRepository, IPaymentReportRepository, PaymentReport } from '../../core/application/ports/onboarding.ports';
 import { IMerchantRepository } from '../../core/application/ports/auth.ports';
+import { ITransferRepository } from '../../core/application/ports/transfer.ports';
+import { Transfer } from '../../core/domain/entities/transfer.entity';
 import { Roles } from '../decorators/roles.decorator';
 import { RolesGuard } from '../guards/roles.guard';
 
@@ -28,6 +32,18 @@ export class MarkPastDueDto {
   tenantId!: string;
 }
 
+export class ReportPaymentDto {
+  @IsString()
+  @IsNotEmpty()
+  payerName!: string;
+}
+
+export class SimulateTransferDto {
+  @IsString()
+  @IsNotEmpty()
+  payerName!: string;
+}
+
 @Controller('subscription')
 export class SubscriptionController {
   constructor(
@@ -36,6 +52,10 @@ export class SubscriptionController {
     private readonly subscriptionRepository: ISubscriptionRepository,
     @Inject('IMerchantRepository')
     private readonly merchantRepository: IMerchantRepository,
+    @Inject('IPaymentReportRepository')
+    private readonly paymentReportRepo: IPaymentReportRepository,
+    @Inject('ITransferRepository')
+    private readonly transferRepo: ITransferRepository,
   ) {}
 
   @Get('status')
@@ -95,5 +115,101 @@ export class SubscriptionController {
     );
     
     return result;
+  }
+
+  @Post('report-payment')
+  @Roles('MERCHANT_OWNER')
+  @UseGuards(RolesGuard)
+  async reportPayment(@Req() req: any, @Body() dto: ReportPaymentDto) {
+    const tenantId = req.user.tenantId;
+    const userId = req.user.userId || req.user.id;
+    const report = new PaymentReport({
+      tenantId,
+      reportedByUserId: userId,
+      payerName: dto.payerName.trim(),
+      amount: 150000,
+    });
+    return this.paymentReportRepo.save(report);
+  }
+
+  @Get('payment-reports')
+  @Roles('SUPER_ADMIN')
+  @UseGuards(RolesGuard)
+  async listPaymentReports() {
+    const reports = await this.paymentReportRepo.findAll();
+    return Promise.all(
+      reports.map(async (report) => {
+        const merchant = await this.merchantRepository.findById(report.tenantId);
+        return {
+          ...report,
+          merchantName: merchant?.name || report.tenantId,
+        };
+      })
+    );
+  }
+
+  @Post('validate-payment-report/:id')
+  @Roles('SUPER_ADMIN')
+  @UseGuards(RolesGuard)
+  async validatePaymentReport(@Req() req: any, @Param('id') reportId: string) {
+    const report = await this.paymentReportRepo.findById(reportId);
+    if (!report) {
+      throw new NotFoundException('Payment report not found');
+    }
+    
+    if (report.status === 'matched') {
+      return { matched: true, message: 'Este pago ya fue validado y acreditado previamente.', report };
+    }
+
+    const pendingTransfers = await this.transferRepo.findPendingByAmountAndPayer('cajasegura-platform', report.amount);
+    const repPayer = report.payerName.toLowerCase().trim();
+    
+    const matchedTr = pendingTransfers.find((trPayerObj) => {
+      const trPayer = trPayerObj.payerName.toLowerCase().trim();
+      return trPayer.includes(repPayer) || repPayer.includes(trPayer);
+    });
+
+    if (matchedTr) {
+      const transferIdToUpdate = matchedTr.id || matchedTr.operationId;
+      const adminId = req.user?.id || 'admin';
+      
+      await this.transferRepo.updateClaimed('cajasegura-platform', transferIdToUpdate, adminId, new Date());
+      
+      report.status = 'matched';
+      report.matchedTransferId = transferIdToUpdate;
+      await this.paymentReportRepo.save(report);
+      
+      await this.subscriptionBillingUseCase.confirmPayment({ tenantId: report.tenantId, daysDuration: 30 });
+      
+      return {
+        matched: true,
+        message: `Transferencia SIPAP de Gs. 150.000 confirmada de "${matchedTr.payerName}". Se acreditó automáticamente 1 mes más (+30 días).`,
+        report,
+        transfer: matchedTr,
+      };
+    } else {
+      return {
+        matched: false,
+        message: `Aún no se detectó una transferencia pendiente de Gs. 150.000 a nombre de "${report.payerName}" en tu cuenta de Franco Girala (Alias: 5644334).`,
+      };
+    }
+  }
+
+  @Post('simulate-incoming-transfer')
+  @Roles('SUPER_ADMIN')
+  @UseGuards(RolesGuard)
+  async simulateIncomingTransfer(@Body() dto: SimulateTransferDto) {
+    const transfer = new Transfer({
+      id: `tr-sipap-${Date.now()}`,
+      tenantId: 'cajasegura-platform',
+      operationId: `SIPAP-${Math.floor(100000 + Math.random() * 900000)}`,
+      operationDate: `Hoy ${new Date().toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit' })}`,
+      payerName: dto.payerName.toUpperCase().trim(),
+      payerBank: 'Banco Itaú',
+      amount: 150000,
+      status: 'pending',
+    });
+    await this.transferRepo.save(transfer);
+    return { success: true, transfer };
   }
 }

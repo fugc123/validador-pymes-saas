@@ -20,6 +20,8 @@ import { ITransferRepository, MerchantMetrics } from '../../core/application/por
 import {
   IMerchantRequestRepository,
   ISubscriptionRepository,
+  PaymentReport,
+  IPaymentReportRepository,
 } from '../../core/application/ports/onboarding.ports';
 
 @Injectable()
@@ -95,6 +97,13 @@ export class InMemoryMerchantRepository implements IMerchantRepository {
       name: 'Kiosko San Roque',
       slug: 'kiosko-san-roque',
       webhookSecret: 'sec_kiosko_san_roque_pilot_2026',
+      status: 'active',
+    }),
+    new Merchant({
+      id: 'cajasegura-platform',
+      name: 'CajaSegura Plataforma',
+      slug: 'cajasegura-platform',
+      webhookSecret: 'sec_cajasegura_admin_2026',
       status: 'active',
     }),
   ];
@@ -315,5 +324,26 @@ export class InMemorySubscriptionRepository implements ISubscriptionRepository {
   }
   async findAll(): Promise<Subscription[]> {
     return [...this.subs.values()];
+  }
+}
+
+@Injectable()
+export class InMemoryPaymentReportRepository implements IPaymentReportRepository {
+  private reports: PaymentReport[] = [];
+
+  async save(report: PaymentReport): Promise<PaymentReport> {
+    const idx = this.reports.findIndex((r) => r.id === report.id);
+    if (idx >= 0) this.reports[idx] = report;
+    else this.reports.unshift(report);
+    return report;
+  }
+  async findAll(): Promise<PaymentReport[]> {
+    return [...this.reports];
+  }
+  async findById(id: string): Promise<PaymentReport | null> {
+    return this.reports.find((r) => r.id === id) || null;
+  }
+  async findByTenantId(tenantId: string): Promise<PaymentReport[]> {
+    return this.reports.filter((r) => r.tenantId === tenantId);
   }
 }
