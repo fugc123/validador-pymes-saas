@@ -17,3 +17,6 @@ coverage/
 # Engram & AI memory
 .engram/
 cloudflared.exe
+
+# Local AI runtime state
+.atl/

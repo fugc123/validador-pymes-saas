@@ -1,0 +1,27 @@
+schema: spec-driven
+version: "2.0"
+
+context: |
+  Project: validador-pymes-saas
+  Tech stack: TypeScript, NestJS 10, TypeORM, PostgreSQL, Redis, Jest
+  Architecture: Multi-Tenant SaaS, Hexagonal Architecture, Anti-Replay Ledger
+  Testing: Jest unit + integration tests
+  Governance: Gentle AI SDD, RDD & Financial Compliance
+
+rules:
+  proposal:
+    - Include anti-replay security analysis for all financial flows
+    - Enforce tenant isolation guarantees
+  specs:
+    - Use Given/When/Then for transaction and idempotency scenarios
+    - Number acceptance criteria as [AC-01], [AC-02]
+  design:
+    - Detail idempotency keys, Redis TTL, and database DDL
+  tasks:
+    - Keep each task bounded to <= 400 diff lines
+  apply:
+    tdd: true
+    test_command: "npm test"
+  verify:
+    test_command: "npm test"
+    build_command: "npm run build"
