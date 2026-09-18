@@ -6,9 +6,22 @@ describe('GetMerchantMetricsUseCase', () => {
   let transferRepo: InMemoryTransferRepository;
   let useCase: GetMerchantMetricsUseCase;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     transferRepo = new InMemoryTransferRepository();
     useCase = new GetMerchantMetricsUseCase(transferRepo);
+
+    await transferRepo.save(
+      new Transfer({
+        id: 'tr-sample-1',
+        tenantId: 'kiosko-san-roque',
+        operationId: 'OP-45601',
+        operationDate: 'Hoy 14:30',
+        payerName: 'ALEJANDRA CHENA',
+        payerBank: 'Banco Itaú',
+        amount: 26000,
+        status: 'pending',
+      }),
+    );
   });
 
   it('should calculate aggregated total collected and validated count accurately', async () => {

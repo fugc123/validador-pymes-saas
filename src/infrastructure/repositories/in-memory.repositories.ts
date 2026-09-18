@@ -59,20 +59,6 @@ export class InMemoryUserRepository implements IUserRepository {
       fullName: 'Platform SuperAdmin',
       isSuperAdmin: true,
     }),
-    new User({
-      id: 'usr-franco-1',
-      email: 'franco@kiosko.com',
-      passwordHash: '$2a$10$abcdefghijklmnopqrstuvwxyz12345',
-      fullName: 'Franco Galeano (Dueño)',
-      isSuperAdmin: false,
-    }),
-    new User({
-      id: 'usr-carlos-1',
-      email: 'carlos@kiosko.com',
-      passwordHash: '$2a$10$abcdefghijklmnopqrstuvwxyz12345',
-      fullName: 'Carlos Almirón (Cajero)',
-      isSuperAdmin: false,
-    }),
   ];
 
   async findByEmail(email: string): Promise<User | null> {
@@ -93,24 +79,10 @@ export class InMemoryUserRepository implements IUserRepository {
 export class InMemoryMerchantRepository implements IMerchantRepository {
   private merchants: Merchant[] = [
     new Merchant({
-      id: 'kiosko-san-roque',
-      name: 'Kiosko San Roque',
-      slug: 'kiosko-san-roque',
-      webhookSecret: 'sec_kiosko_san_roque_pilot_2026',
-      status: 'active',
-    }),
-    new Merchant({
       id: 'cajasegura-platform',
       name: 'CajaSegura Plataforma',
       slug: 'cajasegura-platform',
       webhookSecret: 'sec_cajasegura_admin_2026',
-      status: 'active',
-    }),
-    new Merchant({
-      id: 'farmacia-central',
-      name: 'Farmacia Central',
-      slug: 'farmacia-central',
-      webhookSecret: 'sec_farmacia_central_2026',
       status: 'active',
     }),
   ];
@@ -131,53 +103,7 @@ export class InMemoryMerchantRepository implements IMerchantRepository {
 
 @Injectable()
 export class InMemoryMembershipRepository implements IMembershipRepository {
-  private memberships: { membership: MerchantMembership; merchant: Merchant }[] = [
-    {
-      membership: new MerchantMembership({
-        id: 'mem-owner-1',
-        userId: 'usr-franco-1',
-        merchantId: 'kiosko-san-roque',
-        role: 'MERCHANT_OWNER',
-        isActive: true,
-      }),
-      merchant: new Merchant({
-        id: 'kiosko-san-roque',
-        name: 'Kiosko San Roque',
-        slug: 'kiosko-san-roque',
-        webhookSecret: 'sec_kiosko_san_roque_pilot_2026',
-      }),
-    },
-    {
-      membership: new MerchantMembership({
-        id: 'mem-cashier-1',
-        userId: 'usr-carlos-1',
-        merchantId: 'kiosko-san-roque',
-        role: 'CASHIER',
-        isActive: true,
-      }),
-      merchant: new Merchant({
-        id: 'kiosko-san-roque',
-        name: 'Kiosko San Roque',
-        slug: 'kiosko-san-roque',
-        webhookSecret: 'sec_kiosko_san_roque_pilot_2026',
-      }),
-    },
-    {
-      membership: new MerchantMembership({
-        id: 'mem-franco-cashier-2',
-        userId: 'usr-franco-1',
-        merchantId: 'farmacia-central',
-        role: 'CASHIER',
-        isActive: true,
-      }),
-      merchant: new Merchant({
-        id: 'farmacia-central',
-        name: 'Farmacia Central',
-        slug: 'farmacia-central',
-        webhookSecret: 'sec_farmacia_central_2026',
-      }),
-    },
-  ];
+  private memberships: { membership: MerchantMembership; merchant: Merchant }[] = [];
 
   async findActiveByUser(userId: string): Promise<UserMembershipDetail[]> {
     return this.memberships.filter((m) => m.membership.userId === userId && m.membership.isActive);
@@ -212,28 +138,7 @@ export class InMemoryMembershipRepository implements IMembershipRepository {
 
 @Injectable()
 export class InMemoryTransferRepository implements ITransferRepository {
-  private transfers: Transfer[] = [
-    new Transfer({
-      id: 'tr-sample-1',
-      tenantId: 'kiosko-san-roque',
-      operationId: 'OP-45601',
-      operationDate: 'Hoy 14:30',
-      payerName: 'ALEJANDRA CHENA',
-      payerBank: 'Banco Itaú',
-      amount: 26000,
-      status: 'pending',
-    }),
-    new Transfer({
-      id: 'tr-sample-fc-1',
-      tenantId: 'farmacia-central',
-      operationId: 'OP-77890',
-      operationDate: 'Hoy 16:15',
-      payerName: 'LUCAS GONZALEZ',
-      payerBank: 'Banco Familiar',
-      amount: 45000,
-      status: 'pending',
-    }),
-  ];
+  private transfers: Transfer[] = [];
 
   async save(transfer: Transfer): Promise<Transfer> {
     const idx = this.transfers.findIndex(
@@ -336,20 +241,7 @@ export class InMemoryMerchantRequestRepository implements IMerchantRequestReposi
 
 @Injectable()
 export class InMemorySubscriptionRepository implements ISubscriptionRepository {
-  private subs: Subscription[] = [
-    new Subscription({
-      id: 'sub-pilot-1',
-      tenantId: 'kiosko-san-roque',
-      status: 'trial',
-      currentPeriodEnd: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    }),
-    new Subscription({
-      id: 'sub-fc-1',
-      tenantId: 'farmacia-central',
-      status: 'trial',
-      currentPeriodEnd: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
-    }),
-  ];
+  private subs: Subscription[] = [];
 
   async save(subscription: Subscription): Promise<Subscription> {
     const idx = this.subs.findIndex((s) => s.tenantId === subscription.tenantId);

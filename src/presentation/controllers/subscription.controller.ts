@@ -66,10 +66,14 @@ export class SubscriptionController {
     const status = await this.subscriptionBillingUseCase.getStatus(tenantId);
     
     const now = new Date();
-    const daysRemaining = Math.max(0, Math.ceil((status.currentPeriodEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+    const isLifetime = status.currentPeriodEnd.getFullYear() >= 2090;
+    const daysRemaining = isLifetime
+      ? 99999
+      : Math.max(0, Math.ceil((status.currentPeriodEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
 
     return {
       ...status,
+      isLifetime,
       daysRemaining,
     };
   }
@@ -100,14 +104,18 @@ export class SubscriptionController {
     const result = await Promise.all(
       subscriptions.map(async (sub) => {
         const merchant = await this.merchantRepository.findById(sub.tenantId);
-        const daysRemaining = Math.max(0, Math.ceil((sub.currentPeriodEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+        const isLifetime = sub.currentPeriodEnd.getFullYear() >= 2090;
+        const daysRemaining = isLifetime
+          ? 99999
+          : Math.max(0, Math.ceil((sub.currentPeriodEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
         
         return {
           tenantId: sub.tenantId,
           merchantName: merchant?.name || 'Unknown',
-          status: sub.status,
+          status: isLifetime ? 'lifetime' : sub.status,
+          isLifetime,
           isActive: sub.isActive(),
-          isTrial: sub.isTrial(),
+          isTrial: isLifetime ? false : sub.isTrial(),
           currentPeriodEnd: sub.currentPeriodEnd,
           daysRemaining,
         };

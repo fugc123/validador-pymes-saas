@@ -10,6 +10,10 @@ import {
   AlertTriangle,
   Clock,
   CreditCard,
+  Plus,
+  Sparkles,
+  X,
+  Key,
 } from 'lucide-react';
 
 interface MerchantRequest {
@@ -26,7 +30,8 @@ interface MerchantRequest {
 interface Subscription {
   tenantId: string;
   merchantName: string;
-  status: 'trial' | 'active' | 'past_due' | 'cancelled';
+  status: 'trial' | 'active' | 'past_due' | 'cancelled' | 'lifetime';
+  isLifetime?: boolean;
   daysRemaining: number;
   currentPeriodEnd: string;
 }
@@ -47,6 +52,57 @@ export const SuperAdminPanel: React.FC = () => {
   const [paymentReports, setPaymentReports] = useState<PaymentReport[]>([]);
   const [reportActionMessage, setReportActionMessage] = useState<{ type: 'success' | 'warning', text: string } | null>(null);
   const [simulationPayer, setSimulationPayer] = useState('Franco Galeano');
+
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    businessName: '',
+    ownerName: '',
+    email: '',
+    password: '',
+    phone: '',
+    city: 'Asunción',
+  });
+  const [isSubmittingCreate, setIsSubmittingCreate] = useState(false);
+  const [createdResult, setCreatedResult] = useState<any | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  const handleCreateFreeMerchant = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) return;
+    setIsSubmittingCreate(true);
+    setCreateError(null);
+    try {
+      const res = await fetch('/api/v1/onboarding/superadmin/create-free-merchant', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(createForm),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCreatedResult(data);
+        setCreateForm({
+          businessName: '',
+          ownerName: '',
+          email: '',
+          password: '',
+          phone: '',
+          city: 'Asunción',
+        });
+        fetchSubscriptions();
+        fetchRequests();
+      } else {
+        const errData = await res.json();
+        setCreateError(errData.message || 'Error al crear el comercio');
+      }
+    } catch (err: any) {
+      setCreateError(err.message || 'Error de conexión');
+    } finally {
+      setIsSubmittingCreate(false);
+    }
+  };
 
   const fetchRequests = async () => {
     if (!token) return;
@@ -212,8 +268,15 @@ export const SuperAdminPanel: React.FC = () => {
           </div>
           <div className="font-bold text-white">CajaSegura — Panel de Administración</div>
         </div>
-        <div className="flex items-center space-x-4">
-          <div className="text-sm text-gray-400">{user?.email}</div>
+        <div className="flex items-center space-x-3 sm:space-x-4">
+          <button
+            onClick={() => { setCreatedResult(null); setCreateError(null); setShowCreateModal(true); }}
+            className="px-3.5 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-500/20 flex items-center space-x-1.5 transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Crear Comercio / Dueño Gratuito</span>
+          </button>
+          <div className="text-sm text-gray-400 hidden sm:block">{user?.email}</div>
           <button
             onClick={logout}
             className="p-2 text-gray-400 hover:text-red-400 rounded-lg hover:bg-[#0B0F19] transition-colors"
@@ -422,10 +485,11 @@ export const SuperAdminPanel: React.FC = () => {
               <tbody className="divide-y divide-[#24324D]">
                 {subscriptions.map(s => {
                   let badge = <span className="px-2 py-0.5 rounded-full font-mono text-[10px] font-bold bg-gray-500/20 text-gray-400">Desconocido</span>;
-                  if (s.status === 'trial') badge = <span className="px-2 py-0.5 rounded-full font-mono text-[10px] font-bold bg-blue-500/20 text-blue-400">Trial</span>;
-                  if (s.status === 'active') badge = <span className="px-2 py-0.5 rounded-full font-mono text-[10px] font-bold bg-emerald-500/20 text-emerald-400">Activo</span>;
-                  if (s.status === 'past_due') badge = <span className="px-2 py-0.5 rounded-full font-mono text-[10px] font-bold bg-red-500/20 text-red-400">Moroso</span>;
-                  if (s.status === 'cancelled') badge = <span className="px-2 py-0.5 rounded-full font-mono text-[10px] font-bold bg-gray-500/20 text-gray-400">Cancelado</span>;
+                  if (s.isLifetime || s.status === 'lifetime') badge = <span className="px-2.5 py-0.5 rounded-full font-mono text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">Gratis Permanente</span>;
+                  else if (s.status === 'trial') badge = <span className="px-2 py-0.5 rounded-full font-mono text-[10px] font-bold bg-blue-500/20 text-blue-400">Trial</span>;
+                  else if (s.status === 'active') badge = <span className="px-2 py-0.5 rounded-full font-mono text-[10px] font-bold bg-emerald-500/20 text-emerald-400">Activo</span>;
+                  else if (s.status === 'past_due') badge = <span className="px-2 py-0.5 rounded-full font-mono text-[10px] font-bold bg-red-500/20 text-red-400">Moroso</span>;
+                  else if (s.status === 'cancelled') badge = <span className="px-2 py-0.5 rounded-full font-mono text-[10px] font-bold bg-gray-500/20 text-gray-400">Cancelado</span>;
 
                   return (
                     <tr key={s.tenantId} className="hover:bg-[#1A253C]/40 transition-colors">
@@ -434,24 +498,37 @@ export const SuperAdminPanel: React.FC = () => {
                         <div className="text-[10px] text-gray-500 font-mono">{s.tenantId}</div>
                       </td>
                       <td className="p-3">{badge}</td>
-                      <td className="p-3 font-mono text-gray-300">{s.daysRemaining}</td>
-                      <td className="p-3 text-gray-400">{new Date(s.currentPeriodEnd).toLocaleDateString()}</td>
+                      <td className="p-3 font-mono text-gray-300">
+                        {s.isLifetime || s.status === 'lifetime' ? <span className="text-purple-300 font-bold">∞ Permanente</span> : s.daysRemaining}
+                      </td>
+                      <td className="p-3 text-gray-400">
+                        {s.isLifetime || s.status === 'lifetime' ? <span className="text-purple-300">Sin vencimiento</span> : new Date(s.currentPeriodEnd).toLocaleDateString()}
+                      </td>
                       <td className="p-3 text-right flex items-center justify-end space-x-2">
-                        <button
-                          onClick={() => handleConfirmPayment(s.tenantId)}
-                          className="px-2 py-1 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/30 rounded flex items-center space-x-1"
-                        >
-                          <CheckCircle className="w-3.5 h-3.5" />
-                          <span>Confirmar Pago</span>
-                        </button>
-                        {s.status !== 'past_due' && s.status !== 'cancelled' && (
-                          <button
-                            onClick={() => handleMarkPastDue(s.tenantId)}
-                            className="px-2 py-1 bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/30 rounded flex items-center space-x-1"
-                          >
-                            <AlertTriangle className="w-3.5 h-3.5" />
-                            <span>Marcar Moroso</span>
-                          </button>
+                        {s.isLifetime || s.status === 'lifetime' ? (
+                          <span className="text-xs text-purple-400 font-bold flex items-center space-x-1">
+                            <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                            <span>Bonificado VIP</span>
+                          </span>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => handleConfirmPayment(s.tenantId)}
+                              className="px-2 py-1 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/30 rounded flex items-center space-x-1"
+                            >
+                              <CheckCircle className="w-3.5 h-3.5" />
+                              <span>Confirmar Pago</span>
+                            </button>
+                            {s.status !== 'past_due' && s.status !== 'cancelled' && (
+                              <button
+                                onClick={() => handleMarkPastDue(s.tenantId)}
+                                className="px-2 py-1 bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/30 rounded flex items-center space-x-1"
+                              >
+                                <AlertTriangle className="w-3.5 h-3.5" />
+                                <span>Marcar Moroso</span>
+                              </button>
+                            )}
+                          </>
                         )}
                       </td>
                     </tr>
@@ -462,6 +539,162 @@ export const SuperAdminPanel: React.FC = () => {
           </div>
         </div>
       </main>
+
+      {/* Modal: Crear Comercio Bonificado / Dueño Gratuito */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-[#151D2F] border border-[#24324D] rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl relative">
+            <button
+              onClick={() => setShowCreateModal(false)}
+              className="absolute top-5 right-5 text-gray-400 hover:text-white p-1 rounded-lg hover:bg-[#0B0F19] transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center space-x-3 mb-6">
+              <div className="p-3 bg-purple-500/10 text-purple-400 rounded-xl">
+                <Sparkles className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-white">Crear Comercio Bonificado</h3>
+                <p className="text-xs text-purple-300 font-medium">Plan Permanente Gratis (VIP / Muestra)</p>
+              </div>
+            </div>
+
+            {createError && (
+              <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs">
+                {createError}
+              </div>
+            )}
+
+            {createdResult ? (
+              <div className="space-y-4">
+                <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl space-y-2 text-xs">
+                  <div className="text-emerald-400 font-bold text-sm flex items-center space-x-2">
+                    <CheckCircle className="w-4 h-4" />
+                    <span>¡Comercio y Dueño Creados con Éxito!</span>
+                  </div>
+                  <div className="text-gray-300 pt-2 space-y-1">
+                    <div><span className="text-gray-400 font-medium">Comercio:</span> <span className="text-white font-bold">{createdResult.merchantName}</span></div>
+                    <div><span className="text-gray-400 font-medium">Email de Acceso:</span> <span className="text-white font-mono font-bold">{createdResult.ownerEmail}</span></div>
+                    <div><span className="text-gray-400 font-medium">Plan:</span> <span className="text-purple-300 font-bold">Permanente Gratuito (100% Bonificado)</span></div>
+                    <div className="pt-2">
+                      <div className="text-gray-400 font-medium mb-1">Webhook Secret (para Google Script):</div>
+                      <code className="block p-2 bg-[#0B0F19] rounded-lg text-emerald-300 font-mono text-[11px] break-all select-all">
+                        {createdResult.webhookSecret}
+                      </code>
+                    </div>
+                  </div>
+                </div>
+                <div className="text-xs text-gray-400">
+                  Tu amiga ya puede ingresar directamente a <span className="text-white font-bold">https://cajasegura.com.py</span> con su email y la contraseña que le asignaste.
+                </div>
+                <button
+                  onClick={() => { setShowCreateModal(false); setCreatedResult(null); }}
+                  className="w-full py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl transition-colors"
+                >
+                  Cerrar
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleCreateFreeMerchant} className="space-y-4">
+                <div className="bg-purple-500/5 border border-purple-500/20 rounded-xl p-3 text-[11px] text-purple-300 leading-relaxed">
+                  💡 Este comercio no tendrá alertas de pago, días de prueba ni requerimientos de transferencias bancarias. Su acceso será permanente y 100% libre.
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 mb-1">Nombre del Comercio / Negocio *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ej: Farmacia San José o Kiosko Lili"
+                    value={createForm.businessName}
+                    onChange={(e) => setCreateForm({ ...createForm, businessName: e.target.value })}
+                    className="w-full bg-[#0B0F19] border border-[#24324D] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500 transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 mb-1">Nombre del Dueño / Amiga *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ej: Laura Benítez"
+                    value={createForm.ownerName}
+                    onChange={(e) => setCreateForm({ ...createForm, ownerName: e.target.value })}
+                    className="w-full bg-[#0B0F19] border border-[#24324D] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500 transition-colors"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 mb-1">Email de Acceso *</label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="amiga@farmacia.com"
+                      value={createForm.email}
+                      onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
+                      className="w-full bg-[#0B0F19] border border-[#24324D] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500 transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 mb-1">Contraseña Inicial *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Contraseña segura"
+                      value={createForm.password}
+                      onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
+                      className="w-full bg-[#0B0F19] border border-[#24324D] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500 transition-colors"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 mb-1">Ciudad (Opcional)</label>
+                    <input
+                      type="text"
+                      placeholder="Asunción"
+                      value={createForm.city}
+                      onChange={(e) => setCreateForm({ ...createForm, city: e.target.value })}
+                      className="w-full bg-[#0B0F19] border border-[#24324D] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500 transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 mb-1">Teléfono (Opcional)</label>
+                    <input
+                      type="text"
+                      placeholder="0981xxxxxx"
+                      value={createForm.phone}
+                      onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
+                      className="w-full bg-[#0B0F19] border border-[#24324D] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500 transition-colors"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end space-x-3 pt-4 border-t border-[#24324D]">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateModal(false)}
+                    className="px-4 py-2 bg-[#0B0F19] hover:bg-[#1E293B] text-gray-400 text-xs font-bold rounded-xl transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingCreate}
+                    className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-purple-500/20 transition-all disabled:opacity-50"
+                  >
+                    {isSubmittingCreate ? 'Creando...' : 'Crear Comercio Permanente'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

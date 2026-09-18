@@ -1,6 +1,8 @@
 import { SubscriptionController } from '../../src/presentation/controllers/subscription.controller';
 import { SubscriptionBillingUseCase } from '../../src/core/application/use-cases/billing/subscription-billing.use-case';
 import { InMemoryMerchantRepository, InMemorySubscriptionRepository, InMemoryPaymentReportRepository, InMemoryTransferRepository } from '../../src/infrastructure/repositories/in-memory.repositories';
+import { Merchant } from '../../src/core/domain/entities/merchant.entity';
+import { Subscription } from '../../src/core/domain/entities/subscription.entity';
 
 describe('SubscriptionController', () => {
   let controller: SubscriptionController;
@@ -17,6 +19,20 @@ describe('SubscriptionController', () => {
     transferRepo = new InMemoryTransferRepository();
     billingUseCase = new SubscriptionBillingUseCase(subRepo);
     controller = new SubscriptionController(billingUseCase, subRepo, merchantRepo, paymentReportRepo, transferRepo);
+
+    await merchantRepo.save(new Merchant({
+      id: 'kiosko-san-roque',
+      name: 'Kiosko San Roque',
+      slug: 'kiosko-san-roque',
+      webhookSecret: 'sec_kiosko_san_roque_pilot_2026',
+      status: 'active',
+    }));
+    await subRepo.save(new Subscription({
+      id: 'sub-pilot-1',
+      tenantId: 'kiosko-san-roque',
+      status: 'trial',
+      currentPeriodEnd: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    }));
   });
 
   it('should return subscription status with daysRemaining for a tenant', async () => {

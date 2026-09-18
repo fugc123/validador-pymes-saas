@@ -27,6 +27,7 @@ interface TransferResult {
 interface SubscriptionStatus {
   status: string;
   daysRemaining: number;
+  isLifetime?: boolean;
 }
 
 export const FastPosScreen: React.FC = () => {
@@ -227,6 +228,9 @@ export const FastPosScreen: React.FC = () => {
       </header>
 
       {subscription && (() => {
+        if (subscription.isLifetime || subscription.daysRemaining > 365) {
+          return null;
+        }
         const { status, daysRemaining } = subscription;
         if (status === 'cancelled' || status === 'past_due') {
           return (

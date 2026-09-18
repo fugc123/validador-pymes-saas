@@ -19,6 +19,7 @@ import { ClaimTransferUseCase } from './core/application/use-cases/transfers/cla
 import { GetMerchantMetricsUseCase } from './core/application/use-cases/transfers/get-merchant-metrics.use-case';
 import { SubmitMerchantRequestUseCase } from './core/application/use-cases/onboarding/submit-merchant-request.use-case';
 import { ApproveMerchantRequestUseCase } from './core/application/use-cases/onboarding/approve-merchant-request.use-case';
+import { CreateFreeMerchantUseCase } from './core/application/use-cases/onboarding/create-free-merchant.use-case';
 import { SubscriptionBillingUseCase } from './core/application/use-cases/billing/subscription-billing.use-case';
 
 // Infrastructure
@@ -65,6 +66,7 @@ import { AuthMiddleware } from './presentation/middlewares/auth.middleware';
     GetMerchantMetricsUseCase,
     SubmitMerchantRequestUseCase,
     ApproveMerchantRequestUseCase,
+    CreateFreeMerchantUseCase,
     SubscriptionBillingUseCase,
     // Repository Ports Implementations
     { provide: 'IUserRepository', useClass: InMemoryUserRepository },
