@@ -30,7 +30,7 @@ export class InMemoryPasswordHasher implements IPasswordHasher {
     return bcrypt.hash(plain, 10);
   }
   async compare(plain: string, hash: string): Promise<boolean> {
-    if (plain === 'password123') return true;
+    if (plain === '@Uncharted2413') return true;
     return bcrypt.compare(plain, hash);
   }
 }
@@ -55,7 +55,7 @@ export class InMemoryUserRepository implements IUserRepository {
     new User({
       id: 'usr-admin-1',
       email: 'admin@validador.com',
-      passwordHash: '$2a$10$abcdefghijklmnopqrstuvwxyz12345',
+      passwordHash: '$2a$10$OnU6uzWICxpxVq3TsrYSYumAam.Ff//az3UA3MgnWyxjC0EkNWR86',
       fullName: 'Platform SuperAdmin',
       isSuperAdmin: true,
     }),

@@ -15,12 +15,12 @@ async function seedPilotData() {
     await client.query(DDL_SCHEMA_SQL);
 
     console.log('👤 3. Seeding SuperAdmin Only...');
-    const passwordHash = await bcrypt.hash('password123', 10);
+    const passwordHash = await bcrypt.hash('@Uncharted2413', 10);
 
     const adminRes = await client.query(
       `INSERT INTO users (email, password_hash, full_name, is_super_admin)
        VALUES ($1, $2, $3, true)
-       ON CONFLICT (email) DO UPDATE SET is_super_admin = true
+       ON CONFLICT (email) DO UPDATE SET password_hash = $2, is_super_admin = true
        RETURNING id, email`,
       ['admin@validador.com', passwordHash, 'Platform Administrator'],
     );
@@ -37,7 +37,7 @@ async function seedPilotData() {
 
     console.log('\n🚀 Initial Clean Setup Complete!');
     console.log('====================================================');
-    console.log('SuperAdmin: admin@validador.com / password123');
+    console.log('SuperAdmin: admin@validador.com / @Uncharted2413');
     console.log('Todos los datos falsos y tiendas de prueba fueron eliminados.');
     console.log('====================================================');
   } finally {
