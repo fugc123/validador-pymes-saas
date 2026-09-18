@@ -16,13 +16,20 @@ The current deployment contains hardcoded sample stores (Kiosko San Roque, Farma
 5. **Production Deploy**: Sync and deploy changes to VPS `67.205.168.176`, run migrations/cleanup, restart PM2, and verify live.
 
 ## Tasks
-- [ ] **TASK-01**: Clean fake seed data in `in-memory.repositories.ts` (users, merchants, memberships, transfers, subscriptions).
-- [ ] **TASK-02**: Implement `CreateFreeMerchantUseCase` and DTOs in backend with tests.
-- [ ] **TASK-03**: Expose `POST /api/v1/onboarding/superadmin/create-free-merchant` in `OnboardingController`.
-- [ ] **TASK-04**: Update `SuperAdminPanel.tsx` with "➕ Crear Comercio / Dueño Gratuito" modal and action.
-- [ ] **TASK-05**: Update `OwnerDashboard.tsx` & `FastPosScreen.tsx` to display lifetime plan badges and suppress payment alerts.
-- [ ] **TASK-06**: Verify unit tests and production build locally.
-- [ ] **TASK-07**: Deploy to VPS `67.205.168.176`, clear database tables, restart PM2, and verify live in production.
+- [x] **TASK-01**: Clean fake seed data in `in-memory.repositories.ts` (users, merchants, memberships, transfers, subscriptions).
+- [x] **TASK-02**: Implement `CreateFreeMerchantUseCase` and DTOs in backend with tests.
+- [x] **TASK-03**: Expose `POST /api/v1/onboarding/superadmin/create-free-merchant` in `OnboardingController`.
+- [x] **TASK-04**: Update `SuperAdminPanel.tsx` with "➕ Crear Comercio / Dueño Gratuito" modal and action.
+- [x] **TASK-05**: Update `OwnerDashboard.tsx` & `FastPosScreen.tsx` to display lifetime plan badges and suppress payment alerts.
+- [x] **TASK-06**: Verify unit tests (70/70 passing) and production build locally.
+- [x] **TASK-07**: Deploy to VPS `67.205.168.176`, clear database tables, restart PM2, and verify live in production.
+
+## Verification Evidence
+- Clean seed execution: `TRUNCATE TABLE transfers, subscriptions, merchant_memberships, merchant_requests, merchants, users CASCADE;`
+- Only SuperAdmin seeded: `admin@validador.com` / `password123`.
+- Old fake accounts (`franco@kiosko.com`, etc.) return `HTTP 401 Unauthorized`.
+- Provisioned free permanent merchant via API/UI: `isLifetime: true`, `daysRemaining: 99999`, `currentPeriodEnd: 2099-12-31`.
+- Live HTTPS verification on `https://cajasegura.com.py`.
 
 ## Applicable Checks
 - Automated unit tests passing (Jest)
