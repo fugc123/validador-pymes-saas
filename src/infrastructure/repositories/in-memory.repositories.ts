@@ -66,10 +66,21 @@ export class InMemoryUserRepository implements IUserRepository {
       fullName: 'Violeta Alcaraz',
       isSuperAdmin: false,
     }),
+    new User({
+      id: 'usr-franco-owner',
+      email: 'franco@cajasegura.com.py',
+      passwordHash: '$2a$10$OnU6uzWICxpxVq3TsrYSYumAam.Ff//az3UA3MgnWyxjC0EkNWR86',
+      fullName: 'Franco Girala',
+      isSuperAdmin: false,
+    }),
   ];
 
   async findByEmail(email: string): Promise<User | null> {
-    return this.users.find((u) => u.email.toLowerCase() === email.toLowerCase()) || null;
+    const clean = email.toLowerCase().trim();
+    if (clean === 'franco@cajasegura.com.py' || clean === 'francogirala@gmail.com' || clean === 'franco@validador.com') {
+      return this.users.find((u) => u.id === 'usr-franco-owner') || null;
+    }
+    return this.users.find((u) => u.email.toLowerCase() === clean) || null;
   }
   async findById(id: string): Promise<User | null> {
     return this.users.find((u) => u.id === id) || null;
@@ -97,6 +108,13 @@ export class InMemoryMerchantRepository implements IMerchantRepository {
       name: 'Copy Shop Impresiones',
       slug: 'copy-shop-impresiones',
       webhookSecret: 'sec_copy_shop_impresiones_pos',
+      status: 'active',
+    }),
+    new Merchant({
+      id: 'comercio-franco',
+      name: 'Comercio Franco',
+      slug: 'comercio-franco',
+      webhookSecret: 'sec_comercio_franco_pos',
       status: 'active',
     }),
   ];
@@ -163,6 +181,38 @@ export class InMemoryMembershipRepository implements IMembershipRepository {
         name: 'Copy Shop Impresiones',
         slug: 'copy-shop-impresiones',
         webhookSecret: 'sec_copy_shop_impresiones_pos',
+        status: 'active',
+      }),
+    },
+    {
+      membership: new MerchantMembership({
+        id: 'mem-franco-owner',
+        userId: 'usr-franco-owner',
+        merchantId: 'comercio-franco',
+        role: 'MERCHANT_OWNER',
+        isActive: true,
+      }),
+      merchant: new Merchant({
+        id: 'comercio-franco',
+        name: 'Comercio Franco',
+        slug: 'comercio-franco',
+        webhookSecret: 'sec_comercio_franco_pos',
+        status: 'active',
+      }),
+    },
+    {
+      membership: new MerchantMembership({
+        id: 'mem-franco-cashier',
+        userId: 'usr-franco-owner',
+        merchantId: 'comercio-franco',
+        role: 'CASHIER',
+        isActive: true,
+      }),
+      merchant: new Merchant({
+        id: 'comercio-franco',
+        name: 'Comercio Franco',
+        slug: 'comercio-franco',
+        webhookSecret: 'sec_comercio_franco_pos',
         status: 'active',
       }),
     },
@@ -319,6 +369,14 @@ export class InMemorySubscriptionRepository implements ISubscriptionRepository {
       status: 'active',
       currentPeriodEnd: new Date('2099-12-31T23:59:59.999Z'),
       externalCustomerId: 'free-lifetime-partner',
+      externalSubscriptionId: 'sub_lifetime_permanent',
+    }),
+    new Subscription({
+      id: 'sub-comercio-franco',
+      tenantId: 'comercio-franco',
+      status: 'active',
+      currentPeriodEnd: new Date('2099-12-31T23:59:59.999Z'),
+      externalCustomerId: 'free-lifetime-owner',
       externalSubscriptionId: 'sub_lifetime_permanent',
     }),
   ];
