@@ -27,11 +27,13 @@
 - [x] **TASK-02**: Implement backend self-service trial auto-provisioning with password in SubmitMerchantRequestUseCase and update unit tests. *(Commit: `7d133cd`)*
 - [x] **TASK-03**: Update public registration forms (LandingPage.tsx & PublicRegisterScreen.tsx) with password field and immediate activation flow. *(Commit: `063957f`)*
 - [x] **TASK-04**: Clean up mock cashiers and fallback tenant references in OwnerDashboard.tsx and SuperAdminPanel.tsx. *(Commit: `784afc0`)*
-- [ ] **TASK-05**: Run all unit tests, build locally, deploy to production VPS, and verify live trial signup and login.
+- [x] **TASK-05**: Run all unit tests, build locally, deploy to production VPS, and verify live trial signup and login. *(Verified live in production)*
 
 ## Verification Evidence
-- Clean login view without prefilled inputs.
-- Invalid login returns proper error message and does NOT log in as fake Franco.
-- Registering via public landing creates an active trial user with chosen password immediately.
-- User can immediately log in with their credentials and access OwnerDashboard with 7 days remaining.
-- VPS production deployment updated and verified live.
+- Clean login view without prefilled inputs (`email` and `password` default to empty).
+- Invalid login returns `HTTP 401 {"message":"Invalid credentials"}` and proper UI error banner; does NOT log in as fake demo Franco.
+- Free trial registration via public landing & register screen includes mandatory password, auto-provisions `User`, `Merchant`, `MerchantMembership` (`MERCHANT_OWNER`), and 7-day `Subscription` in `status: 'trial'`.
+- Verified live end-to-end: new trial account registered on `https://cajasegura.com.py/api/v1/onboarding/request` and immediately authenticated with `HTTP 200` on `/api/v1/auth/login`.
+- Cleaned database on VPS: strictly `admin@validador.com` exists.
+- Mock cashiers (Carlos and Ana from Kiosko) removed from `OwnerDashboard.tsx`.
+- All 12 unit test suites (71/71 tests) passing.
