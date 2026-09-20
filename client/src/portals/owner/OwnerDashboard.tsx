@@ -71,8 +71,8 @@ export const OwnerDashboard: React.FC = () => {
   const [auditSearch, setAuditSearch] = useState('');
   const [auditStatusFilter, setAuditStatusFilter] = useState<'ALL' | 'PENDING' | 'CLAIMED'>('ALL');
 
-  const tenantSlug = activeTenant?.tenantId || 'kiosko-san-roque';
-  const tenantSecret = 'sec_kiosko_san_roque_pilot_2026';
+  const tenantSlug = activeTenant?.tenantId || 'comercio';
+  const tenantSecret = activeTenant?.tenantId ? `sec_${activeTenant.tenantId}_pos` : 'sec_comercio_pos';
   const hostUrl = window.location.origin;
 
   const fetchSub = useCallback(async () => {
@@ -799,18 +799,9 @@ Estado: Transferencia acreditada en cuenta`,
               </thead>
               <tbody className="divide-y divide-[#24324D]">
                 <tr>
-                  <td className="p-3 font-semibold text-white">Carlos Almirón</td>
-                  <td className="p-3 text-gray-400">carlos@kiosko.com</td>
-                  <td className="p-3"><span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-400 font-mono">CASHIER</span></td>
-                  <td className="p-3"><span className="text-emerald-400 font-bold">Activo</span></td>
-                  <td className="p-3 text-right text-gray-400 hover:text-white cursor-pointer">Editar</td>
-                </tr>
-                <tr>
-                  <td className="p-3 font-semibold text-white">Ana Martínez</td>
-                  <td className="p-3 text-gray-400">ana@kiosko.com</td>
-                  <td className="p-3"><span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-400 font-mono">CASHIER</span></td>
-                  <td className="p-3"><span className="text-emerald-400 font-bold">Activo</span></td>
-                  <td className="p-3 text-right text-gray-400 hover:text-white cursor-pointer">Editar</td>
+                  <td colSpan={5} className="p-6 text-center text-gray-400 font-sans">
+                    No hay cajeros asignados en este comercio aún. Hacé clic en <strong>+ Agregar Cajero</strong> para dar de alta accesos para tus empleados de caja.
+                  </td>
                 </tr>
               </tbody>
             </table>

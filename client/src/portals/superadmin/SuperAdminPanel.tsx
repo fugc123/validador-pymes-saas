@@ -51,7 +51,7 @@ export const SuperAdminPanel: React.FC = () => {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [paymentReports, setPaymentReports] = useState<PaymentReport[]>([]);
   const [reportActionMessage, setReportActionMessage] = useState<{ type: 'success' | 'warning', text: string } | null>(null);
-  const [simulationPayer, setSimulationPayer] = useState('Franco Galeano');
+  const [simulationPayer, setSimulationPayer] = useState('');
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createForm, setCreateForm] = useState({
@@ -241,7 +241,7 @@ export const SuperAdminPanel: React.FC = () => {
         body: JSON.stringify({ payerName: simulationPayer }),
       });
       if (res.ok) {
-        setReportActionMessage({ type: 'success', text: `Transferencia entrante simulada en cuenta de Franco. Ahora hacé clic en 'Validar Recepción SIPAP'.` });
+        setReportActionMessage({ type: 'success', text: `Transferencia entrante simulada en cuenta bancaria. Ahora hacé clic en 'Validar Recepción SIPAP'.` });
       }
     } catch (err) {
       setReportActionMessage({ type: 'warning', text: 'Error al simular la transferencia.' });
