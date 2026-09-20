@@ -4,6 +4,7 @@ import {
   Headers,
   HttpCode,
   HttpStatus,
+  Logger,
   Param,
   Post,
 } from '@nestjs/common';
@@ -26,6 +27,8 @@ export class WebhookPayloadDto {
 
 @Controller('webhook')
 export class WebhookController {
+  private readonly logger = new Logger(WebhookController.name);
+
   constructor(private readonly ingestUseCase: IngestWebhookUseCase) {}
 
   @Post(':tenantSlug')
@@ -35,6 +38,10 @@ export class WebhookController {
     @Headers('x-merchant-webhook-secret') secretHeader: string,
     @Body() payload: WebhookPayloadDto,
   ) {
+    this.logger.log(
+      `Received webhook for tenant='${tenantSlug}', subject='${payload.subject || 'N/A'}', textLength=${payload.text?.length || 0}, htmlLength=${payload.html?.length || 0}`,
+    );
+
     const result = await this.ingestUseCase.execute({
       tenantSlug,
       secretHeader,

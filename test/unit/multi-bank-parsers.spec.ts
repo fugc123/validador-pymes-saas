@@ -124,4 +124,27 @@ Fecha/Hora: 	14/09/2026 18:45:10`;
     expect(factory.parse(atlasEmail)?.amount).toBe(35000);
     expect(factory.parse(continentalEmail)?.amount).toBe(210000);
   });
+
+  it('8. Universal SIPAP Parser extracts Vanessa Ojeda 48.000 Gs transfer in multiple formats', () => {
+    const text1 = 'Transferencia recibida por Gs. 48.000 de Vanessa Ojeda. Operación: 987654';
+    const parsed1 = factory.parse(text1);
+    expect(parsed1).not.toBeNull();
+    expect(parsed1?.amount).toBe(48000);
+    expect(parsed1?.payerName).toBe('VANESSA OJEDA');
+    expect(parsed1?.operationId).toBe('987654');
+
+    const text2 = '¡Recibiste una transferencia!\nDe: Vanessa Ojeda\nMonto: Gs. 48.000\nComprobante: OP-887766';
+    const parsed2 = factory.parse(text2);
+    expect(parsed2).not.toBeNull();
+    expect(parsed2?.amount).toBe(48000);
+    expect(parsed2?.payerName).toBe('VANESSA OJEDA');
+    expect(parsed2?.operationId).toBe('OP-887766');
+
+    const text3 = 'Aviso de transferencia SIPAP\nCliente pagador: Vanessa Ojeda\nImporte de la operación: 48.000 Gs.\nNro. de Operación: 554433';
+    const parsed3 = factory.parse(text3);
+    expect(parsed3).not.toBeNull();
+    expect(parsed3?.amount).toBe(48000);
+    expect(parsed3?.payerName).toBe('VANESSA OJEDA');
+    expect(parsed3?.operationId).toBe('554433');
+  });
 });

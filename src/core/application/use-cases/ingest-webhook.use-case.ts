@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   Inject,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -30,6 +31,8 @@ export interface IngestWebhookOutput {
 
 @Injectable()
 export class IngestWebhookUseCase {
+  private readonly logger = new Logger(IngestWebhookUseCase.name);
+
   constructor(
     @Inject('IMerchantRepository') private readonly merchantRepo: IMerchantRepository,
     @Inject('ITransferRepository') private readonly transferRepo: ITransferRepository,
@@ -61,13 +64,29 @@ export class IngestWebhookUseCase {
       throw new ForbiddenException('Merchant store is currently inactive or suspended');
     }
 
-    // Parse bank email notification
-    const contentToParse = input.html || input.text;
-    const parsed = this.parserFactory.parse(contentToParse);
+    // Parse bank email notification - try plain text first (cleanest), then html, then subject + text
+    let parsed = null;
+    if (input.text) {
+      parsed = this.parserFactory.parse(input.text);
+    }
+    if (!parsed && input.html) {
+      parsed = this.parserFactory.parse(input.html);
+    }
+    if (!parsed && input.subject) {
+      const combined = `${input.subject}\n${input.text || ''}`;
+      parsed = this.parserFactory.parse(combined);
+    }
 
     if (!parsed) {
+      this.logger.warn(
+        `Failed to parse transfer for tenant '${input.tenantSlug}'. Subject: "${input.subject}". Text snippet: "${input.text?.slice(0, 300)}"`
+      );
       throw new BadRequestException('Unable to extract valid transfer details from email body');
     }
+
+    this.logger.log(
+      `Successfully parsed transfer for tenant '${input.tenantSlug}': OpId=${parsed.operationId}, Amount=${parsed.amount}, Payer=${parsed.payerName}, Bank=${parsed.payerBank}`
+    );
 
     const tenantId = merchant.id!;
 

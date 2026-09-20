@@ -6,6 +6,7 @@ import { UenoBankParser } from './ueno-bank.parser';
 import { FamiliarBankParser } from './familiar-bank.parser';
 import { AtlasBankParser } from './atlas-bank.parser';
 import { ContinentalBankParser } from './continental-bank.parser';
+import { UniversalSipapParser } from './universal-sipap.parser';
 
 @Injectable()
 export class BankParserFactory {
@@ -16,6 +17,7 @@ export class BankParserFactory {
     new FamiliarBankParser(),
     new AtlasBankParser(),
     new ContinentalBankParser(),
+    new UniversalSipapParser(),
   ];
 
   parse(content: string): ParsedTransferData | null {

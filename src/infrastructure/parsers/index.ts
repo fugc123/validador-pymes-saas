@@ -6,4 +6,5 @@ export * from './ueno-bank.parser';
 export * from './familiar-bank.parser';
 export * from './atlas-bank.parser';
 export * from './continental-bank.parser';
+export * from './universal-sipap.parser';
 export * from './bank-parser.factory';
