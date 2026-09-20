@@ -12,6 +12,7 @@ import {
   IMerchantRepository,
   IUserRepository,
   IMembershipRepository,
+  IPasswordHasher,
 } from '../../src/core/application/ports/auth.ports';
 
 describe('Merchant Onboarding & Subscription Billing Lifecycle (T11, T12)', () => {
@@ -20,6 +21,7 @@ describe('Merchant Onboarding & Subscription Billing Lifecycle (T11, T12)', () =
   let mockUserRepo: jest.Mocked<IUserRepository>;
   let mockMembershipRepo: jest.Mocked<IMembershipRepository>;
   let mockSubRepo: jest.Mocked<ISubscriptionRepository>;
+  let mockPasswordHasher: jest.Mocked<IPasswordHasher>;
 
   beforeEach(() => {
     mockRequestRepo = {
@@ -48,22 +50,79 @@ describe('Merchant Onboarding & Subscription Billing Lifecycle (T11, T12)', () =
       findByTenantId: jest.fn(),
       findAll: jest.fn(),
     };
+    mockPasswordHasher = {
+      hash: jest.fn().mockResolvedValue('hashed_test_password'),
+      compare: jest.fn().mockResolvedValue(true),
+    };
   });
 
   describe('SubmitMerchantRequestUseCase (US-ONB-01)', () => {
-    it('Scenario 1: Creates new merchant application in requested status', async () => {
-      const useCase = new SubmitMerchantRequestUseCase(mockRequestRepo);
+    it('Scenario 1: Creates new merchant, user, owner membership and 7-day trial immediately', async () => {
+      mockMerchantRepo.findBySlug.mockResolvedValue(null);
+      mockUserRepo.findByEmail.mockResolvedValue(null);
+      mockMembershipRepo.findByUserAndMerchant.mockResolvedValue(null);
+
+      const useCase = new SubmitMerchantRequestUseCase(
+        mockRequestRepo,
+        mockMerchantRepo,
+        mockUserRepo,
+        mockMembershipRepo,
+        mockSubRepo,
+        mockPasswordHasher,
+      );
       const result = await useCase.execute({
         businessName: 'Farmacia San Cayetano',
         ownerName: 'Juan Duarte',
         email: 'juan@farmacia.com',
+        password: 'securePassword123',
         phone: '+595981112233',
         city: 'Asuncion',
       });
 
-      expect(result.status).toBe('requested');
+      expect(result.status).toBe('approved');
       expect(result.businessName).toBe('Farmacia San Cayetano');
+      expect(result.subscriptionStatus).toBe('trial');
+      expect(mockPasswordHasher.hash).toHaveBeenCalledWith('securePassword123');
+      expect(mockMerchantRepo.save).toHaveBeenCalled();
+      expect(mockUserRepo.save).toHaveBeenCalled();
+      expect(mockMembershipRepo.save).toHaveBeenCalled();
+      expect(mockSubRepo.save).toHaveBeenCalled();
       expect(mockRequestRepo.save).toHaveBeenCalled();
+    });
+
+    it('Scenario 1b: Allows user to register with password and stores hashed credentials', async () => {
+      let savedUser: any = null;
+      mockMerchantRepo.findBySlug.mockResolvedValue(null);
+      mockUserRepo.findByEmail.mockResolvedValue(null);
+      mockUserRepo.save.mockImplementation(async (u: any) => {
+        savedUser = u;
+        return u;
+      });
+      mockMembershipRepo.findByUserAndMerchant.mockResolvedValue(null);
+
+      const useCase = new SubmitMerchantRequestUseCase(
+        mockRequestRepo,
+        mockMerchantRepo,
+        mockUserRepo,
+        mockMembershipRepo,
+        mockSubRepo,
+        mockPasswordHasher,
+      );
+
+      const result = await useCase.execute({
+        businessName: 'Librería Central',
+        ownerName: 'Marta Gómez',
+        email: 'marta@libreria.com',
+        password: 'myTrialSecret123',
+        phone: '+595981998877',
+        city: 'Asuncion',
+      });
+
+      expect(result.status).toBe('approved');
+      expect(result.ownerEmail).toBe('marta@libreria.com');
+      expect(savedUser).toBeDefined();
+      expect(savedUser.email).toBe('marta@libreria.com');
+      expect(savedUser.passwordHash).toBe('hashed_test_password');
     });
   });
 

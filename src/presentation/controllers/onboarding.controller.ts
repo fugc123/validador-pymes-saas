@@ -32,6 +32,10 @@ export class SubmitMerchantRequestDto {
 
   @IsString()
   @IsNotEmpty()
+  password!: string;
+
+  @IsString()
+  @IsNotEmpty()
   phone!: string;
 
   @IsString()
