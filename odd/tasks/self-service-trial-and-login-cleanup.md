@@ -1,4 +1,4 @@
-﻿# Feature: Self-Service Free Trial Auto-Provisioning & Login Mock Data Cleanup
+# Feature: Self-Service Free Trial Auto-Provisioning & Login Mock Data Cleanup
 
 ## Objective
 1. Eliminate all automatic prefill of demo credentials (ranco@kiosko.com / password123) and remove fake user fallbacks in the login screen.
@@ -23,10 +23,10 @@
    - Rebuild backend and frontend, deploy to VPS 67.205.168.176, restart PM2, and verify live self-service registration and login.
 
 ## Tasks
-- [ ] **TASK-01**: Clean frontend login (LoginView.tsx & AuthContext.tsx) and remove demo user fallbacks.
-- [ ] **TASK-02**: Implement backend self-service trial auto-provisioning with password in SubmitMerchantRequestUseCase and update unit tests.
-- [ ] **TASK-03**: Update public registration forms (LandingPage.tsx & PublicRegisterScreen.tsx) with password field and immediate activation flow.
-- [ ] **TASK-04**: Clean up mock cashiers and fallback tenant references in OwnerDashboard.tsx and SuperAdminPanel.tsx.
+- [x] **TASK-01**: Clean frontend login (LoginView.tsx & AuthContext.tsx) and remove demo user fallbacks. *(Commit: `c83c1f2`)*
+- [x] **TASK-02**: Implement backend self-service trial auto-provisioning with password in SubmitMerchantRequestUseCase and update unit tests. *(Commit: `7d133cd`)*
+- [x] **TASK-03**: Update public registration forms (LandingPage.tsx & PublicRegisterScreen.tsx) with password field and immediate activation flow. *(Commit: `063957f`)*
+- [x] **TASK-04**: Clean up mock cashiers and fallback tenant references in OwnerDashboard.tsx and SuperAdminPanel.tsx. *(Commit: `784afc0`)*
 - [ ] **TASK-05**: Run all unit tests, build locally, deploy to production VPS, and verify live trial signup and login.
 
 ## Verification Evidence
