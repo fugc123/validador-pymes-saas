@@ -71,28 +71,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    // Client fallback demo credentials if server is not connected
-    if (email.includes('admin')) {
-      const demoUser: UserProfile = { id: 'usr-admin', email, fullName: 'Super Admin', isSuperAdmin: true };
-      const demoTenant: ActiveTenant = { tenantId: 'global', merchantName: 'Validador Platform', role: 'SUPER_ADMIN' };
-      setUser(demoUser);
-      setActiveTenant(demoTenant);
-      setToken('demo-token-admin');
-      localStorage.setItem('user', JSON.stringify(demoUser));
-      localStorage.setItem('activeTenant', JSON.stringify(demoTenant));
-      localStorage.setItem('token', 'demo-token-admin');
-      return;
+    let errorMsg = 'Correo o contraseña incorrectos.';
+    if (res) {
+      try {
+        const errData = await res.json();
+        if (errData?.message) {
+          errorMsg = Array.isArray(errData.message) ? errData.message.join(', ') : errData.message;
+        }
+      } catch {}
+    } else {
+      errorMsg = 'No se pudo conectar con el servidor. Verificá tu conexión.';
     }
-
-    // Demo multi-store user
-    const demoUser: UserProfile = { id: 'usr-franco', email, fullName: 'Franco Galeano', isSuperAdmin: false };
-    setUser(demoUser);
-    localStorage.setItem('user', JSON.stringify(demoUser));
-    setAvailableMemberships([
-      { tenantId: 'tenant-kiosko', merchantName: 'Kiosko San Roque', role: 'MERCHANT_OWNER' },
-      { tenantId: 'tenant-boutique', merchantName: 'Boutique Asunción', role: 'CASHIER' },
-    ]);
-    setIsSelectingTenant(true);
+    throw new Error(errorMsg);
   };
 
   const selectTenant = async (tenantId: string) => {

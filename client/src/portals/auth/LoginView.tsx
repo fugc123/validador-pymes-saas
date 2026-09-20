@@ -7,15 +7,19 @@ export const LoginView: React.FC<{
   onBackToLanding?: () => void;
 }> = ({ onNavigateToRegister, onBackToLanding }) => {
   const { login, isSelectingTenant, availableMemberships, selectTenant } = useAuth();
-  const [email, setEmail] = useState('franco@kiosko.com');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     setLoading(true);
     try {
       await login(email, password);
+    } catch (err: any) {
+      setError(err?.message || 'Error al iniciar sesión. Verificá tu correo y contraseña.');
     } finally {
       setLoading(false);
     }
@@ -85,6 +89,11 @@ export const LoginView: React.FC<{
         {/* Card */}
         <div className="bg-[#151D2F] border border-[#24324D] rounded-2xl p-8 shadow-2xl">
           <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <div className="p-3 bg-red-950/60 border border-red-500/50 rounded-xl text-xs text-red-300">
+                {error}
+              </div>
+            )}
             <div>
               <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
                 Correo Electrónico
