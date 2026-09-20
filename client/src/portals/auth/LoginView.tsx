@@ -17,7 +17,7 @@ export const LoginView: React.FC<{
     setError(null);
     setLoading(true);
     try {
-      await login(email, password);
+      await login(email.trim(), password.trim());
     } catch (err: any) {
       setError(err?.message || 'Error al iniciar sesión. Verificá tu correo y contraseña.');
     } finally {

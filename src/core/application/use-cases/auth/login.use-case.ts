@@ -54,7 +54,13 @@ export class LoginUseCase {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const isMatch = await this.passwordHasher.compare(input.password, user.passwordHash);
+    const rawPassword = input.password || '';
+    const trimmedPassword = rawPassword.trim();
+
+    const isMatch =
+      (await this.passwordHasher.compare(rawPassword, user.passwordHash)) ||
+      (await this.passwordHasher.compare(trimmedPassword, user.passwordHash));
+
     if (!isMatch) {
       throw new UnauthorizedException('Invalid credentials');
     }
