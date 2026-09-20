@@ -6,14 +6,35 @@ export const PublicRegisterScreen: React.FC<{ onBackToLogin: () => void }> = ({ 
     businessName: '',
     ownerName: '',
     email: '',
+    password: '',
     phone: '',
     city: 'Asunción',
   });
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/v1/onboarding/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      if (res.ok) {
+        setSubmitted(true);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.message || 'Error al procesar la solicitud.');
+      }
+    } catch {
+      setError('No se pudo conectar con el servidor.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -30,19 +51,25 @@ export const PublicRegisterScreen: React.FC<{ onBackToLogin: () => void }> = ({ 
         {submitted ? (
           <div className="text-center py-6">
             <CheckCircle className="w-12 h-12 text-emerald-400 mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-white">¡Solicitud Recibida!</h2>
+            <h2 className="text-xl font-bold text-white">¡Comercio Activado con Éxito!</h2>
             <p className="text-xs text-gray-400 mt-2">
-              Un administrador activará tu prueba de 7 días y te enviará las credenciales y el script de conexión por correo.
+              Tu período de prueba gratis por 7 días ya está disponible. Ya podés ingresar inmediatamente con tu correo y contraseña.
             </p>
             <button
               onClick={onBackToLogin}
-              className="mt-6 w-full py-2.5 bg-emerald-500 text-gray-950 font-bold rounded-xl text-xs"
+              className="mt-6 w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold rounded-xl text-xs shadow-lg shadow-emerald-500/20 transition-all"
             >
-              Regresar
+              Ingresar al Sistema
             </button>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <div className="p-3 bg-red-950/60 border border-red-500 rounded-xl text-xs text-red-300">
+                {error}
+              </div>
+            )}
+
             <div className="text-center mb-6">
               <div className="inline-flex p-3 bg-emerald-500/10 text-emerald-400 rounded-2xl mb-2">
                 <ShieldCheck className="w-8 h-8" />
@@ -88,6 +115,19 @@ export const PublicRegisterScreen: React.FC<{ onBackToLogin: () => void }> = ({ 
             </div>
 
             <div>
+              <label className="block text-xs font-bold text-gray-300 mb-1">Contraseña</label>
+              <input
+                type="password"
+                required
+                minLength={6}
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                className="w-full bg-[#0B0F19] border border-[#24324D] rounded-xl px-4 py-2 text-sm text-white focus:border-emerald-500 focus:outline-none"
+                placeholder="Mínimo 6 caracteres"
+              />
+            </div>
+
+            <div>
               <label className="block text-xs font-bold text-gray-300 mb-1">Teléfono / WhatsApp</label>
               <input
                 type="text"
@@ -112,10 +152,11 @@ export const PublicRegisterScreen: React.FC<{ onBackToLogin: () => void }> = ({ 
 
             <button
               type="submit"
+              disabled={loading}
               className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold rounded-xl text-sm shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center space-x-2"
             >
               <Send className="w-4 h-4" />
-              <span>Enviar Solicitud</span>
+              <span>{loading ? 'Activando tu Prueba Gratis...' : 'Comenzar Prueba Gratis (7 Días)'}</span>
             </button>
           </form>
         )}

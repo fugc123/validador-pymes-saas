@@ -36,6 +36,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToLogin, onGoToReg
     businessName: '',
     ownerName: '',
     email: '',
+    password: '',
     phone: '',
     city: 'Asunción',
   });
@@ -72,10 +73,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToLogin, onGoToReg
         setLeadSubmitted(true);
       } else {
         const data = await res.json().catch(() => ({}));
-        setLeadError(data.message || 'Ocurrió un error al enviar tu solicitud. Intentalo de nuevo.');
+        setLeadError(data.message || 'Ocurrió un error al procesar tu registro. Intentalo de nuevo.');
       }
     } catch {
-      setLeadSubmitted(true); // Fallback graceful success for demo
+      setLeadError('No se pudo conectar con el servidor. Verificá tu conexión.');
     } finally {
       setLeadLoading(false);
     }
@@ -482,15 +483,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToLogin, onGoToReg
           {leadSubmitted ? (
             <div className="text-center py-8 space-y-4">
               <CheckCircle2 className="w-16 h-16 text-emerald-400 mx-auto" />
-              <h3 className="text-xl font-bold text-white">¡Solicitud Recibida con Éxito!</h3>
+              <h3 className="text-xl font-bold text-white">¡Comercio Activado con Éxito!</h3>
               <p className="text-xs text-gray-400 max-w-sm mx-auto">
-                Tu solicitud ya está en la bandeja de activación. Te enviaremos tus credenciales y el script personalizado de Google por correo y WhatsApp.
+                Tu período de prueba gratis por 7 días ya está activo. Ya podés ingresar inmediatamente con tu correo y contraseña para probar el validador en tu local.
               </p>
               <button
                 onClick={onGoToLogin}
-                className="mt-4 px-6 py-2.5 bg-emerald-500 text-gray-950 font-bold rounded-xl text-xs"
+                className="mt-4 px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold rounded-xl text-xs shadow-lg shadow-emerald-500/20 transition-all"
               >
-                Ir a la Pantalla de Acceso
+                Ingresar al Sistema Ahora
               </button>
             </div>
           ) : (
@@ -506,7 +507,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToLogin, onGoToReg
                 <input
                   type="text"
                   required
-                  placeholder="Ej. Kiosko San Roque, Farmacia Central..."
+                  placeholder="Ej. Farmacia San José, Kiosko Lili..."
                   value={leadForm.businessName}
                   onChange={(e) => setLeadForm({ ...leadForm, businessName: e.target.value })}
                   className="w-full bg-[#0B0F19] border border-[#24324D] focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none transition-colors"
@@ -519,7 +520,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToLogin, onGoToReg
                   <input
                     type="text"
                     required
-                    placeholder="Franco Galeano"
+                    placeholder="Ej: Juan Pérez"
                     value={leadForm.ownerName}
                     onChange={(e) => setLeadForm({ ...leadForm, ownerName: e.target.value })}
                     className="w-full bg-[#0B0F19] border border-[#24324D] focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none transition-colors"
@@ -553,23 +554,36 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToLogin, onGoToReg
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-300 mb-1">Ciudad</label>
-                  <select
-                    value={leadForm.city}
-                    onChange={(e) => setLeadForm({ ...leadForm, city: e.target.value })}
+                  <label className="block text-xs font-bold text-gray-300 mb-1">Contraseña para tu Cuenta</label>
+                  <input
+                    type="password"
+                    required
+                    minLength={6}
+                    placeholder="Mínimo 6 caracteres"
+                    value={leadForm.password}
+                    onChange={(e) => setLeadForm({ ...leadForm, password: e.target.value })}
                     className="w-full bg-[#0B0F19] border border-[#24324D] focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none transition-colors"
-                  >
-                    <option value="Asunción">Asunción</option>
-                    <option value="San Lorenzo">San Lorenzo</option>
-                    <option value="Luque">Luque</option>
-                    <option value="Fernando de la Mora">Fernando de la Mora</option>
-                    <option value="Capiatá">Capiatá</option>
-                    <option value="Lambaré">Lambaré</option>
-                    <option value="Ciudad del Este">Ciudad del Este</option>
-                    <option value="Encarnación">Encarnación</option>
-                    <option value="Otra">Otra ciudad</option>
-                  </select>
+                  />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-300 mb-1">Ciudad</label>
+                <select
+                  value={leadForm.city}
+                  onChange={(e) => setLeadForm({ ...leadForm, city: e.target.value })}
+                  className="w-full bg-[#0B0F19] border border-[#24324D] focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none transition-colors"
+                >
+                  <option value="Asunción">Asunción</option>
+                  <option value="San Lorenzo">San Lorenzo</option>
+                  <option value="Luque">Luque</option>
+                  <option value="Fernando de la Mora">Fernando de la Mora</option>
+                  <option value="Capiatá">Capiatá</option>
+                  <option value="Lambaré">Lambaré</option>
+                  <option value="Ciudad del Este">Ciudad del Este</option>
+                  <option value="Encarnación">Encarnación</option>
+                  <option value="Otra">Otra ciudad</option>
+                </select>
               </div>
 
               <button
@@ -577,7 +591,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToLogin, onGoToReg
                 disabled={leadLoading}
                 className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-black text-xs rounded-xl shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center space-x-2 mt-4"
               >
-                <span>{leadLoading ? 'Enviando Solicitud...' : 'Solicitar Prueba Gratuita de 7 Días'}</span>
+                <span>{leadLoading ? 'Activando tu Prueba Gratis...' : 'Comenzar Prueba Gratuita de 7 Días'}</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
 
