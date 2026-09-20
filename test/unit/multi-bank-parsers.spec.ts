@@ -147,4 +147,20 @@ Fecha/Hora: 	14/09/2026 18:45:10`;
     expect(parsed3?.payerName).toBe('VANESSA OJEDA');
     expect(parsed3?.operationId).toBe('554433');
   });
+
+  it('9. Universal SIPAP Parser handles comma thousands separator (PYG 45,000 / PYG 48,000)', () => {
+    const rawItauEmailSnippet = 'Transferencia SIPAP\nEnviado por: Vanessa Ojeda\n\tPYG 45,000\nNro. Comprobante: 112233';
+    const parsed = factory.parse(rawItauEmailSnippet);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.amount).toBe(45000);
+    expect(parsed?.payerName).toBe('VANESSA OJEDA');
+    expect(parsed?.operationId).toBe('112233');
+
+    const rawItau48k = 'Transferencia SIPAP\nCliente Pagador: Vanessa Ojeda\n\tPYG 48,000\nNro. de operación: 998877';
+    const parsed48 = factory.parse(rawItau48k);
+    expect(parsed48).not.toBeNull();
+    expect(parsed48?.amount).toBe(48000);
+    expect(parsed48?.payerName).toBe('VANESSA OJEDA');
+    expect(parsed48?.operationId).toBe('998877');
+  });
 });

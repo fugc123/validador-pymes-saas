@@ -54,11 +54,10 @@ export class UniversalSipapParser implements IBankParser {
     // 1. AMOUNT Extraction
     const rawAmount = findMatch([
       /(?:moneda\s*y\s*monto|monto(?:\s*de\s*la\s*transferencia)?|importe(?:\s*de\s*la\s*operaci[oó]n)?|monto\s*acreditado|valor)\s*[:\-]?\s*(?:gs\.?|pyg)?\s*([0-9.,]+)/i,
-      /(?:gs\.?|pyg|guaran[ií]es)\s*[:\-]?\s*([0-9]{1,3}(?:\.[0-9]{3})+|[0-9]{4,10})/i,
-      /([0-9]{1,3}(?:\.[0-9]{3})+|[0-9]{4,10})\s*(?:gs\.?|pyg|guaran[ií]es)/i,
-      /monto\s*[:\-]?\s*([0-9]{1,3}(?:\.[0-9]{3})+|[0-9]{4,10})/i,
-      /importe\s*[:\-]?\s*([0-9]{1,3}(?:\.[0-9]{3})+|[0-9]{4,10})/i,
-      /(?:por|total)\s*[:\-]?\s*(?:gs\.?|pyg)?\s*([0-9]{1,3}(?:\.[0-9]{3})+|[0-9]{4,10})/i,
+      /(?:gs\.?|pyg|guaran[ií]es)\s*[:\-]?\s*([0-9]{1,3}(?:[.,][0-9]{3})+|[0-9]{4,10})/i,
+      /([0-9]{1,3}(?:[.,][0-9]{3})+|[0-9]{4,10})\s*(?:gs\.?|pyg|guaran[ií]es)/i,
+      /(?:monto|importe)\s*[:\-]?\s*(?:gs\.?|pyg)?\s*([0-9]{1,3}(?:[.,][0-9]{3})+|[0-9]{4,10})/i,
+      /(?:por|total)\s*[:\-]?\s*(?:gs\.?|pyg)?\s*([0-9]{1,3}(?:[.,][0-9]{3})+|[0-9]{4,10})/i,
     ]);
 
     const { currency, amount } = parsePyAmount(rawAmount);
