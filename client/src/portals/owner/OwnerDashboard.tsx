@@ -16,6 +16,7 @@ import {
   Clock,
   ShieldCheck,
   AlertCircle,
+  AlertTriangle,
   Search,
 } from 'lucide-react';
 
@@ -615,15 +616,15 @@ Estado: Transferencia acreditada en cuenta`,
           </div>
 
           {/* Step by step cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 pt-2">
             <div className="bg-[#0B0F19]/80 border border-[#24324D] rounded-2xl p-4 flex flex-col justify-between">
               <div className="space-y-2">
                 <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold flex items-center justify-center">
                   1
                 </div>
-                <div className="font-bold text-sm text-white">Hacé clic en Abrir Google Apps Script</div>
-                <div className="text-xs text-gray-400">
-                  Se abrirá el editor oficial de Google en una pestaña nueva listo para usar.
+                <div className="font-bold text-sm text-white">Abrir y Pegar</div>
+                <div className="text-xs text-gray-400 leading-relaxed">
+                  Abrí <strong className="text-white">Google Apps Script</strong> con el botón de arriba, borrá todo el texto por defecto y pegá tu código con <kbd className="bg-gray-800 text-white px-1 rounded font-mono">Ctrl+V</kbd>.
                 </div>
               </div>
             </div>
@@ -633,9 +634,9 @@ Estado: Transferencia acreditada en cuenta`,
                 <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold flex items-center justify-center">
                   2
                 </div>
-                <div className="font-bold text-sm text-white">Pegá el Script Copiado</div>
-                <div className="text-xs text-gray-400">
-                  Borrá el texto por defecto en Google y pegá el código personalizado con <kbd className="bg-gray-800 px-1 rounded">Ctrl+V</kbd>.
+                <div className="font-bold text-sm text-white">Guardar Proyecto</div>
+                <div className="text-xs text-gray-400 leading-relaxed">
+                  Hacé clic en el ícono de <strong className="text-white">Guardar 💾</strong> en la barra superior o presioná <kbd className="bg-gray-800 text-white px-1 rounded font-mono">Ctrl+S</kbd>.
                 </div>
               </div>
             </div>
@@ -645,9 +646,21 @@ Estado: Transferencia acreditada en cuenta`,
                 <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold flex items-center justify-center">
                   3
                 </div>
-                <div className="font-bold text-sm text-white">Configurá el Disparador (Trigger)</div>
-                <div className="text-xs text-gray-400">
-                  Hacé clic en el reloj 🕒 de la izquierda y añadí un activador para ejecutar cada 1 minuto.
+                <div className="font-bold text-sm text-white">Ejecutar por 1ª vez</div>
+                <div className="text-xs text-gray-400 leading-relaxed">
+                  Asegurate de que arriba esté seleccionada la función <strong className="text-emerald-400">procesarTransferenciasBancarias</strong> y hacé clic en <strong className="text-white">Ejecutar ▶️</strong>.
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-[#0B0F19]/80 border border-amber-500/30 bg-amber-950/10 rounded-2xl p-4 flex flex-col justify-between">
+              <div className="space-y-2">
+                <div className="w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 text-xs font-bold flex items-center justify-center">
+                  4
+                </div>
+                <div className="font-bold text-sm text-amber-300">Aceptar Modo Seguro</div>
+                <div className="text-xs text-gray-300 leading-relaxed">
+                  Google dirá <em>"No verificado"</em>. Tocá <strong className="text-white">Configuración avanzada</strong> ➔ <strong className="text-white underline">Ir a Proyecto (no seguro)</strong> ➔ <strong className="text-emerald-400 underline">Permitir</strong>.
                 </div>
               </div>
             </div>
@@ -655,12 +668,30 @@ Estado: Transferencia acreditada en cuenta`,
             <div className="bg-[#0B0F19]/80 border border-[#24324D] rounded-2xl p-4 flex flex-col justify-between">
               <div className="space-y-2">
                 <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold flex items-center justify-center">
-                  4
+                  5
                 </div>
-                <div className="font-bold text-sm text-white">¡Listo y Seguro!</div>
-                <div className="text-xs text-gray-400">
-                  Cero contraseñas compartidas. Los avisos de SIPAP llegan en menos de 2 segundos a tus cajeros.
+                <div className="font-bold text-sm text-white">Activar Reloj (Trigger)</div>
+                <div className="text-xs text-gray-400 leading-relaxed">
+                  Hacé clic en el reloj 🕒 de la izquierda ➔ <strong className="text-white">+ Añadir activador</strong> ➔ Según el tiempo ➔ Minutos ➔ <strong className="text-emerald-400">Cada minuto</strong> y Guardar.
                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Banner Explicativo de Google No Seguro */}
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-start gap-3.5">
+            <div className="p-2.5 bg-amber-500/20 text-amber-400 rounded-xl shrink-0 mt-0.5">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <div className="space-y-1 text-xs">
+              <div className="font-bold text-amber-300 text-sm flex items-center gap-2">
+                <span>¿Por qué Google dice "Esta app no está verificada" o "No seguro"?</span>
+                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                  Es Normal
+                </span>
+              </div>
+              <div className="text-gray-300 leading-relaxed">
+                Google muestra esta advertencia preventiva porque estás creando <strong>tu propio script privado</strong> dentro de tu cuenta personal y no es una aplicación pública de la tienda de Google. <strong>No hay ningún peligro</strong>: el script se ejecuta 100% en los servidores de Google bajo tu propio usuario y contraseña, únicamente para reenviar las alertas bancarias a tu terminal de cobro. Simplemente hacé clic en <span className="text-white font-bold underline">Configuración avanzada</span>, luego en <span className="text-white font-bold underline">Ir a Proyecto sin título (no seguro)</span> y finalmente en <span className="text-emerald-400 font-bold underline">Permitir</span>.
               </div>
             </div>
           </div>
