@@ -69,6 +69,29 @@ describe('Cashier Fast-POS & Anti-Replay Invariants (T09, T10)', () => {
       expect(result.transfers[0].payerName).toBe('MIA GIMENEZ');
     });
 
+    it('Scenario 1c: Matches multi-word non-contiguous query ("Alann Arce" vs "ALANN RODRIGO ARCE RODRIGUEZ")', async () => {
+      const multiWordTransfer = new Transfer({
+        id: 'transfer-003',
+        tenantId: 'tenant-100',
+        operationId: '76820403',
+        operationDate: '20/09/2026',
+        payerName: 'ALANN RODRIGO ARCE RODRIGUEZ',
+        amount: 1,
+        status: 'pending',
+      });
+      mockTransferRepo.findPendingByAmountAndPayer.mockResolvedValue([multiWordTransfer]);
+      const useCase = new VerifyTransferUseCase(mockTransferRepo);
+
+      const result = await useCase.execute({
+        tenantId: 'tenant-100',
+        amount: 1,
+        payerFilter: 'alann arce',
+      });
+
+      expect(result.found).toBe(true);
+      expect(result.transfers[0].payerName).toBe('ALANN RODRIGO ARCE RODRIGUEZ');
+    });
+
     it('Scenario 3: Transfer outside 45-minute window is not returned', async () => {
       const expiredTransfer = new Transfer({
         id: 'transfer-old',

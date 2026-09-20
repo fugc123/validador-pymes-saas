@@ -256,13 +256,18 @@ Estado: Transferencia acreditada en cuenta`,
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ amount: Number(validationAmount), payerName: validationPayerName || undefined })
+        body: JSON.stringify({ amount: Number(validationAmount), payerFilter: validationPayerName || undefined })
       });
       if (res.ok) {
         const data = await res.json();
-        setValidationResult(data.match);
+        if (data.found && data.transfers && data.transfers.length > 0) {
+          setValidationResult(data.transfers[0]);
+        } else {
+          setValidationError(data.message || 'No se encontró ninguna transferencia pendiente que coincida con ese monto y nombre.');
+        }
       } else {
-        setValidationError('No se encontró ninguna transferencia pendiente que coincida con ese monto y nombre.');
+        const err = await res.json().catch(() => null);
+        setValidationError(err?.message || 'No se encontró ninguna transferencia pendiente que coincida con ese monto y nombre.');
       }
     } catch (e) {
       setValidationError('Error de conexión al verificar transferencia.');

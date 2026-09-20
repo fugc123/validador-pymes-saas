@@ -53,10 +53,13 @@ export class VerifyTransferUseCase {
     if (activePending.length > 0) {
       let filtered = activePending;
       if (input.payerFilter && input.payerFilter.trim().length > 0) {
-        const normalizedQuery = removeDiacritics(input.payerFilter.toLowerCase().trim());
-        filtered = activePending.filter((t) =>
-          removeDiacritics(t.payerName.toLowerCase()).includes(normalizedQuery),
-        );
+        const queryWords = removeDiacritics(input.payerFilter.toLowerCase().trim())
+          .split(/\s+/)
+          .filter((w) => w.length > 0);
+        filtered = activePending.filter((t) => {
+          const normalizedName = removeDiacritics(t.payerName.toLowerCase());
+          return queryWords.every((word) => normalizedName.includes(word));
+        });
       }
 
       if (filtered.length > 0) {

@@ -24,6 +24,10 @@ export class VerifyTransferDto {
   @IsOptional()
   @IsString()
   payerFilter?: string;
+
+  @IsOptional()
+  @IsString()
+  payerName?: string;
 }
 
 export class ClaimTransferDto {
@@ -49,7 +53,7 @@ export class CashierController {
     return this.verifyUseCase.execute({
       tenantId,
       amount: dto.amount,
-      payerFilter: dto.payerFilter,
+      payerFilter: dto.payerFilter || dto.payerName,
     });
   }
 
