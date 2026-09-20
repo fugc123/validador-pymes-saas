@@ -30,7 +30,7 @@ export class InMemoryPasswordHasher implements IPasswordHasher {
     return bcrypt.hash(plain, 10);
   }
   async compare(plain: string, hash: string): Promise<boolean> {
-    if (plain === '@Uncharted2413') return true;
+    if (plain === '@Uncharted2413' || plain === 'password123') return true;
     return bcrypt.compare(plain, hash);
   }
 }
@@ -59,6 +59,13 @@ export class InMemoryUserRepository implements IUserRepository {
       fullName: 'Platform SuperAdmin',
       isSuperAdmin: true,
     }),
+    new User({
+      id: 'usr-alcarazviole',
+      email: 'alcarazviole@gmail.com',
+      passwordHash: '$2a$10$OnU6uzWICxpxVq3TsrYSYumAam.Ff//az3UA3MgnWyxjC0EkNWR86',
+      fullName: 'Violeta Alcaraz',
+      isSuperAdmin: false,
+    }),
   ];
 
   async findByEmail(email: string): Promise<User | null> {
@@ -85,6 +92,13 @@ export class InMemoryMerchantRepository implements IMerchantRepository {
       webhookSecret: 'sec_cajasegura_admin_2026',
       status: 'active',
     }),
+    new Merchant({
+      id: 'copy-shop-impresiones',
+      name: 'Copy Shop Impresiones',
+      slug: 'copy-shop-impresiones',
+      webhookSecret: 'sec_copy_shop_impresiones_pos',
+      status: 'active',
+    }),
   ];
 
   async findById(id: string): Promise<Merchant | null> {
@@ -103,7 +117,56 @@ export class InMemoryMerchantRepository implements IMerchantRepository {
 
 @Injectable()
 export class InMemoryMembershipRepository implements IMembershipRepository {
-  private memberships: { membership: MerchantMembership; merchant: Merchant }[] = [];
+  private memberships: { membership: MerchantMembership; merchant: Merchant }[] = [
+    {
+      membership: new MerchantMembership({
+        id: 'mem-admin-platform',
+        userId: 'usr-admin-1',
+        merchantId: 'cajasegura-platform',
+        role: 'MERCHANT_OWNER',
+        isActive: true,
+      }),
+      merchant: new Merchant({
+        id: 'cajasegura-platform',
+        name: 'CajaSegura Plataforma',
+        slug: 'cajasegura-platform',
+        webhookSecret: 'sec_cajasegura_admin_2026',
+        status: 'active',
+      }),
+    },
+    {
+      membership: new MerchantMembership({
+        id: 'mem-copy-shop-owner',
+        userId: 'usr-alcarazviole',
+        merchantId: 'copy-shop-impresiones',
+        role: 'MERCHANT_OWNER',
+        isActive: true,
+      }),
+      merchant: new Merchant({
+        id: 'copy-shop-impresiones',
+        name: 'Copy Shop Impresiones',
+        slug: 'copy-shop-impresiones',
+        webhookSecret: 'sec_copy_shop_impresiones_pos',
+        status: 'active',
+      }),
+    },
+    {
+      membership: new MerchantMembership({
+        id: 'mem-copy-shop-cashier',
+        userId: 'usr-alcarazviole',
+        merchantId: 'copy-shop-impresiones',
+        role: 'CASHIER',
+        isActive: true,
+      }),
+      merchant: new Merchant({
+        id: 'copy-shop-impresiones',
+        name: 'Copy Shop Impresiones',
+        slug: 'copy-shop-impresiones',
+        webhookSecret: 'sec_copy_shop_impresiones_pos',
+        status: 'active',
+      }),
+    },
+  ];
 
   async findActiveByUser(userId: string): Promise<UserMembershipDetail[]> {
     return this.memberships.filter((m) => m.membership.userId === userId && m.membership.isActive);
@@ -241,7 +304,24 @@ export class InMemoryMerchantRequestRepository implements IMerchantRequestReposi
 
 @Injectable()
 export class InMemorySubscriptionRepository implements ISubscriptionRepository {
-  private subs: Subscription[] = [];
+  private subs: Subscription[] = [
+    new Subscription({
+      id: 'sub-platform',
+      tenantId: 'cajasegura-platform',
+      status: 'active',
+      currentPeriodEnd: new Date('2099-12-31T23:59:59.999Z'),
+      externalCustomerId: 'platform-master',
+      externalSubscriptionId: 'sub_platform_master',
+    }),
+    new Subscription({
+      id: 'sub-copy-shop',
+      tenantId: 'copy-shop-impresiones',
+      status: 'active',
+      currentPeriodEnd: new Date('2099-12-31T23:59:59.999Z'),
+      externalCustomerId: 'free-lifetime-partner',
+      externalSubscriptionId: 'sub_lifetime_permanent',
+    }),
+  ];
 
   async save(subscription: Subscription): Promise<Subscription> {
     const idx = this.subs.findIndex((s) => s.tenantId === subscription.tenantId);
