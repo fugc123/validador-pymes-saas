@@ -1,5 +1,5 @@
 import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
-import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { LoginUseCase } from '../../core/application/use-cases/auth/login.use-case';
 import { SelectTenantUseCase } from '../../core/application/use-cases/auth/select-tenant.use-case';
 import { SwitchTenantUseCase } from '../../core/application/use-cases/auth/switch-tenant.use-case';
@@ -22,6 +22,10 @@ export class SelectTenantDto {
   @IsString()
   @IsNotEmpty()
   tenantId!: string;
+
+  @IsOptional()
+  @IsString()
+  role?: string;
 }
 
 export class SwitchTenantDto {
@@ -32,6 +36,10 @@ export class SwitchTenantDto {
   @IsString()
   @IsNotEmpty()
   targetTenantId!: string;
+
+  @IsOptional()
+  @IsString()
+  role?: string;
 }
 
 @Controller('auth')

@@ -19,6 +19,7 @@ import {
   AlertTriangle,
   Search,
   MessageCircle,
+  ArrowRight,
 } from 'lucide-react';
 
 interface MetricTransfer {
@@ -47,7 +48,7 @@ interface SubscriptionStatus {
 }
 
 export const OwnerDashboard: React.FC = () => {
-  const { user, activeTenant, logout, token } = useAuth();
+  const { user, activeTenant, logout, token, switchTenant } = useAuth();
   const [copiedScript, setCopiedScript] = useState(false);
   const [testStatus, setTestStatus] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<MetricsData | null>(null);
@@ -358,14 +359,23 @@ Estado: Transferencia acreditada en cuenta`,
           </div>
         </div>
 
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 rounded-full text-xs text-emerald-400 font-semibold">
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={() => switchTenant(activeTenant?.tenantId || '', 'CASHIER')}
+            className="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/10"
+            title="Abrir la terminal de cobro rápido para cajero"
+          >
+            <span>Ir a Caja (POS)</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+          <div className="hidden sm:flex items-center space-x-2 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 rounded-full text-xs text-emerald-400 font-semibold">
             <Sparkles className="w-3.5 h-3.5" />
             <span>Plan PYME: 7 Días de Prueba (Gs. 150.000/mes)</span>
           </div>
           <button
             onClick={logout}
             className="p-2 text-gray-400 hover:text-red-400 rounded-lg hover:bg-[#0B0F19] transition-colors"
+            title="Cerrar sesión"
           >
             <LogOut className="w-5 h-5" />
           </button>
@@ -664,14 +674,14 @@ Estado: Transferencia acreditada en cuenta`,
               </div>
             </div>
 
-            <div className="bg-[#0B0F19]/80 border border-[#24324D] rounded-2xl p-4 flex flex-col justify-between">
+            <div className="bg-[#0B0F19]/80 border border-[#24324D] rounded-2xl p-4 flex flex-col justify-between overflow-hidden">
               <div className="space-y-2">
                 <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold flex items-center justify-center">
                   3
                 </div>
                 <div className="font-bold text-sm text-white">Ejecutar por 1ª vez</div>
-                <div className="text-xs text-gray-400 leading-relaxed">
-                  Asegurate de que arriba esté seleccionada la función <strong className="text-emerald-400">procesarTransferenciasBancarias</strong> y hacé clic en <strong className="text-white">Ejecutar ▶️</strong>.
+                <div className="text-xs text-gray-400 leading-relaxed break-words">
+                  Asegurate de que arriba esté seleccionada la función <code className="text-emerald-400 font-mono text-[11px] bg-[#151D2F] px-1.5 py-0.5 rounded border border-emerald-500/30 break-all inline-block my-1">procesarTransferenciasBancarias</code> y hacé clic en <strong className="text-white">Ejecutar ▶️</strong>.
                 </div>
               </div>
             </div>

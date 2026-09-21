@@ -9,6 +9,7 @@ import {
 export interface SelectTenantInput {
   userId: string;
   tenantId: string;
+  role?: string;
 }
 
 export interface SelectTenantOutput {
@@ -40,7 +41,11 @@ export class SelectTenantUseCase {
       throw new ForbiddenException('Target merchant organization is not active or does not exist');
     }
 
-    const membership = await this.membershipRepo.findByUserAndMerchant(input.userId, input.tenantId);
+    const membership = await this.membershipRepo.findByUserAndMerchant(
+      input.userId,
+      input.tenantId,
+      input.role,
+    );
     if (!membership || !membership.isActive) {
       throw new ForbiddenException('No active membership in this organization');
     }

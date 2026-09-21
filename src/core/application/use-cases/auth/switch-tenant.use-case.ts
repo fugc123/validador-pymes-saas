@@ -9,6 +9,7 @@ import {
 export interface SwitchTenantInput {
   userId: string;
   targetTenantId: string;
+  role?: string;
 }
 
 export interface SwitchTenantOutput {
@@ -40,7 +41,11 @@ export class SwitchTenantUseCase {
       throw new ForbiddenException('Target organization is inactive or not found');
     }
 
-    const membership = await this.membershipRepo.findByUserAndMerchant(input.userId, input.targetTenantId);
+    const membership = await this.membershipRepo.findByUserAndMerchant(
+      input.userId,
+      input.targetTenantId,
+      input.role,
+    );
     if (!membership || !membership.isActive) {
       throw new ForbiddenException('No active membership in this organization');
     }

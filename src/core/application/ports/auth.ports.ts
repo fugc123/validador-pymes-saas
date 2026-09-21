@@ -21,7 +21,7 @@ export interface IMerchantRepository {
 
 export interface IMembershipRepository {
   findActiveByUser(userId: string): Promise<UserMembershipDetail[]>;
-  findByUserAndMerchant(userId: string, merchantId: string): Promise<MerchantMembership | null>;
+  findByUserAndMerchant(userId: string, merchantId: string, role?: string): Promise<MerchantMembership | null>;
   save(membership: MerchantMembership): Promise<MerchantMembership>;
 }
 

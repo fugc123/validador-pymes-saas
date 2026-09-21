@@ -221,9 +221,12 @@ export class InMemoryMembershipRepository implements IMembershipRepository {
   async findActiveByUser(userId: string): Promise<UserMembershipDetail[]> {
     return this.memberships.filter((m) => m.membership.userId === userId && m.membership.isActive);
   }
-  async findByUserAndMerchant(userId: string, merchantId: string): Promise<MerchantMembership | null> {
+  async findByUserAndMerchant(userId: string, merchantId: string, role?: string): Promise<MerchantMembership | null> {
     const item = this.memberships.find(
-      (m) => m.membership.userId === userId && m.membership.merchantId === merchantId,
+      (m) =>
+        m.membership.userId === userId &&
+        m.membership.merchantId === merchantId &&
+        (!role || m.membership.role === role),
     );
     return item ? item.membership : null;
   }

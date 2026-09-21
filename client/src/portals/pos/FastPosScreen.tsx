@@ -206,10 +206,24 @@ export const FastPosScreen: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-3">
+          {availableMemberships.some((m) => m.tenantId === activeTenant?.tenantId && m.role === 'MERCHANT_OWNER') && (
+            <button
+              onClick={() => switchTenant(activeTenant?.tenantId || '', 'MERCHANT_OWNER')}
+              className="text-xs text-emerald-400 hover:text-white px-3 py-1.5 rounded-lg border border-emerald-500/40 hover:border-emerald-400 bg-emerald-500/10 flex items-center space-x-1.5 transition-colors font-semibold"
+              title="Volver al panel administrativo de dueño"
+            >
+              <Building2 className="w-3.5 h-3.5" />
+              <span>Panel de Dueño</span>
+            </button>
+          )}
+
           {availableMemberships.length > 1 && (
             <button
-              onClick={() => switchTenant(availableMemberships[1].tenantId)}
+              onClick={() => {
+                const next = availableMemberships.find((m) => m.tenantId !== activeTenant?.tenantId);
+                if (next) switchTenant(next.tenantId, next.role);
+              }}
               className="text-xs text-gray-400 hover:text-white px-3 py-1.5 rounded-lg border border-[#24324D] hover:border-gray-500 flex items-center space-x-1.5 transition-colors"
             >
               <Building2 className="w-3.5 h-3.5" />

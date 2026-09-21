@@ -40,23 +40,26 @@ export const LoginView: React.FC<{
           </div>
 
           <div className="space-y-3">
-            {availableMemberships.map((m) => (
-              <button
-                key={m.tenantId}
-                onClick={() => selectTenant(m.tenantId)}
-                className="w-full text-left p-4 rounded-xl bg-[#0B0F19] hover:bg-[#1A253C] border border-[#24324D] hover:border-emerald-500/50 transition-all flex items-center justify-between group"
-              >
-                <div>
-                  <div className="font-bold text-white group-hover:text-emerald-400 transition-colors">
-                    {m.merchantName}
+            {availableMemberships.map((m, idx) => {
+              const roleLabel = m.role === 'MERCHANT_OWNER' ? 'Dueño / Administración' : 'Cajero / Terminal de Cobro';
+              return (
+                <button
+                  key={`${m.tenantId}-${m.role}-${idx}`}
+                  onClick={() => selectTenant(m.tenantId, m.role)}
+                  className="w-full text-left p-4 rounded-xl bg-[#0B0F19] hover:bg-[#1A253C] border border-[#24324D] hover:border-emerald-500/50 transition-all flex items-center justify-between group"
+                >
+                  <div>
+                    <div className="font-bold text-white group-hover:text-emerald-400 transition-colors">
+                      {m.merchantName}
+                    </div>
+                    <div className="text-xs font-mono text-gray-400 mt-0.5">
+                      Ingresar como: <span className="text-emerald-400 font-bold">{roleLabel}</span>
+                    </div>
                   </div>
-                  <div className="text-xs font-mono text-gray-400">
-                    Rol: <span className="text-emerald-400 font-semibold">{m.role}</span>
-                  </div>
-                </div>
-                <ArrowRight className="w-5 h-5 text-gray-500 group-hover:text-emerald-400 group-hover:translate-x-1 transition-all" />
-              </button>
-            ))}
+                  <ArrowRight className="w-5 h-5 text-gray-500 group-hover:text-emerald-400 group-hover:translate-x-1 transition-all" />
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>

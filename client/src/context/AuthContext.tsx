@@ -26,8 +26,8 @@ interface AuthContextType {
   availableMemberships: MembershipOption[];
   isSelectingTenant: boolean;
   login: (email: string, password: string) => Promise<void>;
-  selectTenant: (tenantId: string) => Promise<void>;
-  switchTenant: (targetTenantId: string) => Promise<void>;
+  selectTenant: (tenantId: string, role?: string) => Promise<void>;
+  switchTenant: (targetTenantId: string, role?: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -43,7 +43,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const saved = localStorage.getItem('activeTenant');
     return saved ? JSON.parse(saved) : null;
   });
-  const [availableMemberships, setAvailableMemberships] = useState<MembershipOption[]>([]);
+  const [availableMemberships, setAvailableMemberships] = useState<MembershipOption[]>(() => {
+    const saved = localStorage.getItem('memberships');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [isSelectingTenant, setIsSelectingTenant] = useState(false);
 
   const login = async (email: string, password: string) => {
@@ -61,6 +64,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (data.requiresTenantSelection) {
         setAvailableMemberships(data.memberships);
+        localStorage.setItem('memberships', JSON.stringify(data.memberships));
         setIsSelectingTenant(true);
       } else {
         setToken(data.accessToken);
@@ -85,14 +89,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     throw new Error(errorMsg);
   };
 
-  const selectTenant = async (tenantId: string) => {
-    const selected = availableMemberships.find((m) => m.tenantId === tenantId);
+  const selectTenant = async (tenantId: string, role?: string) => {
+    const selected = availableMemberships.find(
+      (m) => m.tenantId === tenantId && (!role || m.role === role),
+    );
 
     if (user) {
       const res = await fetch('/api/v1/auth/select-tenant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id, tenantId }),
+        body: JSON.stringify({ userId: user.id, tenantId, role }),
       }).catch(() => null);
 
       if (res && res.ok) {
@@ -125,8 +131,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const switchTenant = async (targetTenantId: string) => {
-    await selectTenant(targetTenantId);
+  const switchTenant = async (targetTenantId: string, role?: string) => {
+    await selectTenant(targetTenantId, role);
   };
 
   const logout = () => {
