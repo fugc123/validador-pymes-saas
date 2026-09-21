@@ -18,6 +18,7 @@ import {
   AlertCircle,
   AlertTriangle,
   Search,
+  MessageCircle,
 } from 'lucide-react';
 
 interface MetricTransfer {
@@ -75,6 +76,12 @@ export const OwnerDashboard: React.FC = () => {
   const tenantSlug = activeTenant?.tenantId || 'comercio';
   const tenantSecret = activeTenant?.tenantId ? `sec_${activeTenant.tenantId}_pos` : 'sec_comercio_pos';
   const hostUrl = window.location.origin;
+
+  const whatsappSupportUrl = useMemo(() => {
+    const merchantName = activeTenant?.merchantName || 'mi comercio';
+    const text = `¡Hola Franco! Necesito una mano para configurar el script de Gmail en mi comercio (${merchantName}). ¿Me podrías guiar?`;
+    return `https://wa.me/595981408944?text=${encodeURIComponent(text)}`;
+  }, [activeTenant?.merchantName]);
 
   const fetchSub = useCallback(async () => {
     if (!token) return;
@@ -617,6 +624,17 @@ Estado: Transferencia acreditada en cuenta`,
                 <span>2. Abrir Google Apps Script</span>
                 <ExternalLink className="w-4 h-4 text-emerald-400" />
               </a>
+
+              <a
+                href={whatsappSupportUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full sm:w-auto px-4 py-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold text-xs rounded-xl flex items-center justify-center space-x-2 transition-all shadow-sm"
+                title="Pedir asistencia directa por WhatsApp"
+              >
+                <MessageCircle className="w-4 h-4 text-emerald-400" />
+                <span>Solicitar Ayuda</span>
+              </a>
             </div>
           </div>
 
@@ -699,6 +717,28 @@ Estado: Transferencia acreditada en cuenta`,
                 Google muestra esta advertencia preventiva porque estás creando <strong>tu propio script privado</strong> dentro de tu cuenta personal y no es una aplicación pública de la tienda de Google. <strong>No hay ningún peligro</strong>: el script se ejecuta 100% en los servidores de Google bajo tu propio usuario y contraseña, únicamente para reenviar las alertas bancarias a tu terminal de cobro. Simplemente hacé clic en <span className="text-white font-bold underline">Configuración avanzada</span>, luego en <span className="text-white font-bold underline">Ir a Proyecto sin título (no seguro)</span> y finalmente en <span className="text-emerald-400 font-bold underline">Permitir</span>.
               </div>
             </div>
+          </div>
+
+          {/* Banner de Asistencia Directa por WhatsApp */}
+          <div className="bg-emerald-950/20 border border-emerald-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center space-x-3.5">
+              <div className="p-2.5 bg-emerald-500/20 text-emerald-400 rounded-xl shrink-0">
+                <MessageCircle className="w-5 h-5" />
+              </div>
+              <div className="space-y-0.5">
+                <div className="text-white font-bold text-sm">¿Se te complica la configuración o tenés dudas?</div>
+                <div className="text-gray-400 text-xs">Te ayudamos por WhatsApp paso a paso para dejar tu caja funcionando en minutos.</div>
+              </div>
+            </div>
+            <a
+              href={whatsappSupportUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="w-full sm:w-auto px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold text-xs rounded-xl flex items-center justify-center space-x-2 transition-all shrink-0 shadow-lg shadow-emerald-500/20"
+            >
+              <MessageCircle className="w-4 h-4" />
+              <span>Solicitar Asistencia por WhatsApp</span>
+            </a>
           </div>
 
           {/* Test Payment Simulator Banner */}
