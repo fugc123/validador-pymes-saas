@@ -25,6 +25,8 @@ interface AuthContextType {
   activeTenant: ActiveTenant | null;
   availableMemberships: MembershipOption[];
   isSelectingTenant: boolean;
+  openTenantSelector: () => void;
+  closeTenantSelector: () => void;
   login: (email: string, password: string) => Promise<void>;
   selectTenant: (tenantId: string, role?: string) => Promise<void>;
   switchTenant: (targetTenantId: string, role?: string) => Promise<void>;
@@ -135,6 +137,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await selectTenant(targetTenantId, role);
   };
 
+  const openTenantSelector = () => setIsSelectingTenant(true);
+  const closeTenantSelector = () => setIsSelectingTenant(false);
+
   const logout = () => {
     setToken(null);
     setUser(null);
@@ -152,6 +157,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         activeTenant,
         availableMemberships,
         isSelectingTenant,
+        openTenantSelector,
+        closeTenantSelector,
         login,
         selectTenant,
         switchTenant,

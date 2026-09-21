@@ -31,7 +31,7 @@ interface SubscriptionStatus {
 }
 
 export const FastPosScreen: React.FC = () => {
-  const { user, activeTenant, logout, switchTenant, availableMemberships, token } = useAuth();
+  const { user, activeTenant, logout, switchTenant, availableMemberships, token, openTenantSelector } = useAuth();
   const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
   const [amount, setAmount] = useState<string>('');
   const [payerName, setPayerName] = useState<string>('');
@@ -220,14 +220,12 @@ export const FastPosScreen: React.FC = () => {
 
           {availableMemberships.length > 1 && (
             <button
-              onClick={() => {
-                const next = availableMemberships.find((m) => m.tenantId !== activeTenant?.tenantId);
-                if (next) switchTenant(next.tenantId, next.role);
-              }}
+              onClick={openTenantSelector}
               className="text-xs text-gray-400 hover:text-white px-3 py-1.5 rounded-lg border border-[#24324D] hover:border-gray-500 flex items-center space-x-1.5 transition-colors"
+              title="Cambiar de sucursal o rol"
             >
               <Building2 className="w-3.5 h-3.5" />
-              <span>Cambiar Sucursal</span>
+              <span>Cambiar Sucursal / Rol</span>
             </button>
           )}
 

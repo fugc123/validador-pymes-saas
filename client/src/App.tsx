@@ -6,25 +6,29 @@ import { OwnerDashboard } from './portals/owner/OwnerDashboard';
 import { SuperAdminPanel } from './portals/superadmin/SuperAdminPanel';
 import { PublicRegisterScreen } from './portals/onboarding/PublicRegisterScreen';
 import { LandingPage } from './portals/landing/LandingPage';
+import { BranchSelectorModal } from './components/BranchSelectorModal';
 
 export const App: React.FC = () => {
-  const { token, user, activeTenant } = useAuth();
+  const { token, user, activeTenant, isSelectingTenant, closeTenantSelector } = useAuth();
   const [view, setView] = useState<'landing' | 'auth' | 'register'>('landing');
 
   // Authenticated flows
   if (token && user) {
-    // SuperAdmin Platform View
+    let mainView = <FastPosScreen />;
     if (user.isSuperAdmin || activeTenant?.role === 'SUPER_ADMIN') {
-      return <SuperAdminPanel />;
+      mainView = <SuperAdminPanel />;
+    } else if (activeTenant?.role === 'MERCHANT_OWNER') {
+      mainView = <OwnerDashboard />;
     }
 
-    // Merchant Owner View
-    if (activeTenant?.role === 'MERCHANT_OWNER') {
-      return <OwnerDashboard />;
-    }
-
-    // Fast POS View for Cashiers (Default retail operator)
-    return <FastPosScreen />;
+    return (
+      <>
+        {mainView}
+        {isSelectingTenant && (
+          <BranchSelectorModal onClose={closeTenantSelector} />
+        )}
+      </>
+    );
   }
 
   // Public Unauthenticated flows

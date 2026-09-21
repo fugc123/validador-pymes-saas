@@ -48,7 +48,7 @@ interface SubscriptionStatus {
 }
 
 export const OwnerDashboard: React.FC = () => {
-  const { user, activeTenant, logout, token, switchTenant } = useAuth();
+  const { user, activeTenant, logout, token, switchTenant, availableMemberships, openTenantSelector } = useAuth();
   const [copiedScript, setCopiedScript] = useState(false);
   const [testStatus, setTestStatus] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<MetricsData | null>(null);
@@ -368,6 +368,16 @@ Estado: Transferencia acreditada en cuenta`,
             <span>Ir a Caja (POS)</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
+          {availableMemberships.length > 1 && (
+            <button
+              onClick={openTenantSelector}
+              className="flex items-center space-x-1.5 px-3 py-1.5 bg-[#24324D] hover:bg-[#2d3f63] text-gray-300 rounded-xl text-xs font-semibold transition-colors border border-gray-600/30"
+              title="Cambiar de sucursal o rol"
+            >
+              <Building2 className="w-3.5 h-3.5" />
+              <span>Cambiar Sucursal / Rol</span>
+            </button>
+          )}
           <div className="hidden sm:flex items-center space-x-2 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 rounded-full text-xs text-emerald-400 font-semibold">
             <Sparkles className="w-3.5 h-3.5" />
             <span>Plan PYME: 7 Días de Prueba (Gs. 150.000/mes)</span>
