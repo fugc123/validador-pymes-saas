@@ -22,28 +22,31 @@ export class FamiliarBankParser implements IBankParser {
       return match && match[1] ? match[1].trim() : null;
     };
 
-    const operationId = getField(/Nro\.?\s*de\s*Operaci[oó]n:\s*([A-Za-z0-9]+)/i);
+    const operationId = getField(/(?:Nro\.?\s*(?:de\s*)?Operaci[oó]n|Operaci[oó]n\s*N[°º.]?|Operaci[oó]n):\s*([A-Za-z0-9]+)/i);
+    const reference = getField(/(?:Referencia|Ref\.?):\s*([A-Za-z0-9]+)/i);
     const receiptNumber = getField(/(?:Comprobante|Nro\.?\s*Comprobante):\s*([A-Za-z0-9]+)/i);
-    const payerName = getField(/(?:Titular\s*Ordenante|Ordenante):\s*([^\r\n]+)/i);
-    const payerBank = getField(/(?:Banco\s*Origen|Entidad\s*Remitente):\s*([^\r\n]+)/i);
-    const rawAmount = getField(/(?:Importe|Monto):\s*([^\r\n]+)/i);
-    const operationDate = getField(/(?:Fecha\s*y\s*Hora|Fecha):\s*([\d/]+(?:\s+[\d:]+)?)/i);
+    const payerName = getField(/(?:Titular\s*Ordenante|Ordenante|Cliente\s*Pagador|Pagador):\s*([^\r\n]+)/i);
+    const payerBank = getField(/(?:Banco\s*Origen|Entidad\s*Remitente|Entidad\s*Pagadora|Banco\s*Remitente):\s*([^\r\n]+)/i);
+    const rawAmount = getField(/(?:Moneda\s*y\s*Monto|Importe|Monto):\s*([^\r\n]+)/i);
+    const operationDate = getField(/(?:Fecha\s*y\s*hora(?:\s*de\s*Operaci[oó]n)?|Fecha):\s*([\d/]+(?:\s+[\d:]+)?)/i);
+    const payerAccount = getField(/(?:Nro\.?\s*de\s*Cuenta\s*del\s*Pagador|Cuenta\s*Pagador):\s*([^\r\n]+)/i);
+    const creditAccount = getField(/(?:Nro\.?\s*de\s*Cuenta\s*del\s*Beneficiario|Cuenta\s*Beneficiario):\s*([^\r\n]+)/i);
 
-    const finalOpId = operationId || receiptNumber;
+    const finalOpId = operationId || reference || receiptNumber;
     if (!finalOpId) return null;
 
     const { currency, amount } = parsePyAmount(rawAmount);
 
     return {
       operationId: finalOpId,
-      receiptNumber: receiptNumber || finalOpId,
+      receiptNumber: receiptNumber || reference || finalOpId,
       operationDate: operationDate || new Date().toISOString(),
       payerName: payerName ? payerName.replace(/\s+/g, ' ') : 'DESCONOCIDO',
-      payerAccount: null,
+      payerAccount: payerAccount || null,
       payerBank: payerBank ? payerBank.replace(/\s+/g, ' ') : 'Banco Familiar',
       currency,
       amount,
-      creditAccount: null,
+      creditAccount: creditAccount || null,
       concept: null,
       rawText: text,
     };

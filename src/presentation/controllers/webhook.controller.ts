@@ -23,6 +23,10 @@ export class WebhookPayloadDto {
   @IsOptional()
   @IsString()
   subject?: string;
+
+  @IsOptional()
+  @IsString()
+  date?: string;
 }
 
 @Controller('webhook')

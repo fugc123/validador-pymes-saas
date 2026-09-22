@@ -163,4 +163,32 @@ Fecha/Hora: 	14/09/2026 18:45:10`;
     expect(parsed48?.payerName).toBe('VANESSA OJEDA');
     expect(parsed48?.operationId).toBe('998877');
   });
+
+  it('10. Familiar Parser correctly parses real Banco Familiar transfer notification', () => {
+    const realFamiliarEmail = `TRANSFERENCIA DE OTRAS ENTIDADES RECIBIDA
+Hemos registrado la siguiente operación de transferencia
+Nro. de Operación: \t702676268
+Referencia: \tBSUDPYPX22092661200061270778
+Fecha y hora de Operación: \t22/09/2026 17:10:17
+Entidad Pagadora: \tSUDAMERIS BANK SAECA
+Cliente Pagador: \tGIRALA CRISTALDO FRANCO URIEL
+Nro. de Cuenta del Pagador: \t******3001
+Moneda y Monto: \tPYG 1.000
+Entidad Beneficiaria: \tBANCO FAMILIAR S.A.E.C.A.
+Cliente Beneficiario: \tCESAR FABIAN MORALES MALDONADO
+Nro. de Cuenta del Beneficiario: \t81844155
+Razón de comunicación: \tTransferencia acreditada en cuenta.
+Comentario del cliente: \t
+Te recordamos que nuestro Centro de Atención al Cliente se encuentra a tu entera disposición; ante cualquier duda o consulta, podés llamar gratuítamente al 0800 11 33 22 desde tu línea baja o desde tu celular al *3322`;
+
+    const parsed = factory.parse(realFamiliarEmail);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.amount).toBe(1000);
+    expect(parsed?.currency).toBe('PYG');
+    expect(parsed?.operationId).toBe('702676268');
+    expect(parsed?.receiptNumber).toBe('BSUDPYPX22092661200061270778');
+    expect(parsed?.payerName).toBe('GIRALA CRISTALDO FRANCO URIEL');
+    expect(parsed?.payerBank).toBe('SUDAMERIS BANK SAECA');
+    expect(parsed?.operationDate).toBe('22/09/2026 17:10:17');
+  });
 });
