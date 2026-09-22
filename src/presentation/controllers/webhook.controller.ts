@@ -7,6 +7,8 @@ import {
   Logger,
   Param,
   Post,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { IngestWebhookUseCase } from '../../core/application/use-cases/ingest-webhook.use-case';
@@ -37,6 +39,13 @@ export class WebhookController {
 
   @Post(':tenantSlug')
   @HttpCode(HttpStatus.OK)
+  @UsePipes(
+    new ValidationPipe({
+      whitelist: false,
+      forbidNonWhitelisted: false,
+      transform: true,
+    }),
+  )
   async handleWebhook(
     @Param('tenantSlug') tenantSlug: string,
     @Headers('x-merchant-webhook-secret') secretHeader: string,

@@ -191,4 +191,65 @@ Te recordamos que nuestro Centro de Atención al Cliente se encuentra a tu enter
     expect(parsed?.payerBank).toBe('SUDAMERIS BANK SAECA');
     expect(parsed?.operationDate).toBe('22/09/2026 17:10:17');
   });
+
+  it('11. Universal Parser extracts Tigo Money transfer with natural language layout', () => {
+    const tigoEmail = `Tigo Money - Notificación de Envío
+¡Recibiste dinero en tu billetera!
+Recibiste Gs. 50.000 de JUAN CARLOS GOMEZ
+Transacción N°: TM-88997711
+Fecha: 22/09/2026 14:15:00`;
+
+    const parsed = factory.parse(tigoEmail);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.amount).toBe(50000);
+    expect(parsed?.payerName).toBe('JUAN CARLOS GOMEZ');
+    expect(parsed?.operationId).toBe('TM-88997711');
+    expect(parsed?.payerBank).toBe('Tigo Money');
+  });
+
+  it('12. Universal Parser extracts Personal Pay / Billetera Personal transfer', () => {
+    const personalEmail = `Personal Pay - Transferencia Acreditada
+¡Te enviaron dinero!
+Monto: 35.000 Gs.
+Enviado por: MARIA ELENA BOGADO
+Comprobante: PP-443322
+Fecha: 22/09/2026 16:30`;
+
+    const parsed = factory.parse(personalEmail);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.amount).toBe(35000);
+    expect(parsed?.payerName).toBe('MARIA ELENA BOGADO');
+    expect(parsed?.operationId).toBe('PP-443322');
+    expect(parsed?.payerBank).toBe('Personal Pay');
+  });
+
+  it('13. Universal Parser extracts Mango / Wally digital wallet notification', () => {
+    const mangoEmail = `¡Cobraste con Mango!
+Monto recibido: Gs. 120.000
+De: CARLOS ALBERTO BENITEZ
+ID de operación: MNG-998877
+Fecha y hora: 22/09/2026 18:05:12`;
+
+    const parsed = factory.parse(mangoEmail);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.amount).toBe(120000);
+    expect(parsed?.payerName).toBe('CARLOS ALBERTO BENITEZ');
+    expect(parsed?.operationId).toBe('MNG-998877');
+    expect(parsed?.payerBank).toBe('Mango');
+  });
+
+  it('14. Universal Parser extracts Tu Financiera / Cooperativa transfer', () => {
+    const financieraEmail = `Aviso de Transferencia Recibida - Tu Financiera
+Operación Nro: TF-55443322
+Titular Ordenante: ANDREA SOLEDAD DUARTE
+Importe: Gs. 250.000
+Fecha: 22/09/2026 12:00:00`;
+
+    const parsed = factory.parse(financieraEmail);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.amount).toBe(250000);
+    expect(parsed?.payerName).toBe('ANDREA SOLEDAD DUARTE');
+    expect(parsed?.operationId).toBe('TF-55443322');
+    expect(parsed?.payerBank).toBe('Tu Financiera');
+  });
 });
