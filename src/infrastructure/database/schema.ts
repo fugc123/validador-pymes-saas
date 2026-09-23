@@ -151,4 +151,16 @@ CREATE TABLE IF NOT EXISTS merchant_requests (
     status VARCHAR(50) DEFAULT 'requested' CHECK (status IN ('requested', 'approved', 'rejected')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Payment Reports Table
+CREATE TABLE IF NOT EXISTS payment_reports (
+    id VARCHAR(100) PRIMARY KEY,
+    tenant_id VARCHAR(100) NOT NULL,
+    reported_by_user_id VARCHAR(100) NOT NULL,
+    payer_name VARCHAR(255) NOT NULL,
+    amount INTEGER NOT NULL DEFAULT 150000,
+    status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'matched', 'rejected')),
+    matched_transfer_id VARCHAR(100),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 `;

@@ -1,7 +1,7 @@
 import { Injectable, Optional } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { DatabaseService } from '../database/database.service';
-import { UserRow, MerchantRow, MerchantMembershipRow, SubscriptionRow } from '../database/schema';
+import { UserRow, MerchantRow, MerchantMembershipRow, SubscriptionRow, TransferRow } from '../database/schema';
 import { User } from '../../core/domain/entities/user.entity';
 import { Merchant } from '../../core/domain/entities/merchant.entity';
 import { MerchantMembership } from '../../core/domain/entities/merchant-membership.entity';
@@ -564,9 +564,102 @@ export class InMemoryMembershipRepository implements IMembershipRepository {
 
 @Injectable()
 export class InMemoryTransferRepository implements ITransferRepository {
+  constructor(@Optional() private readonly dbService?: DatabaseService) {}
   private transfers: Transfer[] = [];
 
   async save(transfer: Transfer): Promise<Transfer> {
+    if (this.dbService && !this.dbService.isMemoryMode) {
+      try {
+        const mRes = await this.dbService.query(
+          'SELECT id FROM merchants WHERE slug = $1 OR id::text = $1',
+          [transfer.tenantId],
+        );
+        if (mRes.rows.length > 0) {
+          const tenantUuid = mRes.rows[0].id;
+          let claimedByUuid: string | null = null;
+          if (transfer.claimedByUserId) {
+            const uRes = await this.dbService.query(
+              'SELECT id FROM users WHERE id::text = $1 OR email = $1',
+              [transfer.claimedByUserId],
+            );
+            if (uRes.rows.length > 0) {
+              claimedByUuid = uRes.rows[0].id;
+            }
+          }
+
+          const res = await this.dbService.query<TransferRow>(
+            `INSERT INTO transfers (
+               tenant_id, operation_id, receipt_number, operation_date,
+               payer_name, payer_account, payer_bank, currency, amount,
+               credit_account, concept, raw_body, status, claimed_at,
+               claimed_by_user_id, created_at
+             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+             ON CONFLICT (tenant_id, operation_id) DO UPDATE SET
+               receipt_number = $3,
+               payer_name = $5,
+               payer_account = $6,
+               payer_bank = $7,
+               currency = $8,
+               amount = $9,
+               credit_account = $10,
+               concept = $11,
+               raw_body = $12,
+               status = $13,
+               claimed_at = $14,
+               claimed_by_user_id = $15
+             RETURNING *`,
+            [
+              tenantUuid,
+              transfer.operationId,
+              transfer.receiptNumber || null,
+              transfer.operationDate,
+              transfer.payerName,
+              transfer.payerAccount || null,
+              transfer.payerBank || null,
+              transfer.currency || 'PYG',
+              transfer.amount,
+              transfer.creditAccount || null,
+              transfer.concept || null,
+              transfer.rawBody || null,
+              transfer.status,
+              transfer.claimedAt || null,
+              claimedByUuid,
+              transfer.createdAt || new Date(),
+            ],
+          );
+          if (res && res.rows && res.rows.length > 0) {
+            const row = res.rows[0];
+            const saved = new Transfer({
+              id: row.id,
+              tenantId: transfer.tenantId,
+              operationId: row.operation_id,
+              receiptNumber: row.receipt_number || undefined,
+              operationDate: row.operation_date,
+              payerName: row.payer_name,
+              payerAccount: row.payer_account || undefined,
+              payerBank: row.payer_bank || undefined,
+              currency: row.currency,
+              amount: row.amount,
+              creditAccount: row.credit_account || undefined,
+              concept: row.concept || undefined,
+              rawBody: row.raw_body || undefined,
+              status: row.status as any,
+              claimedAt: row.claimed_at ? new Date(row.claimed_at) : null,
+              claimedByUserId: row.claimed_by_user_id,
+              createdAt: new Date(row.created_at),
+            });
+            const idx = this.transfers.findIndex(
+              (t) => t.tenantId === transfer.tenantId && t.operationId === transfer.operationId,
+            );
+            if (idx >= 0) this.transfers[idx] = saved;
+            else this.transfers.unshift(saved);
+            return saved;
+          }
+        }
+      } catch (err) {
+        // Fallback
+      }
+    }
     const idx = this.transfers.findIndex(
       (t) => t.tenantId === transfer.tenantId && t.operationId === transfer.operationId,
     );
@@ -574,35 +667,189 @@ export class InMemoryTransferRepository implements ITransferRepository {
     else this.transfers.unshift(transfer);
     return transfer;
   }
+
   async findByTenantAndOperationId(tenantId: string, operationId: string): Promise<Transfer | null> {
+    if (this.dbService && !this.dbService.isMemoryMode) {
+      try {
+        const res = await this.dbService.query<TransferRow>(
+          `SELECT t.* FROM transfers t
+           JOIN merchants m ON t.tenant_id = m.id
+           WHERE (m.slug = $1 OR m.id::text = $1) AND t.operation_id = $2`,
+          [tenantId, operationId],
+        );
+        if (res && res.rows && res.rows.length > 0) {
+          const row = res.rows[0];
+          return new Transfer({
+            id: row.id,
+            tenantId,
+            operationId: row.operation_id,
+            receiptNumber: row.receipt_number || undefined,
+            operationDate: row.operation_date,
+            payerName: row.payer_name,
+            payerAccount: row.payer_account || undefined,
+            payerBank: row.payer_bank || undefined,
+            currency: row.currency,
+            amount: row.amount,
+            creditAccount: row.credit_account || undefined,
+            concept: row.concept || undefined,
+            rawBody: row.raw_body || undefined,
+            status: row.status as any,
+            claimedAt: row.claimed_at ? new Date(row.claimed_at) : null,
+            claimedByUserId: row.claimed_by_user_id,
+            createdAt: new Date(row.created_at),
+          });
+        }
+      } catch (err) {
+        // Fallback
+      }
+    }
     return (
       this.transfers.find((t) => t.tenantId === tenantId && t.operationId === operationId) || null
     );
   }
+
   async findPendingByAmountAndPayer(
     tenantId: string,
     amount: number,
     payerFilter?: string,
   ): Promise<Transfer[]> {
+    if (this.dbService && !this.dbService.isMemoryMode) {
+      try {
+        const params: any[] = [tenantId, amount];
+        let query = `
+          SELECT t.* FROM transfers t
+          JOIN merchants m ON t.tenant_id = m.id
+          WHERE (m.slug = $1 OR m.id::text = $1)
+            AND t.amount = $2
+            AND t.status = 'pending'
+        `;
+        if (payerFilter && payerFilter.trim().length > 0) {
+          params.push(`%${payerFilter.trim()}%`);
+          query += ` AND t.payer_name ILIKE $${params.length}`;
+        }
+        query += ` ORDER BY t.created_at DESC`;
+
+        const res = await this.dbService.query<TransferRow>(query, params);
+        if (res && res.rows && res.rows.length > 0) {
+          return res.rows.map(
+            (row) =>
+              new Transfer({
+                id: row.id,
+                tenantId,
+                operationId: row.operation_id,
+                receiptNumber: row.receipt_number || undefined,
+                operationDate: row.operation_date,
+                payerName: row.payer_name,
+                payerAccount: row.payer_account || undefined,
+                payerBank: row.payer_bank || undefined,
+                currency: row.currency,
+                amount: row.amount,
+                creditAccount: row.credit_account || undefined,
+                concept: row.concept || undefined,
+                rawBody: row.raw_body || undefined,
+                status: row.status as any,
+                claimedAt: row.claimed_at ? new Date(row.claimed_at) : null,
+                claimedByUserId: row.claimed_by_user_id,
+                createdAt: new Date(row.created_at),
+              }),
+          );
+        }
+      } catch (err) {
+        // Fallback
+      }
+    }
     return this.transfers.filter((t) => {
       if (t.tenantId !== tenantId) return false;
       if (t.amount !== amount) return false;
       return t.isPending();
     });
   }
+
   async findById(tenantId: string, id: string): Promise<Transfer | null> {
+    if (this.dbService && !this.dbService.isMemoryMode) {
+      try {
+        const res = await this.dbService.query<TransferRow>(
+          `SELECT t.* FROM transfers t
+           JOIN merchants m ON t.tenant_id = m.id
+           WHERE (m.slug = $1 OR m.id::text = $1)
+             AND (t.id::text = $2 OR t.operation_id = $2)`,
+          [tenantId, id],
+        );
+        if (res && res.rows && res.rows.length > 0) {
+          const row = res.rows[0];
+          return new Transfer({
+            id: row.id,
+            tenantId,
+            operationId: row.operation_id,
+            receiptNumber: row.receipt_number || undefined,
+            operationDate: row.operation_date,
+            payerName: row.payer_name,
+            payerAccount: row.payer_account || undefined,
+            payerBank: row.payer_bank || undefined,
+            currency: row.currency,
+            amount: row.amount,
+            creditAccount: row.credit_account || undefined,
+            concept: row.concept || undefined,
+            rawBody: row.raw_body || undefined,
+            status: row.status as any,
+            claimedAt: row.claimed_at ? new Date(row.claimed_at) : null,
+            claimedByUserId: row.claimed_by_user_id,
+            createdAt: new Date(row.created_at),
+          });
+        }
+      } catch (err) {
+        // Fallback
+      }
+    }
     return (
       this.transfers.find(
         (t) => t.tenantId === tenantId && (t.id === id || t.operationId === id),
       ) || null
     );
   }
+
   async updateClaimed(
     tenantId: string,
     transferId: string,
     cashierUserId: string,
     claimTime: Date,
   ): Promise<boolean> {
+    if (this.dbService && !this.dbService.isMemoryMode) {
+      try {
+        let userUuid: string | null = null;
+        const uRes = await this.dbService.query(
+          'SELECT id FROM users WHERE id::text = $1 OR email = $1',
+          [cashierUserId],
+        );
+        if (uRes.rows.length > 0) {
+          userUuid = uRes.rows[0].id;
+        }
+
+        const res = await this.dbService.query(
+          `UPDATE transfers t
+           SET status = 'claimed',
+               claimed_at = $3,
+               claimed_by_user_id = $4
+           FROM merchants m
+           WHERE t.tenant_id = m.id
+             AND (m.slug = $1 OR m.id::text = $1)
+             AND (t.id::text = $2 OR t.operation_id = $2)
+             AND t.status = 'pending'`,
+          [tenantId, transferId, claimTime, userUuid],
+        );
+        if (res && (res.rowCount ?? 0) > 0) {
+          const item = this.transfers.find(
+            (t) => t.tenantId === tenantId && (t.id === transferId || t.operationId === transferId),
+          );
+          if (item) {
+            item.claim(cashierUserId, claimTime);
+          }
+          return true;
+        }
+      } catch (err) {
+        // Fallback
+      }
+    }
     const transfer = this.transfers.find(
       (t) => t.tenantId === tenantId && (t.id === transferId || t.operationId === transferId),
     );
@@ -612,6 +859,73 @@ export class InMemoryTransferRepository implements ITransferRepository {
   }
 
   async getMetricsByTenant(tenantId: string): Promise<MerchantMetrics> {
+    if (this.dbService && !this.dbService.isMemoryMode) {
+      try {
+        const res = await this.dbService.query<TransferRow>(
+          `SELECT t.* FROM transfers t
+           JOIN merchants m ON t.tenant_id = m.id
+           WHERE (m.slug = $1 OR m.id::text = $1)
+           ORDER BY t.created_at DESC`,
+          [tenantId],
+        );
+        if (res && res.rows) {
+          const tenantTransfers = res.rows.map(
+            (row) =>
+              new Transfer({
+                id: row.id,
+                tenantId,
+                operationId: row.operation_id,
+                receiptNumber: row.receipt_number || undefined,
+                operationDate: row.operation_date,
+                payerName: row.payer_name,
+                payerAccount: row.payer_account || undefined,
+                payerBank: row.payer_bank || undefined,
+                currency: row.currency,
+                amount: row.amount,
+                creditAccount: row.credit_account || undefined,
+                concept: row.concept || undefined,
+                rawBody: row.raw_body || undefined,
+                status: row.status as any,
+                claimedAt: row.claimed_at ? new Date(row.claimed_at) : null,
+                claimedByUserId: row.claimed_by_user_id,
+                createdAt: new Date(row.created_at),
+              }),
+          );
+
+          const claimedTransfers = tenantTransfers.filter((t) => t.isClaimed());
+          const pendingTransfers = tenantTransfers.filter((t) => t.isPending());
+
+          const totalCollectedToday = claimedTransfers.reduce((sum, t) => sum + t.amount, 0);
+          const countValidatedToday = claimedTransfers.length;
+          const pendingUnclaimedCount = pendingTransfers.length;
+
+          const uniqueCashiers = new Set(
+            claimedTransfers.map((t) => t.claimedByUserId).filter((id): id is string => Boolean(id)),
+          );
+
+          const recentTransfers = tenantTransfers.slice(0, 10).map((t) => ({
+            id: t.id || t.operationId,
+            operationId: t.operationId,
+            amount: t.amount,
+            payerName: t.payerName,
+            payerBank: t.payerBank,
+            status: t.status,
+            claimedAt: t.claimedAt ? t.claimedAt.toISOString() : null,
+            operationDate: t.operationDate,
+          }));
+
+          return {
+            totalCollectedToday,
+            countValidatedToday,
+            pendingUnclaimedCount,
+            activeCashiersCount: uniqueCashiers.size || 1,
+            recentTransfers,
+          };
+        }
+      } catch (err) {
+        // Fallback
+      }
+    }
     const tenantTransfers = this.transfers.filter((t) => t.tenantId === tenantId);
     const claimedTransfers = tenantTransfers.filter((t) => t.isClaimed());
     const pendingTransfers = tenantTransfers.filter((t) => t.isPending());
@@ -875,21 +1189,104 @@ export class InMemorySubscriptionRepository implements ISubscriptionRepository {
 
 @Injectable()
 export class InMemoryPaymentReportRepository implements IPaymentReportRepository {
+  constructor(@Optional() private readonly dbService?: DatabaseService) {}
   private reports: PaymentReport[] = [];
 
   async save(report: PaymentReport): Promise<PaymentReport> {
+    if (this.dbService && !this.dbService.isMemoryMode) {
+      try {
+        await this.dbService.query(
+          `INSERT INTO payment_reports (id, tenant_id, reported_by_user_id, payer_name, amount, status, matched_transfer_id, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           ON CONFLICT (id) DO UPDATE SET status = $6, matched_transfer_id = $7`,
+          [report.id, report.tenantId, report.reportedByUserId, report.payerName, report.amount, report.status, report.matchedTransferId || null, report.createdAt],
+        );
+      } catch (err) {
+        // Fallback
+      }
+    }
     const idx = this.reports.findIndex((r) => r.id === report.id);
     if (idx >= 0) this.reports[idx] = report;
     else this.reports.unshift(report);
     return report;
   }
+
   async findAll(): Promise<PaymentReport[]> {
+    if (this.dbService && !this.dbService.isMemoryMode) {
+      try {
+        const res = await this.dbService.query('SELECT * FROM payment_reports ORDER BY created_at DESC');
+        if (res && res.rows) {
+          return res.rows.map(
+            (r: any) =>
+              new PaymentReport({
+                id: r.id,
+                tenantId: r.tenant_id,
+                reportedByUserId: r.reported_by_user_id,
+                payerName: r.payer_name,
+                amount: r.amount,
+                status: r.status,
+                matchedTransferId: r.matched_transfer_id,
+                createdAt: new Date(r.created_at),
+              }),
+          );
+        }
+      } catch (err) {
+        // Fallback
+      }
+    }
     return [...this.reports];
   }
+
   async findById(id: string): Promise<PaymentReport | null> {
+    if (this.dbService && !this.dbService.isMemoryMode) {
+      try {
+        const res = await this.dbService.query('SELECT * FROM payment_reports WHERE id = $1', [id]);
+        if (res && res.rows && res.rows.length > 0) {
+          const r = res.rows[0];
+          return new PaymentReport({
+            id: r.id,
+            tenantId: r.tenant_id,
+            reportedByUserId: r.reported_by_user_id,
+            payerName: r.payer_name,
+            amount: r.amount,
+            status: r.status,
+            matchedTransferId: r.matched_transfer_id,
+            createdAt: new Date(r.created_at),
+          });
+        }
+      } catch (err) {
+        // Fallback
+      }
+    }
     return this.reports.find((r) => r.id === id) || null;
   }
+
   async findByTenantId(tenantId: string): Promise<PaymentReport[]> {
+    if (this.dbService && !this.dbService.isMemoryMode) {
+      try {
+        const res = await this.dbService.query(
+          'SELECT * FROM payment_reports WHERE tenant_id = $1 ORDER BY created_at DESC',
+          [tenantId],
+        );
+        if (res && res.rows) {
+          return res.rows.map(
+            (r: any) =>
+              new PaymentReport({
+                id: r.id,
+                tenantId: r.tenant_id,
+                reportedByUserId: r.reported_by_user_id,
+                payerName: r.payer_name,
+                amount: r.amount,
+                status: r.status,
+                matchedTransferId: r.matched_transfer_id,
+                createdAt: new Date(r.created_at),
+              }),
+          );
+        }
+      } catch (err) {
+        // Fallback
+      }
+    }
     return this.reports.filter((r) => r.tenantId === tenantId);
   }
 }
