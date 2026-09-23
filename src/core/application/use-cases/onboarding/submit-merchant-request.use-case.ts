@@ -81,9 +81,7 @@ export class SubmitMerchantRequestUseCase {
     let userId: string;
 
     if (!user) {
-      userId = `usr-${Date.now()}`;
       user = new User({
-        id: userId,
         email: normalizedEmail,
         passwordHash,
         fullName: input.ownerName,
@@ -91,10 +89,10 @@ export class SubmitMerchantRequestUseCase {
       });
       user = await this.userRepo.save(user);
     } else {
-      userId = user.id || `usr-${Date.now()}`;
       user.updatePassword(passwordHash);
-      await this.userRepo.save(user);
+      user = await this.userRepo.save(user);
     }
+    userId = user.id || `usr-${Date.now()}`;
 
     // 3. Create Owner Membership
     const existingMembership = await this.membershipRepo.findByUserAndMerchant(userId, merchantId);

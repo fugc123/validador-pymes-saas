@@ -14,7 +14,7 @@ export interface DatabaseHealth {
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DatabaseService.name);
   private pool: Pool | null = null;
-  private isMemoryMode = false;
+  public isMemoryMode = false;
 
   constructor(private readonly configService: ConfigService) {}
 

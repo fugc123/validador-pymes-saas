@@ -76,9 +76,7 @@ export class CreateFreeMerchantUseCase {
     let userId: string;
 
     if (!user) {
-      userId = `usr-${Date.now()}`;
       user = new User({
-        id: userId,
         email: input.email.toLowerCase().trim(),
         passwordHash,
         fullName: input.ownerName,
@@ -86,10 +84,10 @@ export class CreateFreeMerchantUseCase {
       });
       user = await this.userRepo.save(user);
     } else {
-      userId = user.id || `usr-${Date.now()}`;
       user.updatePassword(passwordHash);
-      await this.userRepo.save(user);
+      user = await this.userRepo.save(user);
     }
+    userId = user.id || `usr-${Date.now()}`;
 
     // 3. Create Owner Membership
     const existingMembership = await this.membershipRepo.findByUserAndMerchant(userId, merchantId);
