@@ -85,11 +85,12 @@ export const FastPosScreen: React.FC = () => {
           amount: cleanAmount,
           payerFilter: payerName.trim() || undefined,
         }),
-      }).catch(() => null);
+      });
+
+      setSearching(false);
 
       if (res && res.ok) {
         const data = await res.json();
-        setSearching(false);
 
         if (data.found && data.transfers && data.transfers.length > 0) {
           const item = data.transfers[0];
@@ -113,43 +114,21 @@ export const FastPosScreen: React.FC = () => {
           return;
         }
       }
+
+      // No match found in real database
+      AudioSynthesizer.playAlertWarning();
+      setNotFound(true);
     } catch {
-      // Continue to fallback simulation
-    }
-
-    // Fallback simulation for offline/demo
-    setTimeout(() => {
       setSearching(false);
-      if (cleanAmount === 45601 || payerName.toLowerCase().includes('repetido')) {
-        AudioSynthesizer.playAlertWarning();
-        setReplayAlert({
-          claimedAt: '14:32:10 (Hace 12 min)',
-          message: '⛔ NO entregar mercadería. Comprobante ya cobrado por Carlos.',
-        });
-        return;
-      }
-
-      if (cleanAmount > 0) {
-        AudioSynthesizer.playSuccessChime();
-        setMatch({
-          id: 'trans-' + Date.now(),
-          operationId: 'OP-' + Math.floor(100000 + Math.random() * 900000),
-          payerName: payerName.trim() ? payerName.toUpperCase() : 'ALEJANDRA CHENA',
-          payerBank: 'Banco Itaú SIPAP',
-          amount: cleanAmount,
-          operationDate: 'Hoy ' + new Date().toLocaleTimeString().slice(0, 5),
-          status: 'pending',
-        });
-      } else {
-        setNotFound(true);
-      }
-    }, 200);
+      AudioSynthesizer.playAlertWarning();
+      setNotFound(true);
+    }
   };
 
   const handleClaim = async () => {
     if (!match) return;
 
-    if (token && !match.id.startsWith('trans-')) {
+    if (token) {
       try {
         await fetch('/api/v1/cashier/transfers/claim', {
           method: 'POST',
