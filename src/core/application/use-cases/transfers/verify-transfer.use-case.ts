@@ -85,7 +85,7 @@ export class VerifyTransferUseCase {
       found: false,
       status: 'not_found',
       transfers: [],
-      message: 'No pending transfer matching amount and name within the 45-minute window',
+      message: 'No se encontró ninguna transferencia pendiente que coincida con ese monto y nombre en la ventana de 45 minutos.',
     };
   }
 }

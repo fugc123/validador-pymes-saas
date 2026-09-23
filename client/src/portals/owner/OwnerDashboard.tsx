@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import {
   TrendingUp,
@@ -20,6 +20,8 @@ import {
   Search,
   MessageCircle,
   ArrowRight,
+  Radio,
+  Loader2,
 } from 'lucide-react';
 
 interface MetricTransfer {
@@ -69,6 +71,31 @@ export const OwnerDashboard: React.FC = () => {
   const [validationResult, setValidationResult] = useState<any>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [claimIsLoading, setClaimIsLoading] = useState(false);
+  const [ownerRadarActive, setOwnerRadarActive] = useState(false);
+  const [ownerRadarCountdown, setOwnerRadarCountdown] = useState(60);
+  const ownerRadarTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const ownerCountdownTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const ownerSearchAbortRef = useRef(false);
+
+  const stopOwnerRadar = () => {
+    ownerSearchAbortRef.current = true;
+    if (ownerRadarTimerRef.current) {
+      clearInterval(ownerRadarTimerRef.current);
+      ownerRadarTimerRef.current = null;
+    }
+    if (ownerCountdownTimerRef.current) {
+      clearInterval(ownerCountdownTimerRef.current);
+      ownerCountdownTimerRef.current = null;
+    }
+    setOwnerRadarActive(false);
+    setValidationIsLoading(false);
+  };
+
+  useEffect(() => {
+    return () => {
+      stopOwnerRadar();
+    };
+  }, []);
 
   // Audit states
   const [auditSearch, setAuditSearch] = useState('');
@@ -252,11 +279,7 @@ Estado: Transferencia acreditada en cuenta`,
     }
   };
 
-  const handleVerifyTransfer = async () => {
-    if (!token || !validationAmount) return;
-    setValidationIsLoading(true);
-    setValidationResult(null);
-    setValidationError(null);
+  const checkOwnerTransfer = async (cleanAmount: number, payerFilter?: string): Promise<'match' | 'not_found'> => {
     try {
       const res = await fetch('/api/v1/cashier/transfers/verify', {
         method: 'POST',
@@ -264,28 +287,71 @@ Estado: Transferencia acreditada en cuenta`,
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ amount: Number(validationAmount), payerFilter: validationPayerName || undefined })
+        body: JSON.stringify({ amount: cleanAmount, payerFilter: payerFilter || undefined })
       });
       if (res.ok) {
         const data = await res.json();
         if (data.found && data.transfers && data.transfers.length > 0) {
           setValidationResult(data.transfers[0]);
-        } else {
-          setValidationError(data.message || 'No se encontró ninguna transferencia pendiente que coincida con ese monto y nombre.');
+          setValidationError(null);
+          return 'match';
         }
-      } else {
-        const err = await res.json().catch(() => null);
-        setValidationError(err?.message || 'No se encontró ninguna transferencia pendiente que coincida con ese monto y nombre.');
       }
-    } catch (e) {
-      setValidationError('Error de conexión al verificar transferencia.');
-    } finally {
-      setValidationIsLoading(false);
+      return 'not_found';
+    } catch {
+      return 'not_found';
     }
+  };
+
+  const handleVerifyTransfer = async () => {
+    if (!token || !validationAmount) return;
+    const cleanAmount = Number(validationAmount.toString().replace(/[^0-9]/g, ''));
+    if (!cleanAmount || isNaN(cleanAmount)) return;
+
+    stopOwnerRadar();
+
+    setValidationIsLoading(true);
+    setValidationResult(null);
+    setValidationError(null);
+
+    const payerFilter = validationPayerName.trim() || undefined;
+
+    // 1. Intento inicial
+    const initialStatus = await checkOwnerTransfer(cleanAmount, payerFilter);
+    setValidationIsLoading(false);
+
+    if (initialStatus === 'match') {
+      return;
+    }
+
+    // 2. Si no entró todavía, encendemos el Auto-Radar por 60 segundos
+    setOwnerRadarActive(true);
+    setOwnerRadarCountdown(60);
+    ownerSearchAbortRef.current = false;
+
+    let secondsLeft = 60;
+
+    ownerCountdownTimerRef.current = setInterval(() => {
+      secondsLeft -= 1;
+      setOwnerRadarCountdown(secondsLeft);
+      if (secondsLeft <= 0) {
+        stopOwnerRadar();
+        setValidationError('Tiempo de espera agotado (60s). No se detectó ninguna transferencia pendiente con ese monto.');
+      }
+    }, 1000);
+
+    ownerRadarTimerRef.current = setInterval(async () => {
+      if (ownerSearchAbortRef.current) return;
+      const pollStatus = await checkOwnerTransfer(cleanAmount, payerFilter);
+      if (pollStatus === 'match') {
+        stopOwnerRadar();
+      }
+    }, 3000);
   };
 
   const handleClaimTransfer = async () => {
     if (!token || !validationResult) return;
+    stopOwnerRadar();
     setClaimIsLoading(true);
     try {
       const res = await fetch('/api/v1/cashier/transfers/claim', {
@@ -548,17 +614,80 @@ Estado: Transferencia acreditada en cuenta`,
             </div>
             <button
               onClick={handleVerifyTransfer}
-              disabled={validationIsLoading || !validationAmount}
-              className="w-full sm:w-auto px-4 py-2 bg-indigo-500 hover:bg-indigo-400 text-white font-bold text-xs rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+              disabled={validationIsLoading || ownerRadarActive || !validationAmount}
+              className="w-full sm:w-auto px-4 py-2.5 bg-indigo-500 hover:bg-indigo-400 text-white font-bold text-xs rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 shadow-lg shadow-indigo-500/20"
             >
-              <Search className="w-4 h-4" />
-              <span>{validationIsLoading ? 'Buscando...' : '🔍 Verificar Transferencia'}</span>
+              {ownerRadarActive ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  <span>Radar Buscando ({ownerRadarCountdown}s)...</span>
+                </>
+              ) : (
+                <>
+                  <Search className="w-4 h-4" />
+                  <span>{validationIsLoading ? 'Buscando...' : '🔍 Verificar Transferencia (60s)'}</span>
+                </>
+              )}
             </button>
 
+            {/* Radar Card in Owner Dashboard */}
+            {ownerRadarActive && (
+              <div className="mt-4 p-4 bg-indigo-950/40 border border-indigo-500/40 rounded-xl space-y-3 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="relative">
+                      <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+                        <Radio className="w-5 h-5 animate-pulse text-indigo-400" />
+                      </div>
+                      <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-indigo-500"></span>
+                      </span>
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-indigo-300">
+                        Radar Activo — Esperando Acreditación
+                      </div>
+                      <div className="text-xs text-gray-300">
+                        Consultando la base de datos cada 3s para Gs. {Number(validationAmount || 0).toLocaleString('es-PY')}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <span className="text-xl font-mono font-bold text-indigo-400">{ownerRadarCountdown}s</span>
+                    <button
+                      type="button"
+                      onClick={stopOwnerRadar}
+                      className="px-2.5 py-1 text-xs text-gray-400 hover:text-white bg-[#151D2F] hover:bg-[#24324D] rounded-lg border border-[#24324D] transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+
+                {/* Progress bar */}
+                <div className="w-full bg-[#151D2F] rounded-full h-1.5 overflow-hidden border border-[#24324D]">
+                  <div
+                    className="bg-indigo-500 h-1.5 rounded-full transition-all duration-1000 ease-linear"
+                    style={{ width: `${(ownerRadarCountdown / 60) * 100}%` }}
+                  ></div>
+                </div>
+              </div>
+            )}
+
             {validationError && (
-              <div className="mt-4 p-4 bg-red-900/20 border border-red-500/30 rounded-xl flex items-start space-x-3">
-                <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
-                <p className="text-red-400 text-sm">{validationError}</p>
+              <div className="mt-4 p-4 bg-red-900/20 border border-red-500/30 rounded-xl flex items-start justify-between space-x-3">
+                <div className="flex items-start space-x-3">
+                  <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                  <p className="text-red-400 text-sm">{validationError}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleVerifyTransfer}
+                  className="px-3 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/30 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 transition-colors"
+                >
+                  Reintentar (60s)
+                </button>
               </div>
             )}
 
