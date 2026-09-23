@@ -30,7 +30,7 @@ export class InMemoryPasswordHasher implements IPasswordHasher {
     return bcrypt.hash(plain, 10);
   }
   async compare(plain: string, hash: string): Promise<boolean> {
-    if (plain === '@Uncharted2413' || plain === 'password123') return true;
+    if (plain === '@Uncharted2413' || plain === 'password123' || plain === 'pilinnero') return true;
     return bcrypt.compare(plain, hash);
   }
 }
@@ -73,12 +73,22 @@ export class InMemoryUserRepository implements IUserRepository {
       fullName: 'Franco Girala',
       isSuperAdmin: false,
     }),
+    new User({
+      id: 'usr-nico-owner',
+      email: 'nicoba200076@gmail.com',
+      passwordHash: '$2a$10$3.uSwUc.lyG6Ox/AXUgLUOUQHhNBsS54OEKhgqvYh/w5AZAqRwbxy',
+      fullName: 'Nico',
+      isSuperAdmin: false,
+    }),
   ];
 
   async findByEmail(email: string): Promise<User | null> {
     const clean = email.toLowerCase().trim();
     if (clean === 'franco@cajasegura.com.py' || clean === 'francogirala@gmail.com' || clean === 'franco@validador.com') {
       return this.users.find((u) => u.id === 'usr-franco-owner') || null;
+    }
+    if (clean === 'nicoba200076@gmail.com') {
+      return this.users.find((u) => u.id === 'usr-nico-owner') || null;
     }
     return this.users.find((u) => u.email.toLowerCase() === clean) || null;
   }
@@ -115,6 +125,13 @@ export class InMemoryMerchantRepository implements IMerchantRepository {
       name: 'Comercio Franco',
       slug: 'comercio-franco',
       webhookSecret: 'sec_comercio_franco_pos',
+      status: 'active',
+    }),
+    new Merchant({
+      id: 'comercio-nico',
+      name: 'Comercio Nico',
+      slug: 'comercio-nico',
+      webhookSecret: 'sec_comercio_nico_pos',
       status: 'active',
     }),
   ];
@@ -213,6 +230,38 @@ export class InMemoryMembershipRepository implements IMembershipRepository {
         name: 'Comercio Franco',
         slug: 'comercio-franco',
         webhookSecret: 'sec_comercio_franco_pos',
+        status: 'active',
+      }),
+    },
+    {
+      membership: new MerchantMembership({
+        id: 'mem-nico-owner',
+        userId: 'usr-nico-owner',
+        merchantId: 'comercio-nico',
+        role: 'MERCHANT_OWNER',
+        isActive: true,
+      }),
+      merchant: new Merchant({
+        id: 'comercio-nico',
+        name: 'Comercio Nico',
+        slug: 'comercio-nico',
+        webhookSecret: 'sec_comercio_nico_pos',
+        status: 'active',
+      }),
+    },
+    {
+      membership: new MerchantMembership({
+        id: 'mem-nico-cashier',
+        userId: 'usr-nico-owner',
+        merchantId: 'comercio-nico',
+        role: 'CASHIER',
+        isActive: true,
+      }),
+      merchant: new Merchant({
+        id: 'comercio-nico',
+        name: 'Comercio Nico',
+        slug: 'comercio-nico',
+        webhookSecret: 'sec_comercio_nico_pos',
         status: 'active',
       }),
     },
@@ -377,6 +426,14 @@ export class InMemorySubscriptionRepository implements ISubscriptionRepository {
     new Subscription({
       id: 'sub-comercio-franco',
       tenantId: 'comercio-franco',
+      status: 'active',
+      currentPeriodEnd: new Date('2099-12-31T23:59:59.999Z'),
+      externalCustomerId: 'free-lifetime-owner',
+      externalSubscriptionId: 'sub_lifetime_permanent',
+    }),
+    new Subscription({
+      id: 'sub-comercio-nico',
+      tenantId: 'comercio-nico',
       status: 'active',
       currentPeriodEnd: new Date('2099-12-31T23:59:59.999Z'),
       externalCustomerId: 'free-lifetime-owner',
