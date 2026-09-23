@@ -12,6 +12,8 @@ import {
   LogOut,
   Building2,
   ChevronDown,
+  Radio,
+  Loader2,
 } from 'lucide-react';
 
 interface TransferResult {
@@ -36,12 +38,37 @@ export const FastPosScreen: React.FC = () => {
   const [amount, setAmount] = useState<string>('');
   const [payerName, setPayerName] = useState<string>('');
   const [searching, setSearching] = useState(false);
+  const [radarActive, setRadarActive] = useState(false);
+  const [radarCountdown, setRadarCountdown] = useState(60);
   const [match, setMatch] = useState<TransferResult | null>(null);
   const [replayAlert, setReplayAlert] = useState<{ claimedAt: string; message: string } | null>(null);
   const [claimedSuccess, setClaimedSuccess] = useState(false);
   const [notFound, setNotFound] = useState(false);
 
   const amountInputRef = useRef<HTMLInputElement>(null);
+  const radarTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const searchAbortRef = useRef(false);
+
+  const stopRadar = () => {
+    searchAbortRef.current = true;
+    if (radarTimerRef.current) {
+      clearInterval(radarTimerRef.current);
+      radarTimerRef.current = null;
+    }
+    if (countdownTimerRef.current) {
+      clearInterval(countdownTimerRef.current);
+      countdownTimerRef.current = null;
+    }
+    setRadarActive(false);
+    setSearching(false);
+  };
+
+  useEffect(() => {
+    return () => {
+      stopRadar();
+    };
+  }, []);
 
   useEffect(() => {
     amountInputRef.current?.focus();
@@ -63,17 +90,7 @@ export const FastPosScreen: React.FC = () => {
     fetchSub();
   }, [token]);
 
-  const handleSearch = async (e?: React.FormEvent) => {
-    e?.preventDefault();
-    const cleanAmount = parseInt(amount.replace(/[^0-9]/g, ''), 10);
-    if (!cleanAmount || isNaN(cleanAmount)) return;
-
-    setSearching(true);
-    setMatch(null);
-    setReplayAlert(null);
-    setNotFound(false);
-    setClaimedSuccess(false);
-
+  const checkTransfer = async (cleanAmount: number, payerFilter?: string): Promise<'match' | 'claimed' | 'not_found'> => {
     try {
       const res = await fetch('/api/v1/cashier/transfers/verify', {
         method: 'POST',
@@ -83,15 +100,12 @@ export const FastPosScreen: React.FC = () => {
         },
         body: JSON.stringify({
           amount: cleanAmount,
-          payerFilter: payerName.trim() || undefined,
+          payerFilter: payerFilter || undefined,
         }),
       });
 
-      setSearching(false);
-
       if (res && res.ok) {
         const data = await res.json();
-
         if (data.found && data.transfers && data.transfers.length > 0) {
           const item = data.transfers[0];
           AudioSynthesizer.playSuccessChime();
@@ -104,29 +118,75 @@ export const FastPosScreen: React.FC = () => {
             operationDate: item.operationDate,
             status: 'pending',
           });
-          return;
+          return 'match';
         } else if (data.status === 'already_claimed') {
           AudioSynthesizer.playAlertWarning();
           setReplayAlert({
             claimedAt: data.claimedAt ? new Date(data.claimedAt).toLocaleTimeString() : 'Hace instantes',
             message: data.message || '⛔ NO entregar mercadería. Comprobante ya cobrado previamente.',
           });
-          return;
+          return 'claimed';
         }
       }
-
-      // No match found in real database
-      AudioSynthesizer.playAlertWarning();
-      setNotFound(true);
+      return 'not_found';
     } catch {
-      setSearching(false);
-      AudioSynthesizer.playAlertWarning();
-      setNotFound(true);
+      return 'not_found';
     }
+  };
+
+  const handleSearch = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const cleanAmount = parseInt(amount.replace(/[^0-9]/g, ''), 10);
+    if (!cleanAmount || isNaN(cleanAmount)) return;
+
+    // Detener cualquier radar previo
+    stopRadar();
+
+    setSearching(true);
+    setMatch(null);
+    setReplayAlert(null);
+    setNotFound(false);
+    setClaimedSuccess(false);
+
+    const payerFilter = payerName.trim() || undefined;
+
+    // 1. Intento inmediato
+    const initialStatus = await checkTransfer(cleanAmount, payerFilter);
+    setSearching(false);
+
+    if (initialStatus === 'match' || initialStatus === 'claimed') {
+      return;
+    }
+
+    // 2. Si no entró todavía, encendemos el Auto-Radar por 60 segundos
+    setRadarActive(true);
+    setRadarCountdown(60);
+    searchAbortRef.current = false;
+
+    let secondsLeft = 60;
+
+    countdownTimerRef.current = setInterval(() => {
+      secondsLeft -= 1;
+      setRadarCountdown(secondsLeft);
+      if (secondsLeft <= 0) {
+        stopRadar();
+        AudioSynthesizer.playAlertWarning();
+        setNotFound(true);
+      }
+    }, 1000);
+
+    radarTimerRef.current = setInterval(async () => {
+      if (searchAbortRef.current) return;
+      const pollStatus = await checkTransfer(cleanAmount, payerFilter);
+      if (pollStatus === 'match' || pollStatus === 'claimed') {
+        stopRadar();
+      }
+    }, 3000);
   };
 
   const handleClaim = async () => {
     if (!match) return;
+    stopRadar();
 
     if (token) {
       try {
@@ -157,6 +217,7 @@ export const FastPosScreen: React.FC = () => {
   };
 
   const handleReset = () => {
+    stopRadar();
     setMatch(null);
     setReplayAlert(null);
     setNotFound(false);
@@ -286,11 +347,20 @@ export const FastPosScreen: React.FC = () => {
             <div className="flex space-x-3 pt-2">
               <button
                 type="submit"
-                disabled={searching || subscription?.status === 'cancelled' || subscription?.status === 'past_due'}
+                disabled={searching || radarActive || subscription?.status === 'cancelled' || subscription?.status === 'past_due'}
                 className="flex-1 py-3.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 text-base sm:text-lg font-extrabold rounded-2xl shadow-xl shadow-emerald-500/20 hover:shadow-emerald-500/30 transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Search className="w-5 h-5" />
-                <span>Verificar Transferencia</span>
+                {radarActive ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Radar Buscando ({radarCountdown}s)...</span>
+                  </>
+                ) : (
+                  <>
+                    <Search className="w-5 h-5" />
+                    <span>Verificar Transferencia</span>
+                  </>
+                )}
               </button>
 
               <button
@@ -304,6 +374,59 @@ export const FastPosScreen: React.FC = () => {
             </div>
           </form>
         </div>
+
+        {/* State Display: Radar Searching Card */}
+        {radarActive && (
+          <div className="mt-6 bg-emerald-950/30 border-2 border-emerald-500/50 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-2xl shadow-emerald-500/10 animate-fade-in">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-3.5">
+                <div className="relative flex-shrink-0">
+                  <div className="w-11 h-11 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                    <Radio className="w-6 h-6 animate-pulse text-emerald-400" />
+                  </div>
+                  <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500"></span>
+                  </span>
+                </div>
+                <div>
+                  <div className="text-xs uppercase font-extrabold tracking-wider text-emerald-400 flex items-center space-x-2">
+                    <span>Radar Activo — Esperando Acreditación</span>
+                  </div>
+                  <div className="text-sm text-gray-200 mt-0.5">
+                    Buscando <strong className="text-white font-mono">Gs. {parseInt(amount.replace(/[^0-9]/g, '') || '0').toLocaleString('es-PY')}</strong> en vivo...
+                  </div>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-2xl sm:text-3xl font-mono font-extrabold text-emerald-400">{radarCountdown}s</span>
+                <span className="text-[10px] text-gray-400 block uppercase tracking-wider">Restante</span>
+              </div>
+            </div>
+
+            {/* Visual Progress Bar */}
+            <div className="w-full bg-[#0B0F19] rounded-full h-2.5 overflow-hidden border border-[#24324D] mb-4">
+              <div
+                className="bg-gradient-to-r from-emerald-500 to-teal-400 h-2.5 rounded-full transition-all duration-1000 ease-linear"
+                style={{ width: `${(radarCountdown / 60) * 100}%` }}
+              ></div>
+            </div>
+
+            <div className="flex items-center justify-between text-xs text-gray-400 pt-1">
+              <span className="flex items-center space-x-1.5 text-gray-300">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+                <span>En cuanto el banco procese la transferencia, sonará la campana.</span>
+              </span>
+              <button
+                type="button"
+                onClick={stopRadar}
+                className="px-3.5 py-1.5 bg-[#0B0F19] hover:bg-[#1A253C] text-gray-300 hover:text-white rounded-xl border border-[#24324D] transition-colors font-semibold"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* State Display: Match Success Card */}
         {match && (
@@ -385,12 +508,20 @@ export const FastPosScreen: React.FC = () => {
 
         {/* State Display: Not Found */}
         {notFound && (
-          <div className="mt-6 bg-[#151D2F] border border-[#24324D] rounded-2xl p-6 text-center text-gray-400">
-            <Clock className="w-8 h-8 mx-auto text-gray-500 mb-2" />
-            <p className="font-semibold text-white">No se encontró ninguna transferencia pendiente</p>
-            <p className="text-xs text-gray-400 mt-1">
-              Verificá el monto ingresado o pedile al cliente que confirme el envío desde su app bancaria.
+          <div className="mt-6 bg-[#151D2F] border border-[#24324D] rounded-2xl p-6 text-center text-gray-400 animate-fade-in">
+            <Clock className="w-8 h-8 mx-auto text-amber-400 mb-2" />
+            <p className="font-semibold text-white">No se detectó la transferencia tras 60 segundos</p>
+            <p className="text-xs text-gray-400 mt-1 max-w-sm mx-auto">
+              Verificá con el cliente que el débito se haya completado en su app bancaria o que el monto sea exacto.
             </p>
+            <button
+              type="button"
+              onClick={() => handleSearch()}
+              className="mt-4 px-5 py-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:border-emerald-400 rounded-xl text-xs font-bold transition-all inline-flex items-center space-x-2"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>Volver a Buscar (60s)</span>
+            </button>
           </div>
         )}
       </main>
