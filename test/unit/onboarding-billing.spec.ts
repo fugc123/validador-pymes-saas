@@ -44,6 +44,8 @@ describe('Merchant Onboarding & Subscription Billing Lifecycle (T11, T12)', () =
       save: jest.fn().mockImplementation(async (mem) => mem),
       findActiveByUser: jest.fn(),
       findByUserAndMerchant: jest.fn(),
+      findMembersByMerchant: jest.fn(),
+      deleteMembership: jest.fn(),
     };
     mockSubRepo = {
       save: jest.fn().mockImplementation(async (s) => s),

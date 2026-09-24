@@ -55,6 +55,8 @@ describe('Two-Stage Authentication & Multi-Tenant Memberships (T05)', () => {
     mockMembershipRepo = {
       findActiveByUser: jest.fn(),
       findByUserAndMerchant: jest.fn(),
+      findMembersByMerchant: jest.fn(),
+      deleteMembership: jest.fn(),
       save: jest.fn(),
     };
     mockPasswordHasher = {

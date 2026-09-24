@@ -17,6 +17,7 @@ import {
   ScopedTokenPayload,
   TempTokenPayload,
   UserMembershipDetail,
+  MerchantMemberDetail,
 } from '../../core/application/ports/auth.ports';
 import { ITransferRepository, MerchantMetrics } from '../../core/application/ports/transfer.ports';
 import {
@@ -321,7 +322,12 @@ export class InMemoryMerchantRepository implements IMerchantRepository {
 export class InMemoryMembershipRepository implements IMembershipRepository {
   constructor(@Optional() private readonly dbService?: DatabaseService) {}
 
-  private memberships: { membership: MerchantMembership; merchant: Merchant }[] = [
+  private memberships: {
+    membership: MerchantMembership;
+    merchant: Merchant;
+    userEmail?: string;
+    userFullName?: string;
+  }[] = [
     {
       membership: new MerchantMembership({
         id: 'mem-admin-platform',
@@ -507,6 +513,76 @@ export class InMemoryMembershipRepository implements IMembershipRepository {
     return item ? item.membership : null;
   }
 
+  async findMembersByMerchant(merchantId: string): Promise<MerchantMemberDetail[]> {
+    if (this.dbService && !this.dbService.isMemoryMode) {
+      try {
+        const res = await this.dbService.query(
+          `SELECT mm.id as mem_id, mm.user_id, mm.merchant_id, mm.role, mm.is_active, mm.created_at as mem_created_at,
+                  u.id as u_id, u.email as u_email, u.full_name as u_full_name, u.is_super_admin as u_is_super_admin, u.created_at as u_created_at,
+                  m.id as merch_id, m.slug as merch_slug
+           FROM merchant_memberships mm
+           JOIN users u ON mm.user_id = u.id
+           JOIN merchants m ON mm.merchant_id = m.id
+           WHERE (m.slug = $1 OR m.id::text = $1)
+           ORDER BY mm.created_at DESC`,
+          [merchantId],
+        );
+        if (res && res.rows && res.rows.length > 0) {
+          return res.rows.map((row: any) => ({
+            id: row.mem_id,
+            userId: row.user_id,
+            merchantId: row.merch_slug || row.merch_id,
+            role: row.role,
+            isActive: Boolean(row.is_active),
+            createdAt: new Date(row.mem_created_at),
+            user: {
+              id: row.u_id,
+              email: row.u_email,
+              fullName: row.u_full_name,
+              isSuperAdmin: Boolean(row.u_is_super_admin),
+            },
+          }));
+        }
+      } catch (err) {
+        // Fallback
+      }
+    }
+    return this.memberships
+      .filter((m) => m.membership.merchantId === merchantId || m.merchant.slug === merchantId)
+      .map((m) => ({
+        id: m.membership.id || `mem-${m.membership.userId}-${m.membership.merchantId}`,
+        userId: m.membership.userId,
+        merchantId: m.membership.merchantId,
+        role: m.membership.role,
+        isActive: m.membership.isActive,
+        createdAt: m.membership.createdAt,
+        user: {
+          id: m.membership.userId,
+          email: m.userEmail || `${m.membership.userId}@cajasegura.com.py`,
+          fullName: m.userFullName || m.membership.userId.replace(/^usr-/, '').replace(/-/g, ' '),
+          isSuperAdmin: false,
+        },
+      }));
+  }
+
+  async deleteMembership(membershipId: string): Promise<boolean> {
+    if (this.dbService && !this.dbService.isMemoryMode) {
+      try {
+        await this.dbService.query(
+          'DELETE FROM merchant_memberships WHERE id::text = $1',
+          [membershipId],
+        );
+      } catch (err) {
+        // Fallback
+      }
+    }
+    const idx = this.memberships.findIndex((m) => m.membership.id === membershipId);
+    if (idx >= 0) {
+      this.memberships.splice(idx, 1);
+    }
+    return true;
+  }
+
   async save(membership: MerchantMembership): Promise<MerchantMembership> {
     if (this.dbService && !this.dbService.isMemoryMode) {
       try {
@@ -541,12 +617,16 @@ export class InMemoryMembershipRepository implements IMembershipRepository {
         // Fallback
       }
     }
+    const userEmail = (membership as any).userEmail;
+    const userFullName = (membership as any).userFullName;
     const idx = this.memberships.findIndex(
       (m) =>
         m.membership.userId === membership.userId && m.membership.merchantId === membership.merchantId,
     );
     if (idx >= 0) {
       this.memberships[idx].membership = membership;
+      if (userEmail) this.memberships[idx].userEmail = userEmail;
+      if (userFullName) this.memberships[idx].userFullName = userFullName;
     } else {
       this.memberships.push({
         membership,
@@ -556,6 +636,8 @@ export class InMemoryMembershipRepository implements IMembershipRepository {
           slug: membership.merchantId,
           webhookSecret: 'sec_default_secret_12345',
         }),
+        userEmail,
+        userFullName,
       });
     }
     return membership;

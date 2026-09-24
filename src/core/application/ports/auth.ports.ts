@@ -7,6 +7,21 @@ export interface UserMembershipDetail {
   merchant: Merchant;
 }
 
+export interface MerchantMemberDetail {
+  id: string;
+  userId: string;
+  merchantId: string;
+  role: MembershipRole;
+  isActive: boolean;
+  createdAt: Date;
+  user: {
+    id: string;
+    email: string;
+    fullName: string;
+    isSuperAdmin: boolean;
+  };
+}
+
 export interface IUserRepository {
   findByEmail(email: string): Promise<User | null>;
   findById(id: string): Promise<User | null>;
@@ -22,6 +37,8 @@ export interface IMerchantRepository {
 export interface IMembershipRepository {
   findActiveByUser(userId: string): Promise<UserMembershipDetail[]>;
   findByUserAndMerchant(userId: string, merchantId: string, role?: string): Promise<MerchantMembership | null>;
+  findMembersByMerchant(merchantId: string): Promise<MerchantMemberDetail[]>;
+  deleteMembership(membershipId: string): Promise<boolean>;
   save(membership: MerchantMembership): Promise<MerchantMembership>;
 }
 

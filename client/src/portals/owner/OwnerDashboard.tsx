@@ -22,6 +22,9 @@ import {
   ArrowRight,
   Radio,
   Loader2,
+  Trash2,
+  UserPlus,
+  X,
 } from 'lucide-react';
 
 interface MetricTransfer {
@@ -33,6 +36,21 @@ interface MetricTransfer {
   status: string;
   claimedAt: string | null;
   operationDate: string;
+}
+
+interface CashierMember {
+  id: string;
+  userId: string;
+  merchantId: string;
+  role: 'MERCHANT_OWNER' | 'CASHIER';
+  isActive: boolean;
+  createdAt: string;
+  user: {
+    id: string;
+    email: string;
+    fullName: string;
+    isSuperAdmin: boolean;
+  };
 }
 
 interface MetricsData {
@@ -63,6 +81,16 @@ export const OwnerDashboard: React.FC = () => {
   const [reportError, setReportError] = useState<string | null>(null);
 
   const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
+  
+  // Cashier Team states
+  const [cashiers, setCashiers] = useState<CashierMember[]>([]);
+  const [isLoadingCashiers, setIsLoadingCashiers] = useState(false);
+  const [showAddCashierModal, setShowAddCashierModal] = useState(false);
+  const [cashierForm, setCashierForm] = useState({ fullName: '', email: '', password: '' });
+  const [isSubmittingCashier, setIsSubmittingCashier] = useState(false);
+  const [cashierModalError, setCashierModalError] = useState<string | null>(null);
+  const [cashierModalSuccess, setCashierModalSuccess] = useState<string | null>(null);
+  const [deletingCashierId, setDeletingCashierId] = useState<string | null>(null);
   
   // Validation environment states
   const [validationAmount, setValidationAmount] = useState('');
@@ -145,10 +173,95 @@ export const OwnerDashboard: React.FC = () => {
     }
   }, [token]);
 
+  const fetchCashiers = useCallback(async () => {
+    if (!token) return;
+    setIsLoadingCashiers(true);
+    try {
+      const res = await fetch('/api/v1/merchant/cashiers', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCashiers(data);
+      }
+    } catch (e) {
+      console.error('Error fetching cashiers', e);
+    } finally {
+      setIsLoadingCashiers(false);
+    }
+  }, [token]);
+
+  const handleAddCashier = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) return;
+    if (!cashierForm.fullName.trim() || !cashierForm.email.trim() || !cashierForm.password.trim()) {
+      setCashierModalError('Completá todos los campos requeridos.');
+      return;
+    }
+    if (cashierForm.password.trim().length < 6) {
+      setCashierModalError('La contraseña debe tener al menos 6 caracteres.');
+      return;
+    }
+    setIsSubmittingCashier(true);
+    setCashierModalError(null);
+    setCashierModalSuccess(null);
+    try {
+      const res = await fetch('/api/v1/merchant/cashiers', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          fullName: cashierForm.fullName.trim(),
+          email: cashierForm.email.trim(),
+          password: cashierForm.password.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Error al crear cajero');
+      }
+      setCashierModalSuccess(`¡Cajero ${data.user?.fullName || cashierForm.fullName} creado y asignado con éxito!`);
+      setCashierForm({ fullName: '', email: '', password: '' });
+      fetchCashiers();
+      setTimeout(() => {
+        setShowAddCashierModal(false);
+        setCashierModalSuccess(null);
+      }, 1500);
+    } catch (err: any) {
+      setCashierModalError(err.message || 'Ocurrió un error al dar de alta el cajero.');
+    } finally {
+      setIsSubmittingCashier(false);
+    }
+  };
+
+  const handleDeleteCashier = async (membershipId: string, name: string) => {
+    if (!token) return;
+    if (!window.confirm(`¿Estás seguro de que querés remover el acceso de cajero a ${name}?`)) {
+      return;
+    }
+    setDeletingCashierId(membershipId);
+    try {
+      const res = await fetch(`/api/v1/merchant/cashiers/${membershipId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        fetchCashiers();
+      }
+    } catch (e) {
+      console.error('Error deleting cashier', e);
+    } finally {
+      setDeletingCashierId(null);
+    }
+  };
+
   const fetchAllData = useCallback(() => {
     fetchMetrics();
     fetchSub();
-  }, [fetchMetrics, fetchSub]);
+    fetchCashiers();
+  }, [fetchMetrics, fetchSub, fetchCashiers]);
 
   useEffect(() => {
     fetchAllData();
@@ -1008,9 +1121,20 @@ Estado: Transferencia acreditada en cuenta`,
         {/* Cashier Team Table */}
         <div className="bg-[#151D2F] border border-[#24324D] rounded-2xl p-6 shadow-xl">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-white">Equipo de Cajeros</h2>
-            <button className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-gray-950 text-xs font-bold rounded-xl transition-all">
-              + Agregar Cajero
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-bold text-white">Equipo de Cajeros</h2>
+              {isLoadingCashiers && <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />}
+            </div>
+            <button
+              onClick={() => {
+                setCashierModalError(null);
+                setCashierModalSuccess(null);
+                setShowAddCashierModal(true);
+              }}
+              className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-gray-950 text-xs font-bold rounded-xl transition-all shadow-md shadow-emerald-500/20 flex items-center gap-1.5"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>+ Agregar Cajero</span>
             </button>
           </div>
 
@@ -1026,16 +1150,171 @@ Estado: Transferencia acreditada en cuenta`,
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#24324D]">
-                <tr>
-                  <td colSpan={5} className="p-6 text-center text-gray-400 font-sans">
-                    No hay cajeros asignados en este comercio aún. Hacé clic en <strong>+ Agregar Cajero</strong> para dar de alta accesos para tus empleados de caja.
-                  </td>
-                </tr>
+                {cashiers.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="p-6 text-center text-gray-400 font-sans">
+                      No hay cajeros asignados en este comercio aún. Hacé clic en <strong>+ Agregar Cajero</strong> para dar de alta accesos para tus empleados de caja.
+                    </td>
+                  </tr>
+                ) : (
+                  cashiers.map((c) => (
+                    <tr key={c.id} className="hover:bg-[#0B0F19]/40 transition-colors">
+                      <td className="p-3 font-semibold text-white">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center text-xs shrink-0">
+                            {c.user.fullName ? c.user.fullName[0].toUpperCase() : 'C'}
+                          </div>
+                          <span className="truncate">{c.user.fullName || 'Cajero'}</span>
+                        </div>
+                      </td>
+                      <td className="p-3 text-gray-300 font-mono">{c.user.email}</td>
+                      <td className="p-3">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-mono uppercase font-bold border ${
+                          c.role === 'MERCHANT_OWNER'
+                            ? 'bg-purple-500/20 text-purple-400 border-purple-500/30'
+                            : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                        }`}>
+                          {c.role === 'MERCHANT_OWNER' ? 'Dueño' : 'Cajero'}
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        <span className={`inline-flex items-center gap-1.5 text-[11px] font-mono ${
+                          c.isActive ? 'text-emerald-400' : 'text-gray-400'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${c.isActive ? 'bg-emerald-400' : 'bg-gray-500'}`}></span>
+                          {c.isActive ? 'Activo' : 'Inactivo'}
+                        </span>
+                      </td>
+                      <td className="p-3 text-right">
+                        {c.role !== 'MERCHANT_OWNER' && (
+                          <button
+                            onClick={() => handleDeleteCashier(c.id, c.user.fullName || c.user.email)}
+                            disabled={deletingCashierId === c.id}
+                            className="text-gray-400 hover:text-red-400 p-1.5 rounded-lg hover:bg-red-500/10 transition-colors"
+                            title="Remover cajero"
+                          >
+                            {deletingCashierId === c.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-red-400" />
+                            ) : (
+                              <Trash2 className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
         </div>
       </main>
+
+      {/* Modal: Agregar Cajero */}
+      {showAddCashierModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#151D2F] border border-[#24324D] rounded-2xl max-w-md w-full p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-4 border-b border-[#24324D] mb-5">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-emerald-500/10 text-emerald-400 rounded-xl">
+                  <UserPlus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Dar de Alta Nuevo Cajero</h3>
+                  <p className="text-xs text-gray-400">Acceso exclusivo a la terminal de cobro</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAddCashierModal(false)}
+                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-[#0B0F19] transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {cashierModalError && (
+              <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 text-red-300 rounded-xl text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+                <span>{cashierModalError}</span>
+              </div>
+            )}
+
+            {cashierModalSuccess && (
+              <div className="mb-4 p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded-xl text-xs flex items-center gap-2">
+                <Check className="w-4 h-4 shrink-0 text-emerald-400" />
+                <span>{cashierModalSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleAddCashier} className="space-y-4">
+              <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-3 text-[11px] text-emerald-300/90 leading-relaxed">
+                💡 El cajero solo podrá acceder a la pantalla de cobro rápido para validar acreditaciones. No podrá ver el saldo general de tus cuentas ni las configuraciones del comercio.
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-400 mb-1">Nombre Completo del Cajero *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ej: Lucas Benítez"
+                  value={cashierForm.fullName}
+                  onChange={(e) => setCashierForm({ ...cashierForm, fullName: e.target.value })}
+                  className="w-full bg-[#0B0F19] border border-[#24324D] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-400 mb-1">Email de Acceso *</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="cajero@tucomercio.com"
+                  value={cashierForm.email}
+                  onChange={(e) => setCashierForm({ ...cashierForm, email: e.target.value })}
+                  className="w-full bg-[#0B0F19] border border-[#24324D] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-400 mb-1">Contraseña Inicial *</label>
+                <input
+                  type="text"
+                  required
+                  minLength={6}
+                  placeholder="Mínimo 6 caracteres"
+                  value={cashierForm.password}
+                  onChange={(e) => setCashierForm({ ...cashierForm, password: e.target.value })}
+                  className="w-full bg-[#0B0F19] border border-[#24324D] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#24324D]">
+                <button
+                  type="button"
+                  onClick={() => setShowAddCashierModal(false)}
+                  className="px-4 py-2 bg-[#0B0F19] hover:bg-[#1E293B] text-gray-400 text-xs font-bold rounded-xl transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingCashier}
+                  className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 text-xs font-bold rounded-xl shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {isSubmittingCashier ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Creando...</span>
+                    </>
+                  ) : (
+                    <span>Crear y Asignar Cajero</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
