@@ -85,20 +85,20 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToLogin, onGoToReg
   return (
     <div className="min-h-screen bg-[#070A12] text-gray-100 selection:bg-emerald-500 selection:text-gray-950 font-sans">
       {/* Top Navbar */}
-      <nav className="sticky top-0 z-50 backdrop-blur-md bg-[#070A12]/80 border-b border-[#1E293B]">
-        <div className="max-w-6xl mx-auto px-6 h-20 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="p-2.5 bg-gradient-to-tr from-emerald-600 to-teal-400 text-gray-950 rounded-2xl shadow-lg shadow-emerald-500/20">
-              <ShieldCheck className="w-6 h-6" />
+      <nav className="sticky top-0 z-50 backdrop-blur-md bg-[#070A12]/90 border-b border-[#1E293B]">
+        <div className="max-w-6xl mx-auto px-3 sm:px-6 h-16 sm:h-20 flex items-center justify-between gap-2">
+          <div className="flex items-center space-x-2.5 sm:space-x-3 min-w-0">
+            <div className="p-2 sm:p-2.5 bg-gradient-to-tr from-emerald-600 to-teal-400 text-gray-950 rounded-xl sm:rounded-2xl shadow-lg shadow-emerald-500/20 shrink-0">
+              <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div>
-              <div className="text-xl font-extrabold tracking-tight text-white flex items-center space-x-1.5">
-                <span>CajaSegura</span>
-                <span className="text-[10px] uppercase font-mono px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-full font-bold">
+            <div className="min-w-0">
+              <div className="text-base sm:text-xl font-extrabold tracking-tight text-white flex items-center gap-1.5 min-w-0">
+                <span className="truncate">CajaSegura</span>
+                <span className="text-[9px] sm:text-[10px] uppercase font-mono px-1.5 sm:px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-full font-bold shrink-0">
                   SIPAP PY
                 </span>
               </div>
-              <div className="text-[10px] text-gray-400">Protección Anti-Fraude en Tiempo Real</div>
+              <div className="text-[10px] text-gray-400 hidden xs:block truncate">Protección Anti-Fraude en Tiempo Real</div>
             </div>
           </div>
 
@@ -109,18 +109,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToLogin, onGoToReg
             <a href="#precios" className="hover:text-emerald-400 transition-colors">Precios</a>
           </div>
 
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
             <button
               onClick={onGoToLogin}
-              className="text-xs font-bold text-gray-300 hover:text-white px-4 py-2.5 rounded-xl border border-[#24324D] hover:border-gray-500 transition-colors"
+              className="text-xs font-bold text-gray-300 hover:text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl border border-[#24324D] hover:border-gray-500 transition-colors shrink-0"
             >
-              Iniciar Sesión
+              <span className="hidden xs:inline">Iniciar </span>Sesión
             </button>
             <a
               href="#registro"
-              className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 text-xs font-extrabold rounded-xl shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all flex items-center space-x-1.5"
+              className="px-3 sm:px-5 py-2 sm:py-2.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 text-xs font-extrabold rounded-xl shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all flex items-center gap-1 sm:gap-1.5 shrink-0"
             >
-              <span>Probar 7 Días Gratis</span>
+              <span><span className="hidden sm:inline">Probar 7 Días </span>Gratis</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </a>
           </div>

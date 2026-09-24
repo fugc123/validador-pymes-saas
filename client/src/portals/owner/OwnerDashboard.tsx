@@ -395,65 +395,68 @@ Estado: Transferencia acreditada en cuenta`,
   return (
     <div className="min-h-screen bg-[#0B0F19] text-gray-100 flex flex-col">
       {/* Top Bar */}
-      <header className="border-b border-[#24324D] bg-[#151D2F] px-4 sm:px-8 py-3 h-auto min-h-16 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center space-x-3">
-          <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-lg">
-            <Building2 className="w-5 h-5" />
+      <header className="border-b border-[#24324D] bg-[#151D2F] px-3 sm:px-6 py-2.5 sm:py-3.5 flex items-center justify-between gap-2 shrink-0">
+        <div className="flex items-center space-x-2.5 sm:space-x-3 min-w-0">
+          <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl shrink-0">
+            <Building2 className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
-          <div>
-            <div className="font-bold text-white flex items-center space-x-2">
-              <span>{activeTenant?.merchantName} — Panel de Dueño</span>
-              <div className="flex items-center space-x-2 ml-2 px-2.5 py-0.5 bg-[#0B0F19] rounded-full border border-[#24324D]">
-                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                <span className="text-[10px] text-emerald-400 font-medium">En vivo (actualización continua)</span>
+          <div className="min-w-0">
+            <div className="font-bold text-white flex items-center gap-1.5 min-w-0">
+              <span className="text-sm sm:text-base font-extrabold truncate max-w-[130px] xs:max-w-[190px] sm:max-w-xs">
+                {activeTenant?.merchantName || 'Mi Comercio'}
+              </span>
+              <span className="text-[10px] text-gray-400 font-normal hidden sm:inline">— Panel Dueño</span>
+              <div className="flex items-center gap-1 px-1.5 sm:px-2 py-0.5 bg-[#0B0F19] rounded-full border border-[#24324D] shrink-0">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                <span className="text-[9px] text-emerald-400 font-medium hidden xs:inline">En vivo</span>
               </div>
             </div>
-            <div className="flex items-center space-x-4 mt-1">
-              <div className="text-xs text-gray-400">Dueño: {user?.fullName}</div>
-              <div className="text-[10px] text-gray-500 font-mono">
-                Última sincronización: {lastSyncTime.toLocaleTimeString()}
-              </div>
+            <div className="flex items-center gap-1.5 sm:gap-3 text-[11px] text-gray-400 mt-0.5 min-w-0">
+              <span className="truncate max-w-[120px] xs:max-w-[180px] sm:max-w-none">Dueño: {user?.fullName}</span>
+              <span className="text-gray-600 hidden sm:inline">•</span>
+              <span className="text-[10px] text-gray-500 font-mono hidden md:inline">
+                Sinc: {lastSyncTime.toLocaleTimeString()}
+              </span>
               <button
                 onClick={() => fetchAllData()}
-                className="flex items-center space-x-1.5 px-2 py-0.5 bg-[#24324D] hover:bg-[#2d3f63] text-gray-300 rounded text-[10px] transition-colors"
+                className="flex items-center gap-1 px-1.5 py-0.5 bg-[#24324D] hover:bg-[#2d3f63] text-gray-300 rounded text-[10px] transition-colors shrink-0"
+                title="Sincronizar ahora"
                 disabled={isLoadingMetrics}
               >
                 <RefreshCw className={`w-3 h-3 ${isLoadingMetrics ? 'animate-spin text-emerald-400' : ''}`} />
-                <span>Sincronizar Ahora</span>
+                <span className="hidden sm:inline">Sincronizar</span>
               </button>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
           <button
             onClick={() => switchTenant(activeTenant?.tenantId || '', 'CASHIER')}
-            className="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/10"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/10 shrink-0"
             title="Abrir la terminal de cobro rápido para cajero"
           >
-            <span>Ir a Caja (POS)</span>
-            <ArrowRight className="w-3.5 h-3.5" />
+            <span>Ir a Caja</span>
+            <ArrowRight className="w-3.5 h-3.5 hidden xs:inline" />
           </button>
+
           {availableMemberships.length > 1 && (
             <button
               onClick={openTenantSelector}
-              className="flex items-center space-x-1.5 px-3 py-1.5 bg-[#24324D] hover:bg-[#2d3f63] text-gray-300 rounded-xl text-xs font-semibold transition-colors border border-gray-600/30"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-[#24324D] hover:bg-[#2d3f63] text-gray-300 rounded-xl text-xs font-semibold transition-colors border border-gray-600/30 shrink-0"
               title="Cambiar de sucursal o rol"
             >
-              <Building2 className="w-3.5 h-3.5" />
-              <span>Cambiar Sucursal / Rol</span>
+              <Building2 className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden md:inline">Sucursales</span>
             </button>
           )}
-          <div className="hidden sm:flex items-center space-x-2 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 rounded-full text-xs text-emerald-400 font-semibold">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Plan PYME: 7 Días de Prueba (Gs. 150.000/mes)</span>
-          </div>
+
           <button
             onClick={logout}
-            className="p-2 text-gray-400 hover:text-red-400 rounded-lg hover:bg-[#0B0F19] transition-colors"
+            className="p-1.5 sm:p-2 text-gray-400 hover:text-red-400 rounded-lg hover:bg-[#0B0F19] transition-colors shrink-0"
             title="Cerrar sesión"
           >
-            <LogOut className="w-5 h-5" />
+            <LogOut className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>
       </header>

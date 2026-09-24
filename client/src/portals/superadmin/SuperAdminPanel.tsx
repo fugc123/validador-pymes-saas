@@ -261,27 +261,31 @@ export const SuperAdminPanel: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#0B0F19] text-gray-100 flex flex-col">
       {/* Header */}
-      <header className="border-b border-[#24324D] bg-[#151D2F] px-4 sm:px-8 py-3 h-auto min-h-16 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center space-x-3">
-          <div className="p-2 bg-purple-500/10 text-purple-400 rounded-lg">
-            <ShieldAlert className="w-5 h-5" />
+      <header className="border-b border-[#24324D] bg-[#151D2F] px-3 sm:px-8 py-2.5 sm:py-3.5 flex items-center justify-between gap-2 shrink-0">
+        <div className="flex items-center space-x-2.5 sm:space-x-3 min-w-0">
+          <div className="p-2 bg-purple-500/10 text-purple-400 rounded-xl shrink-0">
+            <ShieldAlert className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
-          <div className="font-bold text-white">CajaSegura — Panel de Administración</div>
+          <div className="font-bold text-sm sm:text-base text-white truncate max-w-[150px] xs:max-w-[220px] sm:max-w-none">
+            <span className="hidden sm:inline">CajaSegura — </span>Panel Admin
+          </div>
         </div>
-        <div className="flex items-center space-x-3 sm:space-x-4">
+        <div className="flex items-center gap-1.5 sm:gap-4 shrink-0">
           <button
             onClick={() => { setCreatedResult(null); setCreateError(null); setShowCreateModal(true); }}
-            className="px-3.5 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-500/20 flex items-center space-x-1.5 transition-all"
+            className="px-2.5 sm:px-3.5 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-500/20 flex items-center gap-1.5 transition-all shrink-0"
           >
-            <Plus className="w-4 h-4" />
-            <span>Crear Comercio / Dueño Gratuito</span>
+            <Plus className="w-4 h-4 shrink-0" />
+            <span className="hidden sm:inline">Crear Comercio Gratuito</span>
+            <span className="sm:hidden">Crear</span>
           </button>
-          <div className="text-sm text-gray-400 hidden sm:block">{user?.email}</div>
+          <div className="text-xs text-gray-400 hidden md:block">{user?.email}</div>
           <button
             onClick={logout}
-            className="p-2 text-gray-400 hover:text-red-400 rounded-lg hover:bg-[#0B0F19] transition-colors"
+            className="p-1.5 sm:p-2 text-gray-400 hover:text-red-400 rounded-lg hover:bg-[#0B0F19] transition-colors shrink-0"
+            title="Cerrar sesión"
           >
-            <LogOut className="w-5 h-5" />
+            <LogOut className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>
       </header>
