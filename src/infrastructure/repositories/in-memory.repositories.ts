@@ -605,12 +605,27 @@ export class InMemoryMembershipRepository implements IMembershipRepository {
           );
           if (mRes.rows.length > 0) {
             const merchantUuid = mRes.rows[0].id;
-            await this.dbService.query(
+            const insertRes = await this.dbService.query(
               `INSERT INTO merchant_memberships (user_id, merchant_id, role, is_active)
                VALUES ($1, $2, $3, $4)
-               ON CONFLICT (user_id, merchant_id) DO UPDATE SET role = $3, is_active = $4`,
+               ON CONFLICT (user_id, merchant_id) DO UPDATE SET role = $3, is_active = $4
+               RETURNING id, created_at`,
               [userUuid, merchantUuid, membership.role, membership.isActive],
             );
+            if (insertRes && insertRes.rows && insertRes.rows.length > 0) {
+              const row = insertRes.rows[0];
+              const savedMem = new MerchantMembership({
+                id: row.id,
+                userId: membership.userId,
+                merchantId: membership.merchantId,
+                role: membership.role,
+                isActive: membership.isActive,
+                createdAt: new Date(row.created_at),
+              });
+              (savedMem as any).userEmail = (membership as any).userEmail;
+              (savedMem as any).userFullName = (membership as any).userFullName;
+              membership = savedMem;
+            }
           }
         }
       } catch (err) {
