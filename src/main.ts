@@ -21,4 +21,7 @@ async function bootstrap() {
   await app.listen(port);
   console.log(`Validador PYME SaaS engine running on port ${port}`);
 }
-bootstrap();
+bootstrap().catch((err) => {
+  console.error('Fatal startup error:', err instanceof Error ? err.message : err);
+  process.exit(1);
+});

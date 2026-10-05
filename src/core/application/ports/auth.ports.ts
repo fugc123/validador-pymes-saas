@@ -47,18 +47,24 @@ export interface IPasswordHasher {
   compare(plain: string, hash: string): Promise<boolean>;
 }
 
+export type TokenPurpose = 'access' | 'tenant_selection';
+
 export interface ScopedTokenPayload {
   userId: string;
   email: string;
   tenantId?: string;
   role: 'SUPER_ADMIN' | MembershipRole;
   isSuperAdmin: boolean;
+  /** Signed into the token; only 'access' purpose may authenticate requests. */
+  purpose?: TokenPurpose;
 }
 
 export interface TempTokenPayload {
   userId: string;
   email: string;
   isSuperAdmin: boolean;
+  /** Signed into the token; 'tenant_selection' purpose may not authenticate requests. */
+  purpose?: TokenPurpose;
 }
 
 export interface ITokenService {

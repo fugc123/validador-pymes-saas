@@ -1,5 +1,7 @@
 import { Injectable, Optional } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
+import { randomBytes } from 'crypto';
 import { DatabaseService } from '../database/database.service';
 import { UserRow, MerchantRow, MerchantMembershipRow, SubscriptionRow, TransferRow } from '../database/schema';
 import { User } from '../../core/domain/entities/user.entity';
@@ -33,22 +35,95 @@ export class InMemoryPasswordHasher implements IPasswordHasher {
     return bcrypt.hash(plain, 10);
   }
   async compare(plain: string, hash: string): Promise<boolean> {
-    if (plain === '@Uncharted2413' || plain === 'password123' || plain === 'pilinnero') return true;
     return bcrypt.compare(plain, hash);
+  }
+}
+
+const MIN_JWT_SECRET_LENGTH = 32;
+const DEFAULT_SCOPED_TOKEN_EXPIRATION = '7d';
+const TEMP_TOKEN_EXPIRATION = '15m';
+// Known static/example secrets (docker-compose.prod.yml default and the publicly
+// committed `.env.example` sample); refused outright.
+const UNSAFE_STATIC_JWT_SECRETS = new Set([
+  'cajasegura_prod_secret_jwt_2026_super_key',
+  'super-secret-jwt-key-for-saas-enterprise-2026',
+]);
+
+/**
+ * Resolves the JWT signing secret, failing closed for production and any
+ * execution with configured database mode. Only memory-mode development
+ * without an explicit secret gets a per-process random secret, so no fixed
+ * guessable value can ever be silently used.
+ */
+export function resolveJwtSecret(env: NodeJS.ProcessEnv): string {
+  const isProduction = env.NODE_ENV?.toLowerCase() === 'production';
+  const isDatabaseConfigured = Boolean(env.DATABASE_URL || env.DB_HOST);
+
+  if (!isProduction && !isDatabaseConfigured && !env.JWT_SECRET) {
+    return randomBytes(32).toString('hex');
+  }
+
+  const secret = env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET is required in production and whenever a database is configured.');
+  }
+  if (secret.length < MIN_JWT_SECRET_LENGTH) {
+    throw new Error(`JWT_SECRET must be at least ${MIN_JWT_SECRET_LENGTH} characters long.`);
+  }
+  if (UNSAFE_STATIC_JWT_SECRETS.has(secret)) {
+    throw new Error('JWT_SECRET uses a known static default and must be replaced with a unique secret.');
+  }
+  return secret;
+}
+
+/**
+ * Fails closed at construction when JWT_EXPIRATION cannot resolve to a positive
+ * token lifetime. The probe signs a throwaway token through the same
+ * @nestjs/jwt instance used at runtime, so the accepted duration syntax can
+ * never drift from what actually gets signed: malformed values make signing
+ * throw, and nonpositive values produce exp <= iat.
+ */
+function assertValidJwtExpiration(jwt: JwtService, expiration: string): void {
+  let claims: { iat?: number; exp?: number } | null;
+  try {
+    claims = jwt.decode(jwt.sign({}, { expiresIn: expiration }));
+  } catch {
+    throw new Error(`JWT_EXPIRATION "${expiration}" is not a valid duration, e.g. "30m" or "7d".`);
+  }
+
+  const lifetimeSeconds =
+    claims && typeof claims.iat === 'number' && typeof claims.exp === 'number'
+      ? claims.exp - claims.iat
+      : Number.NaN;
+  if (!(lifetimeSeconds > 0)) {
+    throw new Error(
+      `JWT_EXPIRATION "${expiration}" must resolve to a positive token lifetime, e.g. "30m" or "7d".`,
+    );
   }
 }
 
 @Injectable()
 export class InMemoryTokenService implements ITokenService {
+  private readonly jwt: JwtService;
+  private readonly scopedTokenExpiration: string;
+
+  constructor() {
+    const env = process.env;
+    const expiration = env.JWT_EXPIRATION || DEFAULT_SCOPED_TOKEN_EXPIRATION;
+    const jwt = new JwtService({ secret: resolveJwtSecret(env) });
+    assertValidJwtExpiration(jwt, expiration);
+    this.jwt = jwt;
+    this.scopedTokenExpiration = expiration;
+  }
+
   signScopedToken(payload: ScopedTokenPayload): string {
-    return `jwt_scoped_${Buffer.from(JSON.stringify(payload)).toString('base64')}`;
+    return this.jwt.sign({ ...payload, purpose: 'access' }, { expiresIn: this.scopedTokenExpiration });
   }
   signTempToken(payload: TempTokenPayload): string {
-    return `jwt_temp_${Buffer.from(JSON.stringify(payload)).toString('base64')}`;
+    return this.jwt.sign({ ...payload, purpose: 'tenant_selection' }, { expiresIn: TEMP_TOKEN_EXPIRATION });
   }
   verifyToken<T = any>(token: string): T {
-    const raw = token.replace(/^jwt_(scoped|temp)_/, '');
-    return JSON.parse(Buffer.from(raw, 'base64').toString('utf-8')) as T;
+    return this.jwt.verify(token, { algorithms: ['HS256'] }) as T;
   }
 }
 

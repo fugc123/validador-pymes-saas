@@ -14,10 +14,13 @@ export class AuthMiddleware implements NestMiddleware {
       const token = authHeader.substring(7).trim();
       try {
         const payload = this.tokenService.verifyToken<ScopedTokenPayload>(token);
-        req.user = {
-          ...payload,
-          id: payload.userId,
-        };
+        // Deny by default: only signed tokens purpose-typed for access may authenticate.
+        if (payload.purpose === 'access') {
+          req.user = {
+            ...payload,
+            id: payload.userId,
+          };
+        }
       } catch {
         // Invalid or corrupt token - req.user remains undefined so guards can handle it
       }
