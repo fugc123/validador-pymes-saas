@@ -13,6 +13,9 @@ import { ScopedTokenPayload, TempTokenPayload } from '../../src/core/application
 
 const UNSAFE_STATIC_JWT_SECRET = 'cajasegura_prod_secret_jwt_2026_super_key';
 
+/** Example signing key published in `.env.example` (45 chars, so length checks alone pass it). */
+const DOCUMENTED_EXAMPLE_JWT_SECRET = 'super-secret-jwt-key-for-saas-enterprise-2026';
+
 /** Fixed 46-char signing secret shared by the test signer and the service under test. */
 const TEST_JWT_SECRET = 'auth-token-security-spec-fixed-test-secret-32c';
 
@@ -311,6 +314,21 @@ describe('TASK-01 token and secret security regressions', () => {
       expect(() => new InMemoryTokenService()).toThrow(/static default/i);
     });
 
+    it('fails startup in production when JWT_SECRET is the documented example key', () => {
+      // The published example is long enough to satisfy a naive length check,
+      // so only static/example-secret detection can refuse it.
+      expect(DOCUMENTED_EXAMPLE_JWT_SECRET.length).toBeGreaterThanOrEqual(32);
+      setEnv({ NODE_ENV: 'production', JWT_SECRET: DOCUMENTED_EXAMPLE_JWT_SECRET });
+
+      expect(() => new InMemoryTokenService()).toThrow(/static|example/i);
+    });
+
+    it('treats NODE_ENV Production case-insensitively and fails closed without JWT_SECRET', () => {
+      setEnv({ NODE_ENV: 'Production', JWT_SECRET: undefined });
+
+      expect(() => new InMemoryTokenService()).toThrow(/JWT_SECRET/);
+    });
+
     it('fails startup in production when JWT_SECRET is too short', () => {
       setEnv({ NODE_ENV: 'production', JWT_SECRET: 'shortsecret' });
 
@@ -369,6 +387,17 @@ describe('TASK-01 token and secret security regressions', () => {
       setEnv({ NODE_ENV: 'test', JWT_EXPIRATION: 'not-a-duration' });
 
       expect(() => new InMemoryTokenService()).toThrow(/JWT_EXPIRATION/);
+    });
+
+    it('accepts JWT_EXPIRATION 30m and issues scoped tokens with a 1800s lifetime', () => {
+      setEnv({ NODE_ENV: 'test', JWT_EXPIRATION: '30m' });
+      const service = new InMemoryTokenService();
+
+      const payload = service.verifyToken<{ iat: number; exp: number }>(
+        service.signScopedToken(scopedPayload),
+      );
+
+      expect(payload.exp - payload.iat).toBe(1800);
     });
   });
 });
