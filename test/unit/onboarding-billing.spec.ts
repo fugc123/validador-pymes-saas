@@ -1,9 +1,16 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import 'reflect-metadata';
+import { ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
+import { validate } from 'class-validator';
 import { SubmitMerchantRequestUseCase } from '../../src/core/application/use-cases/onboarding/submit-merchant-request.use-case';
 import { ApproveMerchantRequestUseCase } from '../../src/core/application/use-cases/onboarding/approve-merchant-request.use-case';
 import { SubscriptionBillingUseCase } from '../../src/core/application/use-cases/billing/subscription-billing.use-case';
 import { MerchantRequest } from '../../src/core/domain/entities/merchant-request.entity';
 import { Subscription } from '../../src/core/domain/entities/subscription.entity';
+import { User } from '../../src/core/domain/entities/user.entity';
+import {
+  SubmitMerchantRequestDto,
+  CreateFreeMerchantDto,
+} from '../../src/presentation/controllers/onboarding.controller';
 import {
   IMerchantRequestRepository,
   ISubscriptionRepository,
@@ -125,6 +132,103 @@ describe('Merchant Onboarding & Subscription Billing Lifecycle (T11, T12)', () =
       expect(savedUser).toBeDefined();
       expect(savedUser.email).toBe('marta@libreria.com');
       expect(savedUser.passwordHash).toBe('hashed_test_password');
+    });
+
+    it('rejects signup with an already-registered email (409) without touching the account', async () => {
+      const existingUser = new User({
+        id: 'usr-existing',
+        email: 'taken@store.com',
+        passwordHash: 'original-password-hash',
+        fullName: 'Existing Owner',
+      });
+      mockUserRepo.findByEmail.mockResolvedValue(existingUser);
+
+      const useCase = new SubmitMerchantRequestUseCase(
+        mockRequestRepo,
+        mockMerchantRepo,
+        mockUserRepo,
+        mockMembershipRepo,
+        mockSubRepo,
+        mockPasswordHasher,
+      );
+
+      await expect(
+        useCase.execute({
+          businessName: 'Duplicate Store',
+          ownerName: 'New Owner',
+          email: 'taken@store.com',
+          password: 'NewSecret123',
+          phone: '+595981000000',
+          city: 'Asuncion',
+        }),
+      ).rejects.toThrow(ConflictException);
+
+      // The existing account is never altered and no tenant is linked to it.
+      expect(existingUser.passwordHash).toBe('original-password-hash');
+      expect(mockUserRepo.save).not.toHaveBeenCalled();
+      expect(mockMembershipRepo.save).not.toHaveBeenCalled();
+      expect(mockMerchantRepo.save).not.toHaveBeenCalled();
+      expect(mockSubRepo.save).not.toHaveBeenCalled();
+      expect(mockRequestRepo.save).not.toHaveBeenCalled();
+    });
+
+    it.each([undefined, '', '   '])(
+      'rejects password %p instead of falling back to a default',
+      async (password) => {
+        const useCase = new SubmitMerchantRequestUseCase(
+          mockRequestRepo,
+          mockMerchantRepo,
+          mockUserRepo,
+          mockMembershipRepo,
+          mockSubRepo,
+          mockPasswordHasher,
+        );
+
+        await expect(
+          useCase.execute({
+            businessName: 'No Password Store',
+            ownerName: 'Owner',
+            email: 'nopass@store.com',
+            password,
+            phone: '+595982000000',
+            city: 'Asuncion',
+          }),
+        ).rejects.toThrow(BadRequestException);
+        expect(mockPasswordHasher.hash).not.toHaveBeenCalled();
+        expect(mockMerchantRepo.save).not.toHaveBeenCalled();
+      },
+    );
+  });
+
+  describe('Onboarding DTO password boundary', () => {
+    const validBase = {
+      businessName: 'Boundary Store',
+      ownerName: 'Boundary Owner',
+      email: 'boundary@store.com',
+      phone: '+595983000000',
+      city: 'Asuncion',
+    };
+
+    it('rejects a missing password on public onboarding', async () => {
+      const dto = Object.assign(new SubmitMerchantRequestDto(), validBase);
+      const errors = await validate(dto);
+      expect(errors.some((e) => e.property === 'password')).toBe(true);
+    });
+
+    it('rejects a shorter-than-minimum password on public onboarding', async () => {
+      const dto = Object.assign(new SubmitMerchantRequestDto(), validBase, { password: 'abc' });
+      const errors = await validate(dto);
+      expect(errors.some((e) => e.property === 'password' && e.constraints?.minLength)).toBe(true);
+    });
+
+    it('rejects missing and short passwords on superadmin free-merchant signup', async () => {
+      const missing = Object.assign(new CreateFreeMerchantDto(), validBase);
+      expect((await validate(missing)).some((e) => e.property === 'password')).toBe(true);
+
+      const short = Object.assign(new CreateFreeMerchantDto(), validBase, { password: 'abc' });
+      expect(
+        (await validate(short)).some((e) => e.property === 'password' && e.constraints?.minLength),
+      ).toBe(true);
     });
   });
 

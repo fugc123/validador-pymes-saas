@@ -1,5 +1,8 @@
+import { BadRequestException } from '@nestjs/common';
 import { MerchantController } from '../../src/presentation/controllers/merchant.controller';
 import { GetMerchantMetricsUseCase } from '../../src/core/application/use-cases/transfers/get-merchant-metrics.use-case';
+import { User } from '../../src/core/domain/entities/user.entity';
+import { MerchantMembership } from '../../src/core/domain/entities/merchant-membership.entity';
 import {
   InMemoryMembershipRepository,
   InMemoryUserRepository,
@@ -69,5 +72,96 @@ describe('MerchantController - Cashiers', () => {
 
     const list = await controller.getCashiers();
     expect(list.some((m) => m.id === created.id)).toBe(false);
+  });
+
+  it('never overwrites an existing account password when the owner adds that email', async () => {
+    const originalHash = await passwordHasher.hash('OriginalCashierPass1');
+    await userRepo.save(
+      new User({
+        id: 'usr-existing-cashier',
+        email: 'carlos@testcomercio.com',
+        passwordHash: originalHash,
+        fullName: 'Carlos Original',
+      }),
+    );
+
+    const res = await controller.addCashier({
+      fullName: 'Carlos Cajero',
+      email: 'carlos@testcomercio.com',
+      password: 'AttackerPassword1',
+    });
+
+    // The owner-authorized membership is still created...
+    expect(res.role).toBe('CASHIER');
+    expect(res.isActive).toBe(true);
+
+    // ...but the pre-existing credentials are untouched.
+    const stored = await userRepo.findByEmail('carlos@testcomercio.com');
+    expect(await passwordHasher.compare('OriginalCashierPass1', stored!.passwordHash)).toBe(true);
+    expect(await passwordHasher.compare('AttackerPassword1', stored!.passwordHash)).toBe(false);
+  });
+
+  it('adds the membership once and keeps the original password when adding the same cashier twice', async () => {
+    await controller.addCashier({
+      fullName: 'Ana Cajera',
+      email: 'ana@testcomercio.com',
+      password: 'FirstPass123',
+    });
+    await controller.addCashier({
+      fullName: 'Ana Cajera',
+      email: 'ana@testcomercio.com',
+      password: 'SecondPass123',
+    });
+
+    const list = await controller.getCashiers();
+    expect(list.filter((m) => m.user.email === 'ana@testcomercio.com')).toHaveLength(1);
+
+    const stored = await userRepo.findByEmail('ana@testcomercio.com');
+    expect(await passwordHasher.compare('FirstPass123', stored!.passwordHash)).toBe(true);
+    expect(await passwordHasher.compare('SecondPass123', stored!.passwordHash)).toBe(false);
+  });
+
+  it('does not duplicate or downgrade an existing non-cashier membership for the tenant', async () => {
+    await userRepo.save(
+      new User({
+        id: 'usr-owner-existing',
+        email: 'owner@testcomercio.com',
+        passwordHash: 'owner-password-hash-value',
+        fullName: 'Owner User',
+      }),
+    );
+    await membershipRepo.save(
+      new MerchantMembership({
+        id: 'mem-owner-test-tenant',
+        userId: 'usr-owner-existing',
+        merchantId: 'test-tenant',
+        role: 'MERCHANT_OWNER',
+        isActive: true,
+      }),
+    );
+
+    await controller.addCashier({
+      fullName: 'Owner User',
+      email: 'owner@testcomercio.com',
+      password: 'CashierRole1',
+    });
+
+    const entries = (await controller.getCashiers()).filter(
+      (m) => m.userId === 'usr-owner-existing',
+    );
+    expect(entries).toHaveLength(1);
+    expect(entries[0].role).toBe('MERCHANT_OWNER');
+  });
+
+  it('rejects a whitespace-only password at the boundary', async () => {
+    await expect(
+      controller.addCashier({
+        fullName: 'Bad Password',
+        email: 'badpass@testcomercio.com',
+        password: '      ',
+      }),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(await userRepo.findByEmail('badpass@testcomercio.com')).toBeNull();
   });
 });

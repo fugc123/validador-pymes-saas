@@ -2,6 +2,7 @@ import { UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { LoginUseCase } from '../../src/core/application/use-cases/auth/login.use-case';
 import { SelectTenantUseCase } from '../../src/core/application/use-cases/auth/select-tenant.use-case';
 import { SwitchTenantUseCase } from '../../src/core/application/use-cases/auth/switch-tenant.use-case';
+import { AuthController } from '../../src/presentation/controllers/auth.controller';
 import { User } from '../../src/core/domain/entities/user.entity';
 import { Merchant } from '../../src/core/domain/entities/merchant.entity';
 import { MerchantMembership } from '../../src/core/domain/entities/merchant-membership.entity';
@@ -161,7 +162,8 @@ describe('Two-Stage Authentication & Multi-Tenant Memberships (T05)', () => {
   });
 
   describe('SelectTenantUseCase', () => {
-    it('Scenario 3: Successfully select store and issue scoped JWT', async () => {
+    /** Wires the happy path so the only reason a test fails is its token assertion. */
+    const primeSelectionHappyPath = () => {
       mockUserRepo.findById.mockResolvedValue(sampleUser);
       mockMerchantRepo.findById.mockResolvedValue(storeB);
       mockMembershipRepo.findByUserAndMerchant.mockResolvedValue(
@@ -171,6 +173,14 @@ describe('Two-Stage Authentication & Multi-Tenant Memberships (T05)', () => {
           role: 'CASHIER',
         }),
       );
+    };
+
+    it('Scenario 3: Successfully select store and issue scoped JWT', async () => {
+      primeSelectionHappyPath();
+      mockTokenService.verifyToken.mockReturnValue({
+        userId: 'user-001',
+        purpose: 'tenant_selection',
+      });
 
       const useCase = new SelectTenantUseCase(
         mockUserRepo,
@@ -179,7 +189,11 @@ describe('Two-Stage Authentication & Multi-Tenant Memberships (T05)', () => {
         mockTokenService,
       );
 
-      const result = await useCase.execute({ userId: 'user-001', tenantId: 'store-b' });
+      const result = await useCase.execute({
+        userId: 'user-001',
+        tenantId: 'store-b',
+        token: 'valid.temp.selection.jwt',
+      });
 
       expect(result.accessToken).toBe('mock.scoped.jwt');
       expect(result.activeTenant.tenantId).toBe('store-b');
@@ -187,9 +201,31 @@ describe('Two-Stage Authentication & Multi-Tenant Memberships (T05)', () => {
     });
 
     it('Scenario 4: Rejects unauthorized store selection with ForbiddenException', async () => {
-      mockUserRepo.findById.mockResolvedValue(sampleUser);
-      mockMerchantRepo.findById.mockResolvedValue(storeB);
+      primeSelectionHappyPath();
       mockMembershipRepo.findByUserAndMerchant.mockResolvedValue(null); // No membership
+      mockTokenService.verifyToken.mockReturnValue({
+        userId: 'user-001',
+        purpose: 'tenant_selection',
+      });
+
+      const useCase = new SelectTenantUseCase(
+        mockUserRepo,
+        mockMerchantRepo,
+        mockMembershipRepo,
+        mockTokenService,
+      );
+
+      await expect(
+        useCase.execute({
+          userId: 'user-001',
+          tenantId: 'store-b',
+          token: 'valid.temp.selection.jwt',
+        }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('rejects a tenant selection without any token (401)', async () => {
+      primeSelectionHappyPath();
 
       const useCase = new SelectTenantUseCase(
         mockUserRepo,
@@ -200,12 +236,86 @@ describe('Two-Stage Authentication & Multi-Tenant Memberships (T05)', () => {
 
       await expect(
         useCase.execute({ userId: 'user-001', tenantId: 'store-b' }),
-      ).rejects.toThrow(ForbiddenException);
+      ).rejects.toThrow(UnauthorizedException);
+      expect(mockTokenService.verifyToken).not.toHaveBeenCalled();
+      expect(mockTokenService.signScopedToken).not.toHaveBeenCalled();
+    });
+
+    it('rejects an invalid or expired selection token (401)', async () => {
+      primeSelectionHappyPath();
+      mockTokenService.verifyToken.mockImplementation(() => {
+        throw new Error('jwt expired');
+      });
+
+      const useCase = new SelectTenantUseCase(
+        mockUserRepo,
+        mockMerchantRepo,
+        mockMembershipRepo,
+        mockTokenService,
+      );
+
+      await expect(
+        useCase.execute({
+          userId: 'user-001',
+          tenantId: 'store-b',
+          token: 'tampered.selection.jwt',
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(mockTokenService.signScopedToken).not.toHaveBeenCalled();
+    });
+
+    it('rejects an access-purpose token on tenant selection (401)', async () => {
+      primeSelectionHappyPath();
+      mockTokenService.verifyToken.mockReturnValue({
+        userId: 'user-001',
+        purpose: 'access',
+      });
+
+      const useCase = new SelectTenantUseCase(
+        mockUserRepo,
+        mockMerchantRepo,
+        mockMembershipRepo,
+        mockTokenService,
+      );
+
+      await expect(
+        useCase.execute({
+          userId: 'user-001',
+          tenantId: 'store-b',
+          token: 'valid.scoped.access.jwt',
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(mockTokenService.signScopedToken).not.toHaveBeenCalled();
+    });
+
+    it('rejects a selection token issued for a different user (401)', async () => {
+      primeSelectionHappyPath();
+      mockTokenService.verifyToken.mockReturnValue({
+        userId: 'user-999',
+        purpose: 'tenant_selection',
+      });
+
+      const useCase = new SelectTenantUseCase(
+        mockUserRepo,
+        mockMerchantRepo,
+        mockMembershipRepo,
+        mockTokenService,
+      );
+
+      await expect(
+        useCase.execute({
+          userId: 'user-001',
+          tenantId: 'store-b',
+          token: 'other.user.temp.jwt',
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(mockTokenService.signScopedToken).not.toHaveBeenCalled();
     });
   });
 
   describe('SwitchTenantUseCase', () => {
-    it('should switch between stores if membership exists', async () => {
+    /** Wires the happy path so the only reason a test fails is its token assertion. */
+    const primeSwitchHappyPath = () => {
       mockUserRepo.findById.mockResolvedValue(sampleUser);
       mockMerchantRepo.findById.mockResolvedValue(storeA);
       mockMembershipRepo.findByUserAndMerchant.mockResolvedValue(
@@ -215,6 +325,14 @@ describe('Two-Stage Authentication & Multi-Tenant Memberships (T05)', () => {
           role: 'MERCHANT_OWNER',
         }),
       );
+    };
+
+    it('should switch between stores if membership exists', async () => {
+      primeSwitchHappyPath();
+      mockTokenService.verifyToken.mockReturnValue({
+        userId: 'user-001',
+        purpose: 'access',
+      });
 
       const useCase = new SwitchTenantUseCase(
         mockUserRepo,
@@ -223,9 +341,143 @@ describe('Two-Stage Authentication & Multi-Tenant Memberships (T05)', () => {
         mockTokenService,
       );
 
-      const result = await useCase.execute({ userId: 'user-001', targetTenantId: 'store-a' });
+      const result = await useCase.execute({
+        userId: 'user-001',
+        targetTenantId: 'store-a',
+        token: 'valid.scoped.access.jwt',
+      });
       expect(result.accessToken).toBe('mock.scoped.jwt');
       expect(result.activeTenant.role).toBe('MERCHANT_OWNER');
+      // Membership authorization is preserved: the repository is still consulted.
+      expect(mockMembershipRepo.findByUserAndMerchant).toHaveBeenCalledWith(
+        'user-001',
+        'store-a',
+        undefined,
+      );
+    });
+
+    it('rejects a tenant switch without any token (401)', async () => {
+      primeSwitchHappyPath();
+
+      const useCase = new SwitchTenantUseCase(
+        mockUserRepo,
+        mockMerchantRepo,
+        mockMembershipRepo,
+        mockTokenService,
+      );
+
+      await expect(
+        useCase.execute({ userId: 'user-001', targetTenantId: 'store-a' }),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(mockTokenService.signScopedToken).not.toHaveBeenCalled();
+    });
+
+    it('rejects an invalid or expired access token on tenant switch (401)', async () => {
+      primeSwitchHappyPath();
+      mockTokenService.verifyToken.mockImplementation(() => {
+        throw new Error('jwt expired');
+      });
+
+      const useCase = new SwitchTenantUseCase(
+        mockUserRepo,
+        mockMerchantRepo,
+        mockMembershipRepo,
+        mockTokenService,
+      );
+
+      await expect(
+        useCase.execute({
+          userId: 'user-001',
+          targetTenantId: 'store-a',
+          token: 'tampered.access.jwt',
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(mockTokenService.signScopedToken).not.toHaveBeenCalled();
+    });
+
+    it('rejects a temporary selection token on tenant switch (401)', async () => {
+      primeSwitchHappyPath();
+      mockTokenService.verifyToken.mockReturnValue({
+        userId: 'user-001',
+        purpose: 'tenant_selection',
+      });
+
+      const useCase = new SwitchTenantUseCase(
+        mockUserRepo,
+        mockMerchantRepo,
+        mockMembershipRepo,
+        mockTokenService,
+      );
+
+      await expect(
+        useCase.execute({
+          userId: 'user-001',
+          targetTenantId: 'store-a',
+          token: 'valid.temp.selection.jwt',
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(mockTokenService.signScopedToken).not.toHaveBeenCalled();
+    });
+
+    it('rejects an access token issued for a different user (401)', async () => {
+      primeSwitchHappyPath();
+      mockTokenService.verifyToken.mockReturnValue({
+        userId: 'user-999',
+        purpose: 'access',
+      });
+
+      const useCase = new SwitchTenantUseCase(
+        mockUserRepo,
+        mockMerchantRepo,
+        mockMembershipRepo,
+        mockTokenService,
+      );
+
+      await expect(
+        useCase.execute({
+          userId: 'user-001',
+          targetTenantId: 'store-a',
+          token: 'other.user.access.jwt',
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(mockTokenService.signScopedToken).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('AuthController authorization header forwarding', () => {
+    const loginUseCase = { execute: jest.fn() };
+    const selectUseCase = { execute: jest.fn().mockResolvedValue({ accessToken: 'scoped' }) };
+    const switchUseCase = { execute: jest.fn().mockResolvedValue({ accessToken: 'scoped' }) };
+    const controller = new AuthController(
+      loginUseCase as unknown as LoginUseCase,
+      selectUseCase as unknown as SelectTenantUseCase,
+      switchUseCase as unknown as SwitchTenantUseCase,
+    );
+
+    it('forwards the bearer token to tenant selection', async () => {
+      await controller.selectTenant(
+        { userId: 'user-001', tenantId: 'store-b' },
+        'Bearer temp-selection-jwt',
+      );
+
+      expect(selectUseCase.execute).toHaveBeenCalledWith({
+        userId: 'user-001',
+        tenantId: 'store-b',
+        token: 'temp-selection-jwt',
+      });
+    });
+
+    it('forwards the bearer token to tenant switching', async () => {
+      await controller.switchTenant(
+        { userId: 'user-001', targetTenantId: 'store-a' },
+        'Bearer scoped-access-jwt',
+      );
+
+      expect(switchUseCase.execute).toHaveBeenCalledWith({
+        userId: 'user-001',
+        targetTenantId: 'store-a',
+        token: 'scoped-access-jwt',
+      });
     });
   });
 });

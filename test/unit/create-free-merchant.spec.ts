@@ -1,4 +1,6 @@
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { CreateFreeMerchantUseCase } from '../../src/core/application/use-cases/onboarding/create-free-merchant.use-case';
+import { User } from '../../src/core/domain/entities/user.entity';
 import {
   InMemoryMerchantRepository,
   InMemoryUserRepository,
@@ -68,4 +70,50 @@ describe('CreateFreeMerchantUseCase', () => {
     expect(sub?.status).toBe('active');
     expect(sub?.currentPeriodEnd.getFullYear()).toBe(2099);
   });
+
+  it('rejects creating a free merchant for an already-registered email and never rewrites the password', async () => {
+    const originalHash = await passwordHasher.hash('OriginalPass1');
+    await userRepo.save(
+      new User({
+        id: 'usr-existing-owner',
+        email: 'existing@shop.com',
+        passwordHash: originalHash,
+        fullName: 'Existing Owner',
+      }),
+    );
+
+    await expect(
+      useCase.execute({
+        businessName: 'Another Shop',
+        ownerName: 'New Owner',
+        email: 'existing@shop.com',
+        password: 'BrandNewPass1',
+      }),
+    ).rejects.toThrow(ConflictException);
+
+    const stored = await userRepo.findByEmail('existing@shop.com');
+    expect(await passwordHasher.compare('OriginalPass1', stored!.passwordHash)).toBe(true);
+    expect(await passwordHasher.compare('BrandNewPass1', stored!.passwordHash)).toBe(false);
+
+    // No merchant is provisioned and no membership is attached to the existing account.
+    expect(await merchantRepo.findBySlug('another-shop')).toBeNull();
+    expect(await membershipRepo.findByUserAndMerchant(stored!.id!, 'another-shop')).toBeNull();
+  });
+
+  it.each([undefined, '', '   '])(
+    'rejects password %p instead of falling back to a default',
+    async (password) => {
+      await expect(
+        useCase.execute({
+          businessName: 'No Pass Shop',
+          ownerName: 'Owner',
+          email: 'nopass@shop.com',
+          password,
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(await userRepo.findByEmail('nopass@shop.com')).toBeNull();
+      expect(await merchantRepo.findBySlug('no-pass-shop')).toBeNull();
+    },
+  );
 });
