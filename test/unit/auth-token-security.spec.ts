@@ -58,6 +58,25 @@ function authenticate(middleware: AuthMiddleware, token: string): TestRequest {
   return req;
 }
 
+/**
+ * Deterministically corrupts the bytes a token authenticates: flips one byte of
+ * the JWT signature, or, for the legacy unsigned format, a claims byte inside
+ * the payload while keeping it valid JSON (so undetected tampering is exposed).
+ */
+function corruptSignedBytes(token: string): string {
+  const segments = token.split('.');
+  if (segments.length === 3) {
+    const signature = Buffer.from(segments[2], 'base64url');
+    signature[0] ^= 0xff;
+    return `${segments[0]}.${segments[1]}.${signature.toString('base64url')}`;
+  }
+
+  const marker = token.lastIndexOf('_') + 1;
+  const claims = Buffer.from(token.slice(marker), 'base64').toString('utf8');
+  const tampered = claims.replace('usr-1', 'usr-2');
+  return `${token.slice(0, marker)}${Buffer.from(tampered, 'utf8').toString('base64')}`;
+}
+
 describe('TASK-01 token and secret security regressions', () => {
   beforeEach(() => {
     savedEnv = {};
@@ -115,7 +134,7 @@ describe('TASK-01 token and secret security regressions', () => {
       setEnv({ NODE_ENV: 'test' });
       const service = new InMemoryTokenService();
       const valid = service.signScopedToken(scopedPayload);
-      const tampered = `${valid.slice(0, -3)}xyz`;
+      const tampered = corruptSignedBytes(valid);
 
       expect(() => service.verifyToken(tampered)).toThrow();
     });
@@ -165,6 +184,21 @@ describe('TASK-01 token and secret security regressions', () => {
       expect(typeof scoped.exp).toBe('number');
       expect(typeof temp.exp).toBe('number');
     });
+
+    it('rejects an expired temporary token', () => {
+      setEnv({ NODE_ENV: 'test' });
+      const service = new InMemoryTokenService();
+      const token = service.signTempToken(tempPayload);
+
+      // Temporary tokens live 15m; move the clock past that window.
+      const baseTime = Date.now();
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(baseTime + 16 * 60 * 1000);
+      try {
+        expect(() => service.verifyToken(token)).toThrow(/expired/i);
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
   });
 
   describe('token purpose typing', () => {
@@ -208,6 +242,21 @@ describe('TASK-01 token and secret security regressions', () => {
         purpose: 'access',
         id: 'usr-1',
       });
+    });
+
+    it('overwrites a caller-provided purpose so scoped tokens stay access-only', () => {
+      setEnv({ NODE_ENV: 'test' });
+      const service = new InMemoryTokenService();
+
+      const spoofed: ScopedTokenPayload & { purpose: 'tenant_selection' } = {
+        ...scopedPayload,
+        purpose: 'tenant_selection',
+      };
+      const payload = service.verifyToken<Record<string, unknown>>(
+        service.signScopedToken(spoofed),
+      );
+
+      expect(payload.purpose).toBe('access');
     });
   });
 
@@ -254,6 +303,16 @@ describe('TASK-01 token and secret security regressions', () => {
       expect(() => new InMemoryTokenService()).toThrow(/JWT_SECRET/);
     });
 
+    it('fails startup when only DATABASE_URL is configured without JWT_SECRET', () => {
+      setEnv({
+        NODE_ENV: 'test',
+        DATABASE_URL: 'postgresql://app@db.internal:5432/pymes',
+        JWT_SECRET: undefined,
+      });
+
+      expect(() => new InMemoryTokenService()).toThrow(/JWT_SECRET/);
+    });
+
     it('refuses an explicitly weak secret even in memory-mode development', () => {
       setEnv({ NODE_ENV: 'test', JWT_SECRET: 'shortsecret' });
 
@@ -276,6 +335,14 @@ describe('TASK-01 token and secret security regressions', () => {
       const second = new InMemoryTokenService();
 
       expect(() => second.verifyToken(first.signScopedToken(scopedPayload))).toThrow();
+    });
+  });
+
+  describe('JWT expiration configuration fails closed', () => {
+    it('fails startup when JWT_EXPIRATION is not a valid duration', () => {
+      setEnv({ NODE_ENV: 'test', JWT_EXPIRATION: 'not-a-duration' });
+
+      expect(() => new InMemoryTokenService()).toThrow(/JWT_EXPIRATION/);
     });
   });
 });
