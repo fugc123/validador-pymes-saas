@@ -1,3 +1,4 @@
+import { JwtService } from '@nestjs/jwt';
 import { AuthMiddleware } from '../../src/presentation/middlewares/auth.middleware';
 import {
   InMemoryPasswordHasher,
@@ -11,6 +12,9 @@ import { ScopedTokenPayload, TempTokenPayload } from '../../src/core/application
  */
 
 const UNSAFE_STATIC_JWT_SECRET = 'cajasegura_prod_secret_jwt_2026_super_key';
+
+/** Fixed 46-char signing secret shared by the test signer and the service under test. */
+const TEST_JWT_SECRET = 'auth-token-security-spec-fixed-test-secret-32c';
 
 const scopedPayload: ScopedTokenPayload = {
   userId: 'usr-1',
@@ -75,6 +79,18 @@ function corruptSignedBytes(token: string): string {
   const claims = Buffer.from(token.slice(marker), 'base64').toString('utf8');
   const tampered = claims.replace('usr-1', 'usr-2');
   return `${token.slice(0, marker)}${Buffer.from(tampered, 'utf8').toString('base64')}`;
+}
+
+/**
+ * Signs a scoped access token with a fixed test secret, bypassing the
+ * configuration under test: `JWT_EXPIRATION` must be rejected when invalid,
+ * not used to produce already-expired tokens.
+ */
+function signScopedTokenWithExpiry(expiresIn: string): string {
+  return new JwtService({ secret: TEST_JWT_SECRET }).sign(
+    { ...scopedPayload, purpose: 'access' },
+    { expiresIn },
+  );
 }
 
 describe('TASK-01 token and secret security regressions', () => {
@@ -154,20 +170,24 @@ describe('TASK-01 token and secret security regressions', () => {
 
   describe('token expiration', () => {
     it('rejects an expired scoped token', () => {
-      setEnv({ NODE_ENV: 'test', JWT_EXPIRATION: '-10s' });
+      setEnv({ NODE_ENV: 'test', JWT_SECRET: TEST_JWT_SECRET });
       const service = new InMemoryTokenService();
-      const token = service.signScopedToken(scopedPayload);
 
-      expect(() => service.verifyToken(token)).toThrow(/expired/i);
+      expect(() => service.verifyToken(signScopedTokenWithExpiry('-10s'))).toThrow(/expired/i);
     });
 
     it('does not authenticate an expired scoped token in the middleware', () => {
-      setEnv({ NODE_ENV: 'test', JWT_EXPIRATION: '-10s' });
+      setEnv({ NODE_ENV: 'test', JWT_SECRET: TEST_JWT_SECRET });
       const service = new InMemoryTokenService();
       const middleware = new AuthMiddleware(service);
 
-      const req = authenticate(middleware, service.signScopedToken(scopedPayload));
-      expect(req.user).toBeUndefined();
+      // Control: the same signer and secret authenticate a current token, so an
+      // expired token is rejected because of its expiry alone.
+      expect(authenticate(middleware, signScopedTokenWithExpiry('5m')).user).toMatchObject({
+        userId: 'usr-1',
+        purpose: 'access',
+      });
+      expect(authenticate(middleware, signScopedTokenWithExpiry('-10s')).user).toBeUndefined();
     });
 
     it('issues scoped and temporary tokens carrying an expiry claim', () => {
@@ -339,6 +359,12 @@ describe('TASK-01 token and secret security regressions', () => {
   });
 
   describe('JWT expiration configuration fails closed', () => {
+    it.each(['0s', '-10s'] as const)('fails startup when JWT_EXPIRATION is %s', (expiration) => {
+      setEnv({ NODE_ENV: 'test', JWT_EXPIRATION: expiration });
+
+      expect(() => new InMemoryTokenService()).toThrow(/JWT_EXPIRATION/);
+    });
+
     it('fails startup when JWT_EXPIRATION is not a valid duration', () => {
       setEnv({ NODE_ENV: 'test', JWT_EXPIRATION: 'not-a-duration' });
 
