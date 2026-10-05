@@ -1,4 +1,4 @@
-import { Injectable, Optional } from '@nestjs/common';
+import { ConflictException, Injectable, Optional } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
@@ -222,17 +222,23 @@ export class InMemoryUserRepository implements IUserRepository {
     return this.users.find((u) => u.id === id) || null;
   }
 
+  /**
+   * Create-only contract: inserts a brand-new account and never updates an
+   * existing one. Duplicate id/email in memory mode and Postgres SQLSTATE
+   * 23505 in database mode reject with ConflictException (HTTP 409); every
+   * other database error propagates instead of succeeding as an in-memory
+   * write, and an INSERT that returns no rows is an error.
+   */
   async save(user: User): Promise<User> {
     if (this.dbService && !this.dbService.isMemoryMode) {
+      const cleanEmail = user.email.toLowerCase().trim();
+      const isUuid = user.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id);
+      let res;
       try {
-        const cleanEmail = user.email.toLowerCase().trim();
-        const isUuid = user.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id);
-        let res;
         if (isUuid) {
           res = await this.dbService.query<UserRow>(
             `INSERT INTO users (id, email, password_hash, full_name, is_super_admin, updated_at)
              VALUES ($1, $2, $3, $4, $5, NOW())
-             ON CONFLICT (email) DO UPDATE SET password_hash = $3, full_name = $4, is_super_admin = $5, updated_at = NOW()
              RETURNING id, email, password_hash, full_name, is_super_admin, created_at, updated_at`,
             [user.id, cleanEmail, user.passwordHash, user.fullName, user.isSuperAdmin],
           );
@@ -240,37 +246,54 @@ export class InMemoryUserRepository implements IUserRepository {
           res = await this.dbService.query<UserRow>(
             `INSERT INTO users (email, password_hash, full_name, is_super_admin, updated_at)
              VALUES ($1, $2, $3, $4, NOW())
-             ON CONFLICT (email) DO UPDATE SET password_hash = $2, full_name = $3, is_super_admin = $4, updated_at = NOW()
              RETURNING id, email, password_hash, full_name, is_super_admin, created_at, updated_at`,
             [cleanEmail, user.passwordHash, user.fullName, user.isSuperAdmin],
           );
         }
-        if (res && res.rows && res.rows.length > 0) {
-          const row = res.rows[0];
-          const saved = new User({
-            id: row.id,
-            email: row.email,
-            passwordHash: row.password_hash,
-            fullName: row.full_name,
-            isSuperAdmin: Boolean(row.is_super_admin),
-            createdAt: row.created_at ? new Date(row.created_at) : undefined,
-            updatedAt: row.updated_at ? new Date(row.updated_at) : undefined,
-          });
-          const idx = this.users.findIndex((u) => u.id === saved.id || u.email === saved.email);
-          if (idx >= 0) this.users[idx] = saved;
-          else this.users.push(saved);
-          return saved;
-        }
       } catch (err) {
-        // Fallback to in-memory save
+        if ((err as { code?: string })?.code === '23505') {
+          throw new ConflictException('This email is already registered');
+        }
+        throw err;
       }
+      if (!res || !res.rows || res.rows.length === 0) {
+        throw new Error('User INSERT returned no rows; the account was not created.');
+      }
+      const row = res.rows[0];
+      const saved = new User({
+        id: row.id,
+        email: row.email,
+        passwordHash: row.password_hash,
+        fullName: row.full_name,
+        isSuperAdmin: Boolean(row.is_super_admin),
+        createdAt: row.created_at ? new Date(row.created_at) : undefined,
+        updatedAt: row.updated_at ? new Date(row.updated_at) : undefined,
+      });
+      const idx = this.users.findIndex((u) => u.id === saved.id || u.email === saved.email);
+      if (idx >= 0) this.users[idx] = saved;
+      else this.users.push(saved);
+      return saved;
+    }
+
+    const cleanEmail = user.email.toLowerCase().trim();
+    const exists = this.users.some(
+      (u) => u.email.toLowerCase().trim() === cleanEmail || (user.id !== undefined && u.id === user.id),
+    );
+    if (exists) {
+      // Concurrent signup must never overwrite the stored password or role flags.
+      throw new ConflictException('This email is already registered');
     }
     if (!user.id) {
-      (user as any).id = `usr-${Date.now()}`;
+      // Uniquify so two creates in the same millisecond never collide into a
+      // false conflict (or a silent overwrite, as before).
+      let generated = `usr-${Date.now()}`;
+      let seq = 0;
+      while (this.users.some((u) => u.id === generated)) {
+        generated = `usr-${Date.now()}-${++seq}`;
+      }
+      (user as any).id = generated;
     }
-    const idx = this.users.findIndex((u) => u.id === user.id || u.email === user.email);
-    if (idx >= 0) this.users[idx] = user;
-    else this.users.push(user);
+    this.users.push(user);
     return user;
   }
 }

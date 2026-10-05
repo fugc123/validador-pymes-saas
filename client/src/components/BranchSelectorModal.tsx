@@ -6,8 +6,12 @@ export const BranchSelectorModal: React.FC<{ onClose?: () => void }> = ({ onClos
   const { availableMemberships, activeTenant, switchTenant } = useAuth();
 
   const handleSelect = async (tenantId: string, role: string) => {
-    await switchTenant(tenantId, role);
-    if (onClose) onClose();
+    try {
+      await switchTenant(tenantId, role);
+      if (onClose) onClose();
+    } catch {
+      // Fail closed: keep the selector open; no session change happens on API failure.
+    }
   };
 
   return (

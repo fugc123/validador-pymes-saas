@@ -5,11 +5,14 @@ import {
   IMembershipRepository,
   ITokenService,
 } from '../../ports/auth.ports';
+import { verifyTokenForUser } from './verify-auth-token';
 
 export interface SwitchTenantInput {
   userId: string;
   targetTenantId: string;
   role?: string;
+  /** Signed scoped access token that authorizes the switch for the same user. */
+  token?: string;
 }
 
 export interface SwitchTenantOutput {
@@ -31,6 +34,9 @@ export class SwitchTenantUseCase {
   ) {}
 
   async execute(input: SwitchTenantInput): Promise<SwitchTenantOutput> {
+    // Only a signed scoped access token for this same user may switch tenants.
+    verifyTokenForUser(this.tokenService, input.token, 'access', input.userId);
+
     const user = await this.userRepo.findById(input.userId);
     if (!user) {
       throw new NotFoundException('User not found');

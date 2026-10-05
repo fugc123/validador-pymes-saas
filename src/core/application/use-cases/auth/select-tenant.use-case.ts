@@ -5,11 +5,14 @@ import {
   IMembershipRepository,
   ITokenService,
 } from '../../ports/auth.ports';
+import { verifyTokenForUser } from './verify-auth-token';
 
 export interface SelectTenantInput {
   userId: string;
   tenantId: string;
   role?: string;
+  /** Server-issued temporary bearer token that authorizes the selection. */
+  token?: string;
 }
 
 export interface SelectTenantOutput {
@@ -31,6 +34,9 @@ export class SelectTenantUseCase {
   ) {}
 
   async execute(input: SelectTenantInput): Promise<SelectTenantOutput> {
+    // Only a server-issued temporary token for this same user may select a tenant.
+    verifyTokenForUser(this.tokenService, input.token, 'tenant_selection', input.userId);
+
     const user = await this.userRepo.findById(input.userId);
     if (!user) {
       throw new NotFoundException('User not found');

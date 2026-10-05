@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { Body, Controller, Headers, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { LoginUseCase } from '../../core/application/use-cases/auth/login.use-case';
 import { SelectTenantUseCase } from '../../core/application/use-cases/auth/select-tenant.use-case';
@@ -42,6 +42,14 @@ export class SwitchTenantDto {
   role?: string;
 }
 
+/** Extracts the raw token from a Bearer Authorization header, if present. */
+function bearerToken(authorization?: string): string | undefined {
+  if (typeof authorization !== 'string' || !authorization.startsWith('Bearer ')) {
+    return undefined;
+  }
+  return authorization.slice('Bearer '.length).trim() || undefined;
+}
+
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -58,13 +66,19 @@ export class AuthController {
 
   @Post('select-tenant')
   @HttpCode(HttpStatus.OK)
-  async selectTenant(@Body() dto: SelectTenantDto) {
-    return this.selectTenantUseCase.execute(dto);
+  async selectTenant(
+    @Body() dto: SelectTenantDto,
+    @Headers('authorization') authorization?: string,
+  ) {
+    return this.selectTenantUseCase.execute({ ...dto, token: bearerToken(authorization) });
   }
 
   @Post('switch-tenant')
   @HttpCode(HttpStatus.OK)
-  async switchTenant(@Body() dto: SwitchTenantDto) {
-    return this.switchTenantUseCase.execute(dto);
+  async switchTenant(
+    @Body() dto: SwitchTenantDto,
+    @Headers('authorization') authorization?: string,
+  ) {
+    return this.switchTenantUseCase.execute({ ...dto, token: bearerToken(authorization) });
   }
 }

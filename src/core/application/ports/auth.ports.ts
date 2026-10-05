@@ -25,6 +25,7 @@ export interface MerchantMemberDetail {
 export interface IUserRepository {
   findByEmail(email: string): Promise<User | null>;
   findById(id: string): Promise<User | null>;
+  /** Create-only: inserting an existing id/email rejects with ConflictException (409). */
   save(user: User): Promise<User>;
 }
 

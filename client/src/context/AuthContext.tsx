@@ -1,4 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import {
+  requestTenantSelection,
+  requestTenantSwitch,
+  type IssuedSession,
+} from './auth-requests';
 
 export interface ActiveTenant {
   tenantId: string;
@@ -36,7 +41,17 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
+  const [token, setToken] = useState<string | null>(() => {
+    const saved = localStorage.getItem('token');
+    // Legacy fake `token-${tenantId}` values are not credentials: purge them.
+    if (saved && saved.startsWith('token-')) {
+      localStorage.removeItem('token');
+      return null;
+    }
+    return saved;
+  });
+  // Temporary tenant-selection token: short-lived, memory only, never persisted.
+  const [tempToken, setTempToken] = useState<string | null>(null);
   const [user, setUser] = useState<UserProfile | null>(() => {
     const saved = localStorage.getItem('user');
     return saved ? JSON.parse(saved) : null;
@@ -67,8 +82,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (data.requiresTenantSelection) {
         setAvailableMemberships(data.memberships);
         localStorage.setItem('memberships', JSON.stringify(data.memberships));
+        setTempToken(data.tempToken || null);
         setIsSelectingTenant(true);
       } else {
+        setTempToken(null);
         setToken(data.accessToken);
         setActiveTenant(data.activeTenant);
         localStorage.setItem('token', data.accessToken);
@@ -92,49 +109,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const selectTenant = async (tenantId: string, role?: string) => {
-    const selected = availableMemberships.find(
-      (m) => m.tenantId === tenantId && (!role || m.role === role),
-    );
-
-    if (user) {
-      const res = await fetch('/api/v1/auth/select-tenant', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id, tenantId, role }),
-      }).catch(() => null);
-
-      if (res && res.ok) {
-        const data = await res.json();
-        const newActive: ActiveTenant = {
-          tenantId: data.activeTenant.tenantId,
-          merchantName: data.activeTenant.merchantName,
-          role: data.activeTenant.role,
-        };
-        setActiveTenant(newActive);
-        setToken(data.accessToken);
-        localStorage.setItem('token', data.accessToken);
-        localStorage.setItem('activeTenant', JSON.stringify(newActive));
-        setIsSelectingTenant(false);
-        return;
-      }
+    // Fail closed: selection requires a server-issued temporary token held in memory.
+    if (!user || !tempToken) {
+      throw new Error('Tu sesión de selección ya no es válida. Iniciá sesión de nuevo.');
     }
 
-    if (selected) {
-      const newActive: ActiveTenant = {
-        tenantId: selected.tenantId,
-        merchantName: selected.merchantName,
-        role: selected.role as any,
-      };
-      setActiveTenant(newActive);
-      setToken(`token-${tenantId}`);
-      localStorage.setItem('token', `token-${tenantId}`);
-      localStorage.setItem('activeTenant', JSON.stringify(newActive));
-      setIsSelectingTenant(false);
+    let data: IssuedSession;
+    try {
+      data = await requestTenantSelection({
+        temporaryToken: tempToken,
+        userId: user.id,
+        tenantId,
+        role,
+      });
+    } catch {
+      // Fail closed: never fabricate a session token when the API rejects the selection.
+      throw new Error('No se pudo seleccionar la sucursal. Iniciá sesión de nuevo.');
     }
+
+    const newActive: ActiveTenant = {
+      tenantId: data.activeTenant.tenantId,
+      merchantName: data.activeTenant.merchantName,
+      role: data.activeTenant.role,
+    };
+    setActiveTenant(newActive);
+    setToken(data.accessToken);
+    setTempToken(null);
+    localStorage.setItem('token', data.accessToken);
+    localStorage.setItem('activeTenant', JSON.stringify(newActive));
+    setIsSelectingTenant(false);
   };
 
   const switchTenant = async (targetTenantId: string, role?: string) => {
-    await selectTenant(targetTenantId, role);
+    // Fail closed: switching requires the current scoped access token for this user.
+    if (!user || !token) {
+      throw new Error('Tu sesión ya no es válida. Iniciá sesión de nuevo.');
+    }
+
+    let data: IssuedSession;
+    try {
+      data = await requestTenantSwitch({
+        accessToken: token,
+        userId: user.id,
+        targetTenantId,
+        role,
+      });
+    } catch {
+      // Fail closed: the current session stays untouched when the switch is rejected.
+      throw new Error('No se pudo cambiar de sucursal.');
+    }
+
+    const newActive: ActiveTenant = {
+      tenantId: data.activeTenant.tenantId,
+      merchantName: data.activeTenant.merchantName,
+      role: data.activeTenant.role,
+    };
+    setActiveTenant(newActive);
+    setToken(data.accessToken);
+    localStorage.setItem('token', data.accessToken);
+    localStorage.setItem('activeTenant', JSON.stringify(newActive));
   };
 
   const openTenantSelector = () => setIsSelectingTenant(true);
@@ -142,6 +175,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     setToken(null);
+    setTempToken(null);
     setUser(null);
     setActiveTenant(null);
     setAvailableMemberships([]);

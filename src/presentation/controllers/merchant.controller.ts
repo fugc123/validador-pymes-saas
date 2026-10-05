@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -26,6 +27,9 @@ import {
 import { User } from '../../core/domain/entities/user.entity';
 import { MerchantMembership } from '../../core/domain/entities/merchant-membership.entity';
 
+/** Single source for the cashier password rule: DTO boundary and controller guard. */
+const MIN_PASSWORD_LENGTH = 6;
+
 export class CreateCashierDto {
   @IsString()
   @IsNotEmpty()
@@ -37,7 +41,7 @@ export class CreateCashierDto {
 
   @IsString()
   @IsNotEmpty()
-  @MinLength(6)
+  @MinLength(MIN_PASSWORD_LENGTH)
   password!: string;
 }
 
@@ -76,11 +80,19 @@ export class MerchantController {
   @HttpCode(HttpStatus.CREATED)
   async addCashier(@Body() dto: CreateCashierDto) {
     const tenantId = TenantContext.getTenantId();
+    // The ValidationPipe enforces the DTO shape; this guard also catches
+    // whitespace-only input so a new account can never get a weak password.
+    const password = (dto.password ?? '').trim();
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      throw new BadRequestException(
+        `Password must be at least ${MIN_PASSWORD_LENGTH} characters`,
+      );
+    }
     const cleanEmail = dto.email.toLowerCase().trim();
-    const passwordHash = await this.passwordHasher.hash(dto.password.trim());
 
     let user = await this.userRepo.findByEmail(cleanEmail);
     if (!user) {
+      const passwordHash = await this.passwordHasher.hash(password);
       user = new User({
         email: cleanEmail,
         passwordHash,
@@ -88,14 +100,14 @@ export class MerchantController {
         isSuperAdmin: false,
       });
       user = await this.userRepo.save(user);
-    } else {
-      user.updatePassword(passwordHash);
-      user = await this.userRepo.save(user);
     }
+    // Existing accounts keep their credentials: the owner only links a membership.
 
     const userId = user.id || `usr-${Date.now()}`;
 
-    let membership = await this.membershipRepo.findByUserAndMerchant(userId, tenantId, 'CASHIER');
+    // Look up any membership for this tenant so re-adding never creates a
+    // duplicate row nor downgrades an existing role.
+    let membership = await this.membershipRepo.findByUserAndMerchant(userId, tenantId);
     if (!membership) {
       membership = new MerchantMembership({
         id: `mem-${Date.now()}`,
@@ -107,7 +119,7 @@ export class MerchantController {
       (membership as any).userEmail = user.email;
       (membership as any).userFullName = user.fullName;
       membership = await this.membershipRepo.save(membership);
-    } else {
+    } else if (!membership.isActive) {
       membership.activate();
       (membership as any).userEmail = user.email;
       (membership as any).userFullName = user.fullName;

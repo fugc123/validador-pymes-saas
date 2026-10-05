@@ -6,7 +6,7 @@ export const LoginView: React.FC<{
   onNavigateToRegister: () => void;
   onBackToLanding?: () => void;
 }> = ({ onNavigateToRegister, onBackToLanding }) => {
-  const { login, isSelectingTenant, availableMemberships, selectTenant } = useAuth();
+  const { login, isSelectingTenant, availableMemberships, selectTenant, closeTenantSelector } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -45,7 +45,13 @@ export const LoginView: React.FC<{
               return (
                 <button
                   key={`${m.tenantId}-${m.role}-${idx}`}
-                  onClick={() => selectTenant(m.tenantId, m.role)}
+                  onClick={() =>
+                    selectTenant(m.tenantId, m.role).catch((err: any) => {
+                      // Fail closed: return to the login form instead of faking a session.
+                      setError(err?.message || 'No se pudo seleccionar la sucursal.');
+                      closeTenantSelector();
+                    })
+                  }
                   className="w-full text-left p-4 rounded-xl bg-[#0B0F19] hover:bg-[#1A253C] border border-[#24324D] hover:border-emerald-500/50 transition-all flex items-center justify-between group"
                 >
                   <div>

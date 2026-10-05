@@ -1,4 +1,6 @@
 import {
+  BadRequestException,
+  ConflictException,
   Injectable,
   Inject,
 } from '@nestjs/common';
@@ -41,6 +43,9 @@ function slugify(text: string): string {
     .replace(/(^-|-$)+/g, '');
 }
 
+/** Mirrors the DTO boundary rule so no caller can provision a weaker password. */
+const MIN_PASSWORD_LENGTH = 6;
+
 @Injectable()
 export class CreateFreeMerchantUseCase {
   constructor(
@@ -52,7 +57,18 @@ export class CreateFreeMerchantUseCase {
   ) {}
 
   async execute(input: CreateFreeMerchantInput): Promise<CreateFreeMerchantOutput> {
-    const rawPassword = input.password?.trim() || 'password123';
+    const rawPassword = input.password?.trim() ?? '';
+    if (rawPassword.length < MIN_PASSWORD_LENGTH) {
+      throw new BadRequestException(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
+    }
+
+    // Signup must never alter or link an already-registered account.
+    const normalizedEmail = input.email.toLowerCase().trim();
+    const existingUser = await this.userRepo.findByEmail(normalizedEmail);
+    if (existingUser) {
+      throw new ConflictException('This email is already registered');
+    }
+
     const passwordHash = await this.passwordHasher.hash(rawPassword);
 
     // 1. Generate unique slug for Merchant
@@ -71,23 +87,16 @@ export class CreateFreeMerchantUseCase {
     const savedMerchant = await this.merchantRepo.save(merchant);
     const merchantId = savedMerchant.id || finalSlug;
 
-    // 2. Find or Create Owner User
-    let user = await this.userRepo.findByEmail(input.email);
-    let userId: string;
-
-    if (!user) {
-      user = new User({
-        email: input.email.toLowerCase().trim(),
+    // 2. Create Owner User (a fresh account: existing emails were rejected above)
+    const user = await this.userRepo.save(
+      new User({
+        email: normalizedEmail,
         passwordHash,
         fullName: input.ownerName,
         isSuperAdmin: false,
-      });
-      user = await this.userRepo.save(user);
-    } else {
-      user.updatePassword(passwordHash);
-      user = await this.userRepo.save(user);
-    }
-    userId = user.id || `usr-${Date.now()}`;
+      }),
+    );
+    const userId = user.id || `usr-${Date.now()}`;
 
     // 3. Create Owner Membership
     const existingMembership = await this.membershipRepo.findByUserAndMerchant(userId, merchantId);

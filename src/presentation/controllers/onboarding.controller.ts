@@ -9,7 +9,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
 import { SubmitMerchantRequestUseCase } from '../../core/application/use-cases/onboarding/submit-merchant-request.use-case';
 import { ApproveMerchantRequestUseCase } from '../../core/application/use-cases/onboarding/approve-merchant-request.use-case';
 import { CreateFreeMerchantUseCase } from '../../core/application/use-cases/onboarding/create-free-merchant.use-case';
@@ -32,6 +32,7 @@ export class SubmitMerchantRequestDto {
 
   @IsString()
   @IsNotEmpty()
+  @MinLength(6)
   password!: string;
 
   @IsString()
@@ -58,6 +59,7 @@ export class CreateFreeMerchantDto {
 
   @IsString()
   @IsNotEmpty()
+  @MinLength(6)
   password!: string;
 
   @IsString()
