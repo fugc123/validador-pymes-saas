@@ -20,7 +20,7 @@ The independent review found unsigned bearer tokens, universal password bypasses
 - Keep changes minimal, use existing dependencies, and do not weaken tenant validation or financial idempotency.
 
 ## Scope / Tasks
-- [ ] **TASK-01**: Sign and expire scoped/temporary tokens, enforce token purpose, remove password bypasses, and make production secret configuration fail closed.
+- [x] **TASK-01**: Sign and expire scoped/temporary tokens, enforce token purpose, remove password bypasses, and make production secret configuration fail closed.
 - [ ] **TASK-02**: Verify temporary-session ownership for tenant selection/switching; reject public onboarding for existing emails with 409; prevent password changes when adding existing cashier accounts; remove frontend fake-token fallback.
 - [ ] **TASK-03**: Validate webhook secrets only by constant-time equality with the stored secret; provide an owner-authorized way to retrieve/use the actual secret and remove slug-derived client secrets.
 - [ ] **TASK-04**: Scope membership deletion to the active tenant and test cross-tenant denial.
@@ -56,10 +56,10 @@ The independent review found unsigned bearer tokens, universal password bypasses
 - Local startup/auth smoke: production without JWT_SECRET exited 1; memory-mode development booted; valid login/token was accepted, wrong password and forged/temporary/tampered tokens were rejected. This was run before the final config-only hardening hunk; final full suite/build remained green afterward.
 - Independent verification: final high-risk static check passed; parent full-suite spot-check also passed (14 suites / 109 tests).
 - Seed check: documented admin credential does not match the current seed hash; the mismatch is recorded without retaining credentials and is assigned to TASK-07.
-- Local Git author identity was configured only in this clone using the user's exact values. RED checkpoints are committed; GREEN checkpoint is pending.
-- Next step: create TASK-01's GREEN work-unit commit, then continue TASK-02.
+- Local Git author identity was configured only in this clone using the user's exact values. TASK-01 GREEN work-unit commit: `4d27f38` (`fix(auth): sign and constrain bearer tokens`); four RED checkpoints precede it.
+- Next step: begin TASK-02 under strict TDD.
 
 ## Delivery and Commit Evidence
 - Forecast: approximately 800 authored changed lines; planning heuristic only, not a hard cap.
 - Chain strategy: `stacked-to-main` for any future PR slices. For this change, the user explicitly authorized a direct push to `main` after all tasks and checks; no PR is authorized or planned.
-- Each completed task will be checked off only after its observed checks and recorded in this document and its Engram mirror. Commits will be local Conventional Commits; no push or PR will be created.
+- Each completed task will be checked off only after its observed checks and recorded in this document and its Engram mirror. Commits are local Conventional Commits; the authorized push to `main` remains pending completion of all tasks and checks.
