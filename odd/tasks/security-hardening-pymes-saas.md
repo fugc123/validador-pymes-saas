@@ -49,7 +49,7 @@ The independent review found unsigned bearer tokens, universal password bypasses
 - Baseline: repository was clean on `main`; created local branch `fix/pymes-saas-security`.
 - Exploration: independent read-only map covered backend, frontend, persistence, tests, deployment, and docs; exact evidence is recorded in the session and Engram review memory.
 - Dependency setup: root and client `npm ci --ignore-scripts --registry=https://registry.npmjs.org` both exited 0; no tracked files changed. Npm reported 54 root and 2 client dependency advisories; no remediation audit was authorized or performed.
-- Implementation: TASK-01 through TASK-03 are complete and committed; TASK-04 through TASK-07 remain open.
+- Implementation: TASK-01 through TASK-03 are complete and committed; TASK-04 code/tests are green in the working tree pending its GREEN commit; TASK-05 through TASK-07 remain open.
 - Baseline verification: `npm test -- --runInBand` — 13 suites / 81 tests passed.
 - TASK-01 RED checkpoints: `292205f` (15 failed / 4 passed of 19); `6ba96a7` (20 failed / 3 passed of 23 against vulnerable source); `638d04c` (3 invalid-expiry failures / 22 passed of 25); `27b9fa4` (2 unsafe-default failures / 26 passed of 28).
 - TASK-01 GREEN: focused suite 28/28; full suite 14 suites / 109 tests; `npm run build` and `npx tsc --noEmit` exited 0.
@@ -66,7 +66,10 @@ The independent review found unsigned bearer tokens, universal password bypasses
 - TASK-03 independent verification passed; parent full-suite spot-check passed (18 suites / 172 tests). Risk assessment was unassessable due to untracked helper files; all new source files will be included in the GREEN commit.
 - Operational note: scripts using derived secrets will receive 401 until the owner copies the updated script/secret from the dashboard; no production inventory or rotation was performed.
 - TASK-03 GREEN work-unit commit: `14f7b86` (`fix(webhook): require the stored tenant secret`).
-- Next step: begin TASK-04 under strict TDD.
+- TASK-04 RED checkpoint `a36e7cb`: cross-tenant/absent deletion failed (2 failures / 6 passes) and old one-argument port calls produced compile-time RED.
+- TASK-04 GREEN: focused membership/cashier suites 28/28; full suite 18 suites / 177 tests; backend `tsc`/build and client build exited 0.
+- TASK-04 independent source verification passed; parent full-suite spot-check also passed (18 suites / 177 tests). DB error fallback remains TASK-05; superadmin-without-tenant delete fails closed before repository access but may surface as 500.
+- Next step: commit the verified TASK-04 GREEN work unit, then begin TASK-05 under strict TDD.
 
 ## Delivery and Commit Evidence
 - Forecast: approximately 800 authored changed lines; planning heuristic only, not a hard cap.

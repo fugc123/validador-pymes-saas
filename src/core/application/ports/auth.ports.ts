@@ -39,7 +39,8 @@ export interface IMembershipRepository {
   findActiveByUser(userId: string): Promise<UserMembershipDetail[]>;
   findByUserAndMerchant(userId: string, merchantId: string, role?: string): Promise<MerchantMembership | null>;
   findMembersByMerchant(merchantId: string): Promise<MerchantMemberDetail[]>;
-  deleteMembership(membershipId: string): Promise<boolean>;
+  /** Deletes only a membership owned by `merchantId`; false when no same-tenant row matched. */
+  deleteMembership(merchantId: string, membershipId: string): Promise<boolean>;
   save(membership: MerchantMembership): Promise<MerchantMembership>;
 }
 

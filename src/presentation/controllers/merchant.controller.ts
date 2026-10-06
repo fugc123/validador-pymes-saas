@@ -178,7 +178,13 @@ export class MerchantController {
   @Roles('MERCHANT_OWNER', 'SUPER_ADMIN')
   @HttpCode(HttpStatus.OK)
   async removeCashier(@Param('id') membershipId: string) {
-    await this.membershipRepo.deleteMembership(membershipId);
+    const tenantId = TenantContext.getTenantId();
+    const deleted = await this.membershipRepo.deleteMembership(tenantId, membershipId);
+    // Absent and cross-tenant results are indistinguishable: a safe 404
+    // instead of a success acknowledgment that would leak existence.
+    if (!deleted) {
+      throw new NotFoundException('Membership not found');
+    }
     return { success: true };
   }
 }

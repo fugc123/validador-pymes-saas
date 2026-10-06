@@ -663,21 +663,42 @@ export class InMemoryMembershipRepository implements IMembershipRepository {
       }));
   }
 
-  async deleteMembership(membershipId: string): Promise<boolean> {
+  async deleteMembership(merchantId: string, membershipId: string): Promise<boolean> {
+    // Scope by membership id AND owning merchant: the path param is never
+    // trusted as a tenant id, and a foreign-tenant row must survive untouched.
+    const scopedIndex = () =>
+      this.memberships.findIndex(
+        (m) =>
+          m.membership.id === membershipId &&
+          (m.membership.merchantId === merchantId || m.merchant.slug === merchantId),
+      );
+
     if (this.dbService && !this.dbService.isMemoryMode) {
       try {
-        await this.dbService.query(
-          'DELETE FROM merchant_memberships WHERE id::text = $1',
-          [membershipId],
+        const res = await this.dbService.query(
+          `DELETE FROM merchant_memberships
+           WHERE id::text = $1
+             AND merchant_id IN (SELECT id FROM merchants WHERE slug = $2 OR id::text = $2)
+           RETURNING id`,
+          [membershipId, merchantId],
         );
+        if (!res || !res.rows || res.rows.length === 0) {
+          return false;
+        }
+        const idx = scopedIndex();
+        if (idx >= 0) {
+          this.memberships.splice(idx, 1);
+        }
+        return true;
       } catch (err) {
         // Fallback
       }
     }
-    const idx = this.memberships.findIndex((m) => m.membership.id === membershipId);
-    if (idx >= 0) {
-      this.memberships.splice(idx, 1);
+    const idx = scopedIndex();
+    if (idx < 0) {
+      return false;
     }
+    this.memberships.splice(idx, 1);
     return true;
   }
 
