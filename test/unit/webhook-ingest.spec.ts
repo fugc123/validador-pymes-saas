@@ -55,6 +55,90 @@ Fecha y hora transferencia 16/09/2026 15:30:00 h`;
     ).rejects.toThrow(UnauthorizedException);
   });
 
+  it('rejects slug-derived secrets that are not the exact stored value', async () => {
+    mockMerchantRepo.findBySlug.mockResolvedValue(activeMerchant);
+    mockTransferRepo.findByTenantAndOperationId.mockResolvedValue(null);
+    mockTransferRepo.save.mockImplementation(async (t) => t);
+
+    const useCase = new IngestWebhookUseCase(mockMerchantRepo, mockTransferRepo, parserFactory);
+
+    // Legacy derivation shortcuts that used to authenticate without ever
+    // matching the persisted webhookSecret.
+    const derivedSecrets = [
+      'sec_kiosko-san-roque_pos',
+      'sec_kiosko_san_roque_pos',
+      'sec_kiosko_san_roque_anything',
+    ];
+
+    for (const secretHeader of derivedSecrets) {
+      await expect(
+        useCase.execute({
+          tenantSlug: 'kiosko-san-roque',
+          secretHeader,
+          text: validSampleText,
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+    }
+
+    expect(mockTransferRepo.save).not.toHaveBeenCalled();
+  });
+
+  it('rejects a prefix of the stored secret and other wrong-length values', async () => {
+    mockMerchantRepo.findBySlug.mockResolvedValue(activeMerchant);
+    const useCase = new IngestWebhookUseCase(mockMerchantRepo, mockTransferRepo, parserFactory);
+
+    const wrongLengthValues = [
+      activeMerchant.webhookSecret.slice(0, 12),
+      `${activeMerchant.webhookSecret}-extra-suffix`,
+    ];
+
+    for (const secretHeader of wrongLengthValues) {
+      await expect(
+        useCase.execute({
+          tenantSlug: 'kiosko-san-roque',
+          secretHeader,
+          text: validSampleText,
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+    }
+  });
+
+  it('rejects a same-length value that differs from the stored secret', async () => {
+    mockMerchantRepo.findBySlug.mockResolvedValue(activeMerchant);
+    const useCase = new IngestWebhookUseCase(mockMerchantRepo, mockTransferRepo, parserFactory);
+
+    const mutated = `X${activeMerchant.webhookSecret.slice(1)}`;
+
+    await expect(
+      useCase.execute({
+        tenantSlug: 'kiosko-san-roque',
+        secretHeader: mutated,
+        text: validSampleText,
+      }),
+    ).rejects.toThrow(UnauthorizedException);
+  });
+
+  it('rejects an empty or malformed (non-string) secret header', async () => {
+    mockMerchantRepo.findBySlug.mockResolvedValue(activeMerchant);
+    const useCase = new IngestWebhookUseCase(mockMerchantRepo, mockTransferRepo, parserFactory);
+
+    await expect(
+      useCase.execute({
+        tenantSlug: 'kiosko-san-roque',
+        secretHeader: '',
+        text: validSampleText,
+      }),
+    ).rejects.toThrow(UnauthorizedException);
+
+    await expect(
+      useCase.execute({
+        tenantSlug: 'kiosko-san-roque',
+        secretHeader: [activeMerchant.webhookSecret] as unknown as string,
+        text: validSampleText,
+      }),
+    ).rejects.toThrow(UnauthorizedException);
+  });
+
   it('Scenario 1: Valid new transfer ingestion creates pending transfer', async () => {
     mockMerchantRepo.findBySlug.mockResolvedValue(activeMerchant);
     mockTransferRepo.findByTenantAndOperationId.mockResolvedValue(null);

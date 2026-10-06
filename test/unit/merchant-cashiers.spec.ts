@@ -8,6 +8,7 @@ import {
   InMemoryUserRepository,
   InMemoryPasswordHasher,
   InMemoryTransferRepository,
+  InMemoryMerchantRepository,
 } from '../../src/infrastructure/repositories/in-memory.repositories';
 import { TenantContext } from '../../src/presentation/interceptors/tenant-context.service';
 
@@ -17,6 +18,7 @@ describe('MerchantController - Cashiers', () => {
   let userRepo: InMemoryUserRepository;
   let passwordHasher: InMemoryPasswordHasher;
   let transferRepo: InMemoryTransferRepository;
+  let merchantRepo: InMemoryMerchantRepository;
   let getMetricsUseCase: GetMerchantMetricsUseCase;
 
   beforeEach(() => {
@@ -24,6 +26,7 @@ describe('MerchantController - Cashiers', () => {
     userRepo = new InMemoryUserRepository();
     passwordHasher = new InMemoryPasswordHasher();
     transferRepo = new InMemoryTransferRepository();
+    merchantRepo = new InMemoryMerchantRepository();
     getMetricsUseCase = new GetMerchantMetricsUseCase(transferRepo);
 
     controller = new MerchantController(
@@ -31,6 +34,7 @@ describe('MerchantController - Cashiers', () => {
       membershipRepo,
       userRepo,
       passwordHasher,
+      merchantRepo,
     );
 
     // Mock TenantContext
