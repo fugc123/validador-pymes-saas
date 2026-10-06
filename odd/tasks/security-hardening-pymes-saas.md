@@ -89,6 +89,6 @@ The independent review found unsigned bearer tokens, universal password bypasses
 - Next step: push the completed branch to the explicitly authorized GitHub `main` destination; no deployment or PR is authorized.
 
 ## Delivery and Commit Evidence
-- Forecast: approximately 800 authored changed lines; planning heuristic only, not a hard cap.
+- Forecast was approximately 800 authored changed lines. Actual delta against local `main`: 67 files, 5,125 additions + 1,140 deletions (6,265 changed lines; no generated files or lockfile changes). This remains an advisory sizing measure, not a hard cap; the user explicitly chose a direct push to `main` and no PR.
 - Chain strategy: `stacked-to-main` for any future PR slices. For this change, the user explicitly authorized a direct push to `main` after all tasks and checks; no PR is authorized or planned.
 - Each completed task will be checked off only after its observed checks and recorded in this document and its Engram mirror. Commits are local Conventional Commits; the authorized push to `main` remains pending completion of all tasks and checks.
