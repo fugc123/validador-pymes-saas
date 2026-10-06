@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { MerchantController } from '../../src/presentation/controllers/merchant.controller';
 import { GetMerchantMetricsUseCase } from '../../src/core/application/use-cases/transfers/get-merchant-metrics.use-case';
 import { User } from '../../src/core/domain/entities/user.entity';
@@ -76,6 +76,29 @@ describe('MerchantController - Cashiers', () => {
 
     const list = await controller.getCashiers();
     expect(list.some((m) => m.id === created.id)).toBe(false);
+  });
+
+  it('does not delete a membership that belongs to another tenant', async () => {
+    await membershipRepo.save(
+      new MerchantMembership({
+        id: 'mem-foreign',
+        userId: 'usr-foreign',
+        merchantId: 'other-tenant',
+        role: 'CASHIER',
+        isActive: true,
+      }),
+    );
+
+    // Active tenant is 'test-tenant' (mocked TenantContext): a foreign
+    // membership must be reported as absent, never deleted or acknowledged.
+    await expect(controller.removeCashier('mem-foreign')).rejects.toThrow(NotFoundException);
+
+    const survivors = await membershipRepo.findMembersByMerchant('other-tenant');
+    expect(survivors.some((m) => m.id === 'mem-foreign')).toBe(true);
+  });
+
+  it('reports an absent membership as 404 instead of success', async () => {
+    await expect(controller.removeCashier('mem-does-not-exist')).rejects.toThrow(NotFoundException);
   });
 
   it('never overwrites an existing account password when the owner adds that email', async () => {

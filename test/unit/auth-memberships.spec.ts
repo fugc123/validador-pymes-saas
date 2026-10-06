@@ -13,6 +13,8 @@ import {
   IPasswordHasher,
   ITokenService,
 } from '../../src/core/application/ports/auth.ports';
+import { InMemoryMembershipRepository } from '../../src/infrastructure/repositories/in-memory.repositories';
+import { DatabaseService } from '../../src/infrastructure/database/database.service';
 
 describe('Two-Stage Authentication & Multi-Tenant Memberships (T05)', () => {
   let mockUserRepo: jest.Mocked<IUserRepository>;
@@ -479,5 +481,57 @@ describe('Two-Stage Authentication & Multi-Tenant Memberships (T05)', () => {
         token: 'scoped-access-jwt',
       });
     });
+  });
+});
+
+describe('Membership repository - tenant-scoped deletion (trust boundary)', () => {
+  const newMembership = (id: string, merchantId: string) =>
+    new MerchantMembership({
+      id,
+      userId: `usr-${id}`,
+      merchantId,
+      role: 'CASHIER',
+      isActive: true,
+    });
+
+  /** Stands in for PostgreSQL: records the SQL/params and replays a canned result. */
+  const fakeDbService = (result: { rows: unknown[]; rowCount?: number }) => {
+    const db = new DatabaseService({ get: () => undefined } as any);
+    db.isMemoryMode = false;
+    const query = jest.fn().mockResolvedValue(result);
+    (db as any).query = query;
+    return { db, query };
+  };
+
+  it('memory mode deletes a membership only when it belongs to the given tenant', async () => {
+    const repo = new InMemoryMembershipRepository();
+    await repo.save(newMembership('mem-same', 'store-a'));
+    await repo.save(newMembership('mem-other', 'store-b'));
+
+    expect(await repo.deleteMembership('store-a', 'mem-same')).toBe(true);
+    expect(await repo.deleteMembership('store-a', 'mem-other')).toBe(false);
+
+    expect((await repo.findMembersByMerchant('store-a')).some((m) => m.id === 'mem-same')).toBe(false);
+    expect((await repo.findMembersByMerchant('store-b')).some((m) => m.id === 'mem-other')).toBe(true);
+  });
+
+  it('database mode scopes the DELETE to both the membership id and its owning merchant', async () => {
+    const { db, query } = fakeDbService({ rows: [], rowCount: 0 });
+    const repo = new InMemoryMembershipRepository(db);
+
+    expect(await repo.deleteMembership('store-a', 'mem-1')).toBe(false);
+
+    expect(query).toHaveBeenCalledTimes(1);
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain('DELETE FROM merchant_memberships');
+    expect(sql).toMatch(/WHERE[\s\S]*merchant_id/);
+    expect(params).toEqual(['mem-1', 'store-a']);
+  });
+
+  it('database mode reports a deleted same-tenant row as true', async () => {
+    const { db } = fakeDbService({ rows: [{ id: 'mem-1' }], rowCount: 1 });
+    const repo = new InMemoryMembershipRepository(db);
+
+    expect(await repo.deleteMembership('store-a', 'mem-1')).toBe(true);
   });
 });
