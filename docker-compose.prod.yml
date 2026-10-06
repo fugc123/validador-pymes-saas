@@ -11,7 +11,7 @@ services:
     environment:
       POSTGRES_DB: ${DB_NAME:-validador_saas}
       POSTGRES_USER: ${DB_USER:-cajasegura_admin}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-cajasegura_secure_pass_2026}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required in the production environment}
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
@@ -42,12 +42,12 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: ${DB_USER:-cajasegura_admin}
-      DB_PASSWORD: ${DB_PASSWORD:-cajasegura_secure_pass_2026}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required in the production environment}
       DB_NAME: ${DB_NAME:-validador_saas}
-      JWT_SECRET: ${JWT_SECRET:-cajasegura_prod_secret_jwt_2026_super_key}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required in the production environment}
       JWT_EXPIRATION: ${JWT_EXPIRATION:-7d}
-    ports:
-      - "127.0.0.1:3000:3000"
+    # No published port: the backend is reachable only through the compose
+    # network so every request passes the frontend proxy rate limits.
     networks:
       - cajasegura-network
 

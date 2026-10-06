@@ -49,7 +49,7 @@ The independent review found unsigned bearer tokens, universal password bypasses
 - Baseline: repository was clean on `main`; created local branch `fix/pymes-saas-security`.
 - Exploration: independent read-only map covered backend, frontend, persistence, tests, deployment, and docs; exact evidence is recorded in the session and Engram review memory.
 - Dependency setup: root and client `npm ci --ignore-scripts --registry=https://registry.npmjs.org` both exited 0; no tracked files changed. Npm reported 54 root and 2 client dependency advisories; no remediation audit was authorized or performed.
-- Implementation: TASK-01 through TASK-05 are complete and committed; TASK-06 and TASK-07 remain open.
+- Implementation: TASK-01 through TASK-05 are complete and committed; TASK-06 code/tests are green in the working tree pending its GREEN commit; TASK-07 remains open.
 - Baseline verification: `npm test -- --runInBand` — 13 suites / 81 tests passed.
 - TASK-01 RED checkpoints: `292205f` (15 failed / 4 passed of 19); `6ba96a7` (20 failed / 3 passed of 23 against vulnerable source); `638d04c` (3 invalid-expiry failures / 22 passed of 25); `27b9fa4` (2 unsafe-default failures / 26 passed of 28).
 - TASK-01 GREEN: focused suite 28/28; full suite 14 suites / 109 tests; `npm run build` and `npx tsc --noEmit` exited 0.
@@ -76,7 +76,11 @@ The independent review found unsigned bearer tokens, universal password bypasses
 - Operational limit: if subscription confirmation succeeds but payment-report persistence then fails, the transfer stays claimed and credit is not repeated, but its report remains pending and may need manual reconciliation; no cross-repository transaction was introduced.
 - The DB claim query now enforces the same inclusive 45-minute window as the transfer domain. Older transfers will not auto-claim for subscription reports; no production billing behavior was inspected.
 - TASK-05 GREEN work-unit commit: `6093089` (`fix(db): propagate persistence failures`).
-- Next step: begin TASK-06 under strict TDD.
+- TASK-06 RED checkpoint `a870ec5`: 13 failed / 3 passed of 16 static edge/seed tests, plus the intended missing-export compile RED.
+- TASK-06 GREEN: focused suites 25/25; full suite 22 suites / 245 tests; `npx tsc --noEmit`, backend build, client build, and Compose config checks exited 0.
+- TASK-06 independent verification passed; parent full-suite spot-check also passed (22 suites / 245 tests). `nginx -t` could not run because Nginx/Docker are unavailable locally; static Nginx config assertions passed.
+- Operational requirements: production now needs explicit `DB_PASSWORD` and `JWT_SECRET`; seed execution requires `DATABASE_URL` and `SUPERADMIN_PASSWORD`; backend host port 3000 is no longer published (API must enter through Nginx). HSTS is deferred until TLS termination is known; CSP is deferred for a content audit.
+- Next step: commit the verified TASK-06 GREEN work unit, then begin TASK-07 under strict TDD.
 
 ## Delivery and Commit Evidence
 - Forecast: approximately 800 authored changed lines; planning heuristic only, not a hard cap.
