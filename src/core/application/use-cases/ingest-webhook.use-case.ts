@@ -45,27 +45,25 @@ export class IngestWebhookUseCase {
       throw new NotFoundException(`Merchant tenant '${input.tenantSlug}' not found`);
     }
 
-    // Article I & IV: Secret verification with constant-time comparison
+    // Article I & IV: only exact, constant-time equality with the persisted
+    // secret authenticates. Slug-derived, prefix, and equality shortcuts are
+    // rejected; the length check runs before the constant-time comparison.
     if (!input.secretHeader) {
       throw new UnauthorizedException('Missing webhook secret header');
     }
 
-    const isValidSecret =
-      input.secretHeader === merchant.webhookSecret ||
-      input.secretHeader === `sec_${merchant.slug}_pos` ||
-      input.secretHeader === `sec_${merchant.slug.replace(/-/g, '_')}_pos` ||
-      input.secretHeader.startsWith(`sec_${merchant.slug.replace(/-/g, '_')}_`);
+    if (typeof input.secretHeader !== 'string') {
+      throw new UnauthorizedException('Invalid webhook secret');
+    }
 
-    if (!isValidSecret) {
-      const expectedBuffer = Buffer.from(merchant.webhookSecret, 'utf-8');
-      const receivedBuffer = Buffer.from(input.secretHeader, 'utf-8');
+    const expectedBuffer = Buffer.from(merchant.webhookSecret, 'utf-8');
+    const receivedBuffer = Buffer.from(input.secretHeader, 'utf-8');
 
-      if (
-        expectedBuffer.length !== receivedBuffer.length ||
-        !crypto.timingSafeEqual(expectedBuffer, receivedBuffer)
-      ) {
-        throw new UnauthorizedException('Invalid webhook secret');
-      }
+    if (
+      expectedBuffer.length !== receivedBuffer.length ||
+      !crypto.timingSafeEqual(expectedBuffer, receivedBuffer)
+    ) {
+      throw new UnauthorizedException('Invalid webhook secret');
     }
 
     if (!merchant.isActive()) {

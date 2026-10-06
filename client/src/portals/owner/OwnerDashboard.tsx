@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { requestWebhookSecret, sendTestWebhook } from '../../context/webhook-requests';
 import {
   TrendingUp,
   Users,
@@ -70,6 +71,10 @@ interface SubscriptionStatus {
 export const OwnerDashboard: React.FC = () => {
   const { user, activeTenant, logout, token, switchTenant, availableMemberships, openTenantSelector } = useAuth();
   const [copiedScript, setCopiedScript] = useState(false);
+  const [scriptError, setScriptError] = useState<string | null>(null);
+  // Cached secret is bound to the slug it was read for, so a tenant switch can
+  // never surface the previous tenant's value.
+  const [webhookSecret, setWebhookSecret] = useState<{ slug: string; secret: string } | null>(null);
   const [testStatus, setTestStatus] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<MetricsData | null>(null);
   const [isLoadingMetrics, setIsLoadingMetrics] = useState(false);
@@ -130,7 +135,8 @@ export const OwnerDashboard: React.FC = () => {
   const [auditStatusFilter, setAuditStatusFilter] = useState<'ALL' | 'PENDING' | 'CLAIMED'>('ALL');
 
   const tenantSlug = activeTenant?.tenantId || 'comercio';
-  const tenantSecret = activeTenant?.tenantId ? `sec_${activeTenant.tenantId}_pos` : 'sec_comercio_pos';
+  const activeWebhookSecret =
+    webhookSecret && webhookSecret.slug === tenantSlug ? webhookSecret.secret : null;
   const hostUrl = window.location.origin;
 
   const whatsappSupportUrl = useMemo(() => {
@@ -269,6 +275,27 @@ export const OwnerDashboard: React.FC = () => {
     return () => clearInterval(interval);
   }, [fetchAllData]);
 
+  // The real persisted webhook secret comes from the owner-authorized endpoint
+  // for the active tenant. It is never derived from the tenant slug and never
+  // written to localStorage.
+  useEffect(() => {
+    let cancelled = false;
+    // Clear before every tenant/token refetch: no window where a stale value
+    // could be read. The `cancelled` flag drops responses that arrive late.
+    setWebhookSecret(null);
+    if (!token) {
+      return;
+    }
+    requestWebhookSecret(token)
+      .then((secret) => {
+        if (!cancelled) setWebhookSecret({ slug: tenantSlug, secret });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [token, tenantSlug]);
+
   // Personalized Google Apps Script with user variables already injected!
   const personalizedGasScript = `/**
  * VALIDADOR PYME SAAS — INGESTOR DE GMAIL PERSONALIZADO
@@ -277,7 +304,7 @@ export const OwnerDashboard: React.FC = () => {
  */
 const BASE_API_URL = '${hostUrl}';
 const MERCHANT_SLUG = '${tenantSlug}';
-const WEBHOOK_SECRET = '${tenantSecret}';
+const WEBHOOK_SECRET = '${activeWebhookSecret ?? ''}';
 const LABEL_NAME = 'SIPAP_Validador';
 
 function procesarTransferenciasBancarias() {
@@ -326,6 +353,13 @@ function procesarTransferenciasBancarias() {
 }`;
 
   const handleCopyPersonalizedScript = () => {
+    if (!activeWebhookSecret) {
+      setScriptError(
+        'No pudimos obtener el secreto web de tu comercio. Reintentá en unos segundos; si persiste, contactá a soporte.',
+      );
+      return;
+    }
+    setScriptError(null);
     navigator.clipboard.writeText(personalizedGasScript);
     setCopiedScript(true);
     setTimeout(() => setCopiedScript(false), 3000);
@@ -361,34 +395,31 @@ function procesarTransferenciasBancarias() {
 
   const handleSimulateTestPayment = async () => {
     setTestStatus('Enviando transferencia simulada de prueba...');
-    try {
-      const res = await fetch(`/api/v1/webhook/${tenantSlug}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-merchant-webhook-secret': tenantSecret,
-        },
-        body: JSON.stringify({
-          text: `A continuación el detalle de la operación:
+
+    if (!token) {
+      setTestStatus('❌ Tu sesión no está activa. Volvé a iniciar sesión para enviar la prueba.');
+      return;
+    }
+
+    const text = `A continuación el detalle de la operación:
 Nro. de operación: TEST-${Date.now().toString().slice(-6)}
 Fecha y hora de operación: Hoy ${new Date().toLocaleTimeString()}
 Cliente Pagador: CLIENTE DE PRUEBA
 Moneda y Monto: PYG 25,000
 Nro. comprobante: COMP-TEST
 Concepto de la Transferencia: /PRUEBA SISTEMA/
-Estado: Transferencia acreditada en cuenta`,
-        }),
-      }).catch(() => null);
+Estado: Transferencia acreditada en cuenta`;
 
-      if (res && res.ok) {
-        setTestStatus('✅ ¡Transferencia de Gs. 25.000 recibida con éxito! Ya podés verla en la pantalla de cobro del Cajero.');
-        await fetchMetrics();
-      } else {
-        setTestStatus('✅ Simulación enviada (Modo de demostración activo).');
-        await fetchMetrics();
-      }
-    } catch (e) {
-      setTestStatus('✅ Simulación enviada.');
+    try {
+      // The helper reads the persisted secret with this credential and posts
+      // it verbatim. It rejects on a missing secret, a non-2xx webhook
+      // response, or a network failure — so success is only reported when the
+      // webhook actually accepted the transfer.
+      await sendTestWebhook(token, tenantSlug, text);
+      setTestStatus('✅ ¡Transferencia de Gs. 25.000 recibida con éxito! Ya podés verla en la pantalla de cobro del Cajero.');
+      await fetchMetrics();
+    } catch {
+      setTestStatus('❌ No pudimos enviar la transferencia de prueba. Revisá tu conexión y reintentá en unos segundos.');
     }
   };
 
@@ -868,6 +899,10 @@ Estado: Transferencia acreditada en cuenta`,
                 <p className="text-xs text-gray-400 mt-0.5">
                   Generamos tu script a medida con las claves de tu tienda ya configuradas. Solo copiás, pegás y activás.
                 </p>
+                <p className="text-[11px] text-amber-300 mt-1.5 leading-relaxed">
+                  Nota operativa: si tu script dejó de recibir transferencias, volvé a copiar y reemplazar el script
+                  desde este panel — el secreto web ya no se deriva del slug de tu tienda.
+                </p>
               </div>
             </div>
 
@@ -902,6 +937,12 @@ Estado: Transferencia acreditada en cuenta`,
               </a>
             </div>
           </div>
+
+          {scriptError && (
+            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs">
+              {scriptError}
+            </div>
+          )}
 
           {/* Step by step cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 pt-2">

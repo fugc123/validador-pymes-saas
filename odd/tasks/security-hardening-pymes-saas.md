@@ -49,7 +49,7 @@ The independent review found unsigned bearer tokens, universal password bypasses
 - Baseline: repository was clean on `main`; created local branch `fix/pymes-saas-security`.
 - Exploration: independent read-only map covered backend, frontend, persistence, tests, deployment, and docs; exact evidence is recorded in the session and Engram review memory.
 - Dependency setup: root and client `npm ci --ignore-scripts --registry=https://registry.npmjs.org` both exited 0; no tracked files changed. Npm reported 54 root and 2 client dependency advisories; no remediation audit was authorized or performed.
-- Implementation: TASK-01 and TASK-02 are complete and committed; TASK-03 through TASK-07 remain open.
+- Implementation: TASK-01 and TASK-02 are complete and committed; TASK-03 code/tests are green in the working tree pending its GREEN commit; TASK-04 through TASK-07 remain open.
 - Baseline verification: `npm test -- --runInBand` — 13 suites / 81 tests passed.
 - TASK-01 RED checkpoints: `292205f` (15 failed / 4 passed of 19); `6ba96a7` (20 failed / 3 passed of 23 against vulnerable source); `638d04c` (3 invalid-expiry failures / 22 passed of 25); `27b9fa4` (2 unsafe-default failures / 26 passed of 28).
 - TASK-01 GREEN: focused suite 28/28; full suite 14 suites / 109 tests; `npm run build` and `npx tsc --noEmit` exited 0.
@@ -61,7 +61,11 @@ The independent review found unsigned bearer tokens, universal password bypasses
 - TASK-02 GREEN: focused repository/client/auth suites passed; full suite 16 suites / 151 tests; backend `tsc`/build and client build exited 0.
 - TASK-02 independent source verification passed; parent full-suite spot-check also passed (16 suites / 151 tests). Native risk assessment was unassessable due to new files and is treated as high; no RDD review was started.
 - TASK-02 GREEN work-unit commit: `6f632b7` (`fix(auth): close signup races and bind tenant sessions`).
-- Next step: begin TASK-03 under strict TDD.
+- TASK-03 RED checkpoints: `b7a1760` (derived secrets and owner endpoint); `55b4d73` (missing tenant denial and webhook-probe failures).
+- TASK-03 GREEN: focused webhook specs 24/24; full suite 18 suites / 172 tests; backend `tsc`/build and client build exited 0.
+- TASK-03 independent verification passed; parent full-suite spot-check passed (18 suites / 172 tests). Risk assessment was unassessable due to untracked helper files; all new source files will be included in the GREEN commit.
+- Operational note: scripts using derived secrets will receive 401 until the owner copies the updated script/secret from the dashboard; no production inventory or rotation was performed.
+- Next step: commit the verified TASK-03 GREEN work unit, then begin TASK-04 under strict TDD.
 
 ## Delivery and Commit Evidence
 - Forecast: approximately 800 authored changed lines; planning heuristic only, not a hard cap.

@@ -4,9 +4,11 @@ import {
   Controller,
   Delete,
   Get,
+  ForbiddenException,
   HttpCode,
   HttpStatus,
   Inject,
+  NotFoundException,
   Param,
   Post,
   UseGuards,
@@ -21,6 +23,7 @@ import { TenantContextInterceptor } from '../interceptors/tenant-context.interce
 import { TenantContext } from '../interceptors/tenant-context.service';
 import {
   IMembershipRepository,
+  IMerchantRepository,
   IUserRepository,
   IPasswordHasher,
 } from '../../core/application/ports/auth.ports';
@@ -57,6 +60,8 @@ export class MerchantController {
     private readonly userRepo: IUserRepository,
     @Inject('IPasswordHasher')
     private readonly passwordHasher: IPasswordHasher,
+    @Inject('IMerchantRepository')
+    private readonly merchantRepo: IMerchantRepository,
   ) {}
 
   @Get('metrics')
@@ -65,6 +70,33 @@ export class MerchantController {
   async getMetrics() {
     const tenantId = TenantContext.getTenantId();
     return this.getMetricsUseCase.execute(tenantId);
+  }
+
+  /**
+   * Owner-authorized read of the persisted webhook secret for the active
+   * tenant. It is never derived from the slug and is scoped to the session's
+   * tenant context, so cashiers and other tenants cannot reach it.
+   */
+  @Get('webhook-secret')
+  @Roles('MERCHANT_OWNER', 'SUPER_ADMIN')
+  @HttpCode(HttpStatus.OK)
+  async getWebhookSecret() {
+    // `getTenantId()` throws a plain Error outside a tenant scope (e.g. a
+    // global superadmin session without a selected tenant). Translate that
+    // into a deliberate 403 and deny before any repository read, so the
+    // secret can never be resolved without an active tenant.
+    let tenantId: string;
+    try {
+      tenantId = TenantContext.getTenantId();
+    } catch {
+      throw new ForbiddenException('An active tenant is required to read the webhook secret');
+    }
+
+    const merchant = await this.merchantRepo.findById(tenantId);
+    if (!merchant) {
+      throw new NotFoundException(`Merchant tenant '${tenantId}' not found`);
+    }
+    return { webhookSecret: merchant.webhookSecret };
   }
 
   @Get('cashiers')
