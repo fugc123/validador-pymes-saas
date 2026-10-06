@@ -42,6 +42,13 @@ describe('.github/workflows/ci.yml — CI-only contract', () => {
     expect(workflow).toMatch(/permissions:\s*\n\s*contents:\s*read\b/);
   });
 
+  it('disables git credential persistence on the checkout step', () => {
+    workflowExists();
+    expect(workflow).toMatch(
+      /uses:\s*actions\/checkout@[^\n]*\n\s+with:[\s\S]*?persist-credentials:\s*false\b/,
+    );
+  });
+
   it('runs on the ubuntu hosted runner with Node 20', () => {
     workflowExists();
     expect(workflow).toMatch(/runs-on:\s*ubuntu-/);
