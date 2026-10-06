@@ -26,7 +26,7 @@ The independent review found unsigned bearer tokens, universal password bypasses
 - [x] **TASK-04**: Scope membership deletion to the active tenant and test cross-tenant denial.
 - [x] **TASK-05**: Remove silent database-mode memory fallbacks and swallowed persistence errors; fail startup/requests safely when configured persistence is unavailable.
 - [x] **TASK-06**: Add the smallest production-suitable security headers and abuse throttling supported by the existing deployment; remove unsafe production secret defaults.
-- [ ] **TASK-07**: Align docs and scripts with actual implementation, remove or repair the nonexistent E2E command, and record final checks and remaining operational limits.
+- [x] **TASK-07**: Align docs and scripts with actual implementation, remove or repair the nonexistent E2E command, and record final checks and remaining operational limits.
 
 ## Acceptance Criteria
 - Forged, expired, malformed, or wrong-purpose tokens cannot authenticate or authorize requests.
@@ -49,7 +49,7 @@ The independent review found unsigned bearer tokens, universal password bypasses
 - Baseline: repository was clean on `main`; created local branch `fix/pymes-saas-security`.
 - Exploration: independent read-only map covered backend, frontend, persistence, tests, deployment, and docs; exact evidence is recorded in the session and Engram review memory.
 - Dependency setup: root and client `npm ci --ignore-scripts --registry=https://registry.npmjs.org` both exited 0; no tracked files changed. Npm reported 54 root and 2 client dependency advisories; no remediation audit was authorized or performed.
-- Implementation: TASK-01 through TASK-06 are committed; TASK-07 docs/script/tests are complete in the staged candidate, with its GREEN commit pending.
+- Implementation: TASK-01 through TASK-07 are complete and committed on `fix/pymes-saas-security`.
 - Baseline verification: `npm test -- --runInBand` — 13 suites / 81 tests passed.
 - TASK-01 RED checkpoints: `292205f` (15 failed / 4 passed of 19); `6ba96a7` (20 failed / 3 passed of 23 against vulnerable source); `638d04c` (3 invalid-expiry failures / 22 passed of 25); `27b9fa4` (2 unsafe-default failures / 26 passed of 28).
 - TASK-01 GREEN: focused suite 28/28; full suite 14 suites / 109 tests; `npm run build` and `npx tsc --noEmit` exited 0.
@@ -85,7 +85,8 @@ The independent review found unsigned bearer tokens, universal password bypasses
 - TASK-07 GREEN: focused GAS specs 17/17; full suite 24 suites / 262 tests; `npx tsc --noEmit`, backend build, and client build exited 0. Compose config/JSON/YAML and `git diff --check` passed.
 - Final independent review passed after correcting the reject-flow claim, SDD route/link claims, and user-confirmed Gs. 150.000/month display; native risk remains medium. No `nginx -t` could run (binary/Docker unavailable).
 - Remaining limits: `.env.example`/`.env*` were not accessed due read-deny; no live PostgreSQL or automated E2E exists; legacy derived webhook scripts must be recopied from the owner panel; payment-confirmation/report persistence remains non-atomic and may require manual reconciliation on a later save failure.
-- Next step: commit the verified TASK-07 GREEN work unit, record its hash, then push the completed branch to the explicitly authorized `main` destination.
+- TASK-07 GREEN work-unit commit: `d971cba` (`fix(security): align docs and Apps Script secrets`).
+- Next step: push the completed branch to the explicitly authorized GitHub `main` destination; no deployment or PR is authorized.
 
 ## Delivery and Commit Evidence
 - Forecast: approximately 800 authored changed lines; planning heuristic only, not a hard cap.
