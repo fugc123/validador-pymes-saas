@@ -114,4 +114,23 @@ describe('SubscriptionController', () => {
     expect((await controller.getStatus(ownerReq)).status).toBe('trial');
     claimSpy.mockRestore();
   });
+
+  it('does not mark a payment report as matched when subscription confirmation fails', async () => {
+    const ownerReq = { user: { tenantId: 'kiosko-san-roque', id: 'usr-franco-1' } };
+    const report = await controller.reportPayment(ownerReq, { payerName: 'Franco Galeano' });
+    await controller.simulateIncomingTransfer({ payerName: 'FRANCO GALEANO' });
+
+    // Subscription persistence fails after the transfer claim succeeded.
+    const confirmSpy = jest
+      .spyOn(billingUseCase, 'confirmPayment')
+      .mockRejectedValue(new Error('subscription persistence unavailable'));
+    const adminReq = { user: { id: 'usr-admin-1', role: 'SUPER_ADMIN' } };
+
+    await expect(controller.validatePaymentReport(adminReq, report.id)).rejects.toThrow();
+
+    const storedReport = await paymentReportRepo.findById(report.id);
+    expect(storedReport?.status).toBe('pending');
+    expect((await controller.getStatus(ownerReq)).status).toBe('trial');
+    confirmSpy.mockRestore();
+  });
 });
