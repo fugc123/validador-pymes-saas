@@ -22,7 +22,7 @@ The independent review found unsigned bearer tokens, universal password bypasses
 ## Scope / Tasks
 - [x] **TASK-01**: Sign and expire scoped/temporary tokens, enforce token purpose, remove password bypasses, and make production secret configuration fail closed.
 - [x] **TASK-02**: Verify temporary-session ownership for tenant selection/switching; reject public onboarding for existing emails with 409; prevent password changes when adding existing cashier accounts; remove frontend fake-token fallback.
-- [ ] **TASK-03**: Validate webhook secrets only by constant-time equality with the stored secret; provide an owner-authorized way to retrieve/use the actual secret and remove slug-derived client secrets.
+- [x] **TASK-03**: Validate webhook secrets only by constant-time equality with the stored secret; provide an owner-authorized way to retrieve/use the actual secret and remove slug-derived client secrets.
 - [ ] **TASK-04**: Scope membership deletion to the active tenant and test cross-tenant denial.
 - [ ] **TASK-05**: Remove silent database-mode memory fallbacks and swallowed persistence errors; fail startup/requests safely when configured persistence is unavailable.
 - [ ] **TASK-06**: Add the smallest production-suitable security headers and abuse throttling supported by the existing deployment; remove unsafe production secret defaults.
@@ -49,7 +49,7 @@ The independent review found unsigned bearer tokens, universal password bypasses
 - Baseline: repository was clean on `main`; created local branch `fix/pymes-saas-security`.
 - Exploration: independent read-only map covered backend, frontend, persistence, tests, deployment, and docs; exact evidence is recorded in the session and Engram review memory.
 - Dependency setup: root and client `npm ci --ignore-scripts --registry=https://registry.npmjs.org` both exited 0; no tracked files changed. Npm reported 54 root and 2 client dependency advisories; no remediation audit was authorized or performed.
-- Implementation: TASK-01 and TASK-02 are complete and committed; TASK-03 code/tests are green in the working tree pending its GREEN commit; TASK-04 through TASK-07 remain open.
+- Implementation: TASK-01 through TASK-03 are complete and committed; TASK-04 through TASK-07 remain open.
 - Baseline verification: `npm test -- --runInBand` — 13 suites / 81 tests passed.
 - TASK-01 RED checkpoints: `292205f` (15 failed / 4 passed of 19); `6ba96a7` (20 failed / 3 passed of 23 against vulnerable source); `638d04c` (3 invalid-expiry failures / 22 passed of 25); `27b9fa4` (2 unsafe-default failures / 26 passed of 28).
 - TASK-01 GREEN: focused suite 28/28; full suite 14 suites / 109 tests; `npm run build` and `npx tsc --noEmit` exited 0.
@@ -65,7 +65,8 @@ The independent review found unsigned bearer tokens, universal password bypasses
 - TASK-03 GREEN: focused webhook specs 24/24; full suite 18 suites / 172 tests; backend `tsc`/build and client build exited 0.
 - TASK-03 independent verification passed; parent full-suite spot-check passed (18 suites / 172 tests). Risk assessment was unassessable due to untracked helper files; all new source files will be included in the GREEN commit.
 - Operational note: scripts using derived secrets will receive 401 until the owner copies the updated script/secret from the dashboard; no production inventory or rotation was performed.
-- Next step: commit the verified TASK-03 GREEN work unit, then begin TASK-04 under strict TDD.
+- TASK-03 GREEN work-unit commit: `14f7b86` (`fix(webhook): require the stored tenant secret`).
+- Next step: begin TASK-04 under strict TDD.
 
 ## Delivery and Commit Evidence
 - Forecast: approximately 800 authored changed lines; planning heuristic only, not a hard cap.
