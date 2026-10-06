@@ -91,6 +91,22 @@ describe('MerchantController - Owner webhook secret endpoint', () => {
     await expect(controller.getWebhookSecret()).rejects.toThrow(NotFoundException);
   });
 
+  it('denies with a deliberate 403 when there is no active tenant context and never reads the merchant repository', async () => {
+    // Exercise the real TenantContext (superadmin session without an active
+    // tenant): no store, so `getTenantId()` has nothing to resolve.
+    getTenantId.mockRestore();
+    const findById = jest.spyOn(merchantRepo, 'findById');
+
+    const denial = await controller.getWebhookSecret().then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(denial).toBeInstanceOf(ForbiddenException);
+    expect((denial as ForbiddenException).getStatus()).toBe(403);
+    expect(findById).not.toHaveBeenCalled();
+  });
+
   describe('authorization', () => {
     const rolesGuard = new RolesGuard(new Reflector());
     const tenantGuard = new TenantGuard();
