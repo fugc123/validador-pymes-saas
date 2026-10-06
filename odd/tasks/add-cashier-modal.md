@@ -19,7 +19,7 @@ Enable merchant owners to add, view, and manage cashiers from their Owner Dashbo
 4. **Unit Tests & Verification**:
    - Add/update tests for cashier listing and creation.
    - Verify local build (`npm run build` root and client).
-   - Commit, push, and deploy to production VPS (`67.205.168.176`).
+   - Commit, push, and deploy to the production VPS (host redacted).
 
 ## Tasks
 - [x] **TASK-01**: Add cashier querying and deletion to IMembershipRepository and implement in InMemoryMembershipRepository with PostgreSQL support.
@@ -30,8 +30,8 @@ Enable merchant owners to add, view, and manage cashiers from their Owner Dashbo
 ## Verification Evidence
 - 13/13 test suites (81 tests) passing without errors (`test/unit/merchant-cashiers.spec.ts`).
 - Root backend and Vite frontend built cleanly.
-- Commits `a53a50b` and `31f29f7` pushed to `origin/main` and deployed to VPS `67.205.168.176`.
-- Live end-to-end test against production (`https://cajasegura.com.py`):
+- Commits `a53a50b` and `31f29f7` pushed to `origin/main` and deployed to the production VPS (host redacted).
+- Manual live walkthrough against production (host redacted) — a human-driven scenario executed by hand, not an automated E2E suite:
   1. Authenticated as store owner.
   2. `POST /api/v1/merchant/cashiers` created cashier and saved user and membership directly into PostgreSQL `users` and `merchant_memberships` tables.
   3. `GET /api/v1/merchant/cashiers` listed the cashier with full user and role details.

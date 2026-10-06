@@ -290,7 +290,7 @@ describe('Merchant Onboarding & Subscription Billing Lifecycle (T11, T12)', () =
     });
   });
 
-  describe('SubscriptionBillingUseCase ($15/mo Lifecycle - FSM 3.2)', () => {
+  describe('SubscriptionBillingUseCase (manual Gs. 150.000/month lifecycle - FSM 3.2)', () => {
     it('Transitions trial -> active on payment confirmation', async () => {
       const existingTrial = new Subscription({
         id: 'sub-001',

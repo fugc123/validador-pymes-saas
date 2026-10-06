@@ -75,7 +75,7 @@ export const PublicRegisterScreen: React.FC<{ onBackToLogin: () => void }> = ({ 
                 <ShieldCheck className="w-8 h-8" />
               </div>
               <h1 className="text-xl font-extrabold text-white">Solicitar Validador PYME</h1>
-              <p className="text-xs text-gray-400 mt-1">7 días de prueba gratis • Luego $15 USD/mes</p>
+              <p className="text-xs text-gray-400 mt-1">7 días de prueba gratis • Luego Gs. 150.000/mes</p>
             </div>
 
             <div>

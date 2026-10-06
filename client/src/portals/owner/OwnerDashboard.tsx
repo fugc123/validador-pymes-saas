@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { requestWebhookSecret, sendTestWebhook } from '../../context/webhook-requests';
+import { buildPersonalizedGasScript } from './personalized-gas-script';
 import {
   TrendingUp,
   Users,
@@ -71,6 +72,7 @@ interface SubscriptionStatus {
 export const OwnerDashboard: React.FC = () => {
   const { user, activeTenant, logout, token, switchTenant, availableMemberships, openTenantSelector } = useAuth();
   const [copiedScript, setCopiedScript] = useState(false);
+  const [copiedSecret, setCopiedSecret] = useState(false);
   const [scriptError, setScriptError] = useState<string | null>(null);
   // Cached secret is bound to the slug it was read for, so a tenant switch can
   // never surface the previous tenant's value.
@@ -296,63 +298,23 @@ export const OwnerDashboard: React.FC = () => {
     };
   }, [token, tenantSlug]);
 
-  // Personalized Google Apps Script with user variables already injected!
-  const personalizedGasScript = `/**
- * VALIDADOR PYME SAAS — INGESTOR DE GMAIL PERSONALIZADO
- * Comercio: ${activeTenant?.merchantName || 'Mi Comercio'}
- * Generado automáticamente por Validador PYME
- */
-const BASE_API_URL = '${hostUrl}';
-const MERCHANT_SLUG = '${tenantSlug}';
-const WEBHOOK_SECRET = '${activeWebhookSecret ?? ''}';
-const LABEL_NAME = 'SIPAP_Validador';
-
-function procesarTransferenciasBancarias() {
-  let label = GmailApp.getUserLabelByName(LABEL_NAME);
-  if (!label) {
-    label = GmailApp.createLabel(LABEL_NAME);
-  }
-
-  const searchQuery = '("itau" OR "itaú" OR "gnb" OR "ueno" OR "familiar" OR "atlas" OR "continental" OR "sipap" OR "transferencia" OR "acreditada") -label:' + LABEL_NAME;
-  const threads = GmailApp.search(searchQuery, 0, 15);
-  if (threads.length === 0) return;
-
-  const webhookEndpoint = BASE_API_URL + '/api/v1/webhook/' + MERCHANT_SLUG;
-
-  for (let i = 0; i < threads.length; i++) {
-    const thread = threads[i];
-    const messages = thread.getMessages();
-
-    for (let j = 0; j < messages.length; j++) {
-      const msg = messages[j];
-      try {
-        const payload = JSON.stringify({
-          text: msg.getPlainBody(),
-          html: msg.getBody(),
-          subject: msg.getSubject(),
-          date: msg.getDate().toISOString()
-        });
-
-        const response = UrlFetchApp.fetch(webhookEndpoint, {
-          method: 'post',
-          contentType: 'application/json',
-          headers: { 'X-Merchant-Webhook-Secret': WEBHOOK_SECRET },
-          payload: payload,
-          muteHttpExceptions: true
-        });
-
-        if (response.getResponseCode() >= 200 && response.getResponseCode() < 300) {
-          thread.addLabel(label);
-          thread.markRead();
-        }
-      } catch (err) {
-        Logger.log('Error enviando aviso: ' + err.toString());
-      }
-    }
-  }
-}`;
+  // Personalized Google Apps Script with the merchant URL and slug already
+  // injected. The generated source carries no secret: it reads WEBHOOK_SECRET
+  // from the merchant's Script Properties at runtime, so the script copy and
+  // the secret copy stay separate.
+  const personalizedGasScript = buildPersonalizedGasScript(hostUrl, tenantSlug);
 
   const handleCopyPersonalizedScript = () => {
+    setScriptError(null);
+    navigator.clipboard.writeText(personalizedGasScript);
+    setCopiedScript(true);
+    setTimeout(() => setCopiedScript(false), 3000);
+  };
+
+  // The persisted secret is a second, separate copy the owner pastes as the
+  // `WEBHOOK_SECRET` Script Property. It is held in memory only for this copy
+  // action: never in the generated script, never in localStorage, never logged.
+  const handleCopyWebhookSecret = () => {
     if (!activeWebhookSecret) {
       setScriptError(
         'No pudimos obtener el secreto web de tu comercio. Reintentá en unos segundos; si persiste, contactá a soporte.',
@@ -360,9 +322,9 @@ function procesarTransferenciasBancarias() {
       return;
     }
     setScriptError(null);
-    navigator.clipboard.writeText(personalizedGasScript);
-    setCopiedScript(true);
-    setTimeout(() => setCopiedScript(false), 3000);
+    navigator.clipboard.writeText(activeWebhookSecret);
+    setCopiedSecret(true);
+    setTimeout(() => setCopiedSecret(false), 3000);
   };
 
   const handleReportPayment = async () => {
@@ -897,11 +859,13 @@ Estado: Transferencia acreditada en cuenta`;
                   Conexión con tu Gmail en 3 Minutos (Sin Costo de Auditoría)
                 </h2>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  Generamos tu script a medida con las claves de tu tienda ya configuradas. Solo copiás, pegás y activás.
+                  Son dos copias separadas: el script (sin secretos) y el secreto web, que se guarda como
+                  Propiedad del Script. Copiás, pegás y activás.
                 </p>
                 <p className="text-[11px] text-amber-300 mt-1.5 leading-relaxed">
-                  Nota operativa: si tu script dejó de recibir transferencias, volvé a copiar y reemplazar el script
-                  desde este panel — el secreto web ya no se deriva del slug de tu tienda.
+                  Nota operativa: el secreto web nunca viaja dentro del código. Si tu script dejó de recibir
+                  transferencias, copiá de nuevo el secreto desde este panel y actualizalo en las Propiedades
+                  del Script de Apps Script; el código solo hace falta reemplazarlo si cambió tu URL o tu slug.
                 </p>
               </div>
             </div>
@@ -915,13 +879,23 @@ Estado: Transferencia acreditada en cuenta`;
                 <span>{copiedScript ? '¡Script Copiado al Portapapeles!' : '1. Copiar Mi Script Personalizado'}</span>
               </button>
 
+              <button
+                onClick={handleCopyWebhookSecret}
+                disabled={!activeWebhookSecret}
+                title="Copiar el secreto WEBHOOK_SECRET para pegarlo como Propiedad del Script"
+                className="w-full sm:w-auto px-5 py-2.5 bg-[#0B0F19] hover:bg-[#1A253C] border border-amber-500/40 hover:border-amber-400/60 text-amber-300 font-bold text-xs rounded-xl flex items-center justify-center space-x-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {copiedSecret ? <Check className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
+                <span>{copiedSecret ? '¡Secreto Copiado al Portapapeles!' : '2. Copiar Secreto WEBHOOK_SECRET'}</span>
+              </button>
+
               <a
                 href="https://script.new"
                 target="_blank"
                 rel="noreferrer"
                 className="w-full sm:w-auto px-5 py-2.5 bg-[#0B0F19] hover:bg-[#1A253C] border border-[#24324D] hover:border-emerald-500/40 text-white font-bold text-xs rounded-xl flex items-center justify-center space-x-2 transition-all"
               >
-                <span>2. Abrir Google Apps Script</span>
+                <span>3. Abrir Google Apps Script</span>
                 <ExternalLink className="w-4 h-4 text-emerald-400" />
               </a>
 
@@ -945,7 +919,7 @@ Estado: Transferencia acreditada en cuenta`;
           )}
 
           {/* Step by step cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 pt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-2">
             <div className="bg-[#0B0F19]/80 border border-[#24324D] rounded-2xl p-4 flex flex-col justify-between">
               <div className="space-y-2">
                 <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold flex items-center justify-center">
@@ -970,10 +944,22 @@ Estado: Transferencia acreditada en cuenta`;
               </div>
             </div>
 
+            <div className="bg-[#0B0F19]/80 border border-amber-500/30 bg-amber-950/10 rounded-2xl p-4 flex flex-col justify-between overflow-hidden">
+              <div className="space-y-2">
+                <div className="w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 text-xs font-bold flex items-center justify-center">
+                  3
+                </div>
+                <div className="font-bold text-sm text-amber-300">Guardar el Secreto</div>
+                <div className="text-xs text-gray-300 leading-relaxed break-words">
+                  En <strong className="text-white">Configuración del proyecto</strong> ➔ <strong className="text-white">Propiedades del script</strong>, creá <code className="text-amber-300 font-mono text-[11px] bg-[#151D2F] px-1.5 py-0.5 rounded border border-amber-500/30 break-all inline-block my-1">WEBHOOK_SECRET</code> con el valor del botón 2. El secreto nunca se pega dentro del código.
+                </div>
+              </div>
+            </div>
+
             <div className="bg-[#0B0F19]/80 border border-[#24324D] rounded-2xl p-4 flex flex-col justify-between overflow-hidden">
               <div className="space-y-2">
                 <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold flex items-center justify-center">
-                  3
+                  4
                 </div>
                 <div className="font-bold text-sm text-white">Ejecutar por 1ª vez</div>
                 <div className="text-xs text-gray-400 leading-relaxed break-words">
@@ -982,13 +968,13 @@ Estado: Transferencia acreditada en cuenta`;
               </div>
             </div>
 
-            <div className="bg-[#0B0F19]/80 border border-amber-500/30 bg-amber-950/10 rounded-2xl p-4 flex flex-col justify-between">
+            <div className="bg-[#0B0F19]/80 border border-[#24324D] rounded-2xl p-4 flex flex-col justify-between">
               <div className="space-y-2">
-                <div className="w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 text-xs font-bold flex items-center justify-center">
-                  4
+                <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold flex items-center justify-center">
+                  5
                 </div>
-                <div className="font-bold text-sm text-amber-300">Aceptar Modo Seguro</div>
-                <div className="text-xs text-gray-300 leading-relaxed">
+                <div className="font-bold text-sm text-white">Aceptar Modo Seguro</div>
+                <div className="text-xs text-gray-400 leading-relaxed">
                   Google dirá <em>"No verificado"</em>. Tocá <strong className="text-white">Configuración avanzada</strong> ➔ <strong className="text-white underline">Ir a Proyecto (no seguro)</strong> ➔ <strong className="text-emerald-400 underline">Permitir</strong>.
                 </div>
               </div>
@@ -997,7 +983,7 @@ Estado: Transferencia acreditada en cuenta`;
             <div className="bg-[#0B0F19]/80 border border-[#24324D] rounded-2xl p-4 flex flex-col justify-between">
               <div className="space-y-2">
                 <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold flex items-center justify-center">
-                  5
+                  6
                 </div>
                 <div className="font-bold text-sm text-white">Activar Reloj (Trigger)</div>
                 <div className="text-xs text-gray-400 leading-relaxed">

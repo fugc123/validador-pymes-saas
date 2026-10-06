@@ -12,15 +12,20 @@ Script de automatización para Gmail que conecta las notificaciones de transfere
 
 2. **Copiar y Pegar**:
    - Borrá cualquier código existente en el archivo `Código.gs`.
-   - Pegá el contenido de [`code.gs`](./code.gs).
+   - Pegá el contenido de [`code.gs`](./code.gs). También podés pegar la copia personalizada desde el **Panel de Dueño** (botón *1. Copiar Mi Script Personalizado*), que ya trae la URL y el slug de tu comercio.
 
-3. **Configurar los datos de tu Comercio**:
-   - Reemplazá:
+3. **Configurar el secreto del Comercio (copia separada)**:
+   - El panel entrega **dos copias independientes**: el **script** (que nunca contiene secretos) y el **secreto** (botón *2. Copiar Secreto WEBHOOK_SECRET*). Ambas se pegan en lugares distintos.
+   - El secreto del webhook **no se escribe en el código**. Guardalo como **Propiedad del Script**:
+     - En el editor de Apps Script, abrí **Configuración del proyecto** (⚙️ Project Settings) → **Propiedades del script** (Script Properties).
+     - Agregá una propiedad con nombre `WEBHOOK_SECRET` y el valor copiado desde el panel.
+   - Si estás usando `code.gs` a mano, completá únicamente las constantes de tu comercio (el secreto no va aquí):
      ```javascript
      const BASE_API_URL = 'https://tu-servidor.com'; // O tu túnel Cloudflare
      const MERCHANT_SLUG = 'kiosko-san-roque'; // Slug único de tu tienda
-     const WEBHOOK_SECRET = 'sec_kiosko_san_roque_pilot_2026'; // Secret provisto en tu panel
      ```
+   - Si la propiedad falta o está vacía, el script falla sin enviar nada: no llama al servidor, no etiqueta ni marca correos como leídos, y la ejecución aparece con error hasta que configures la propiedad.
+   - Si el servidor responde con un estado distinto de 2xx (por ejemplo `401`), el script tampoco etiqueta ni marca el correo como leído: el mensaje queda pendiente para el próximo intento.
 
 4. **Autorizar Permisos**:
    - Hacé clic en **Guardar** (Ctrl + S / Cmd + S).

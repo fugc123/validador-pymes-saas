@@ -59,4 +59,5 @@ No feature request, performance optimization, refactoring, or third-party integr
 
 1. **Zero-Warning Discipline**: The codebase shall compile with zero TypeScript errors under strict mode (`noImplicitAny: true`, `strictNullChecks: true`).
 2. **Automated Verification Contract**: No code is deemed complete without automated tests (unit and E2E) providing verifiable execution receipts.
+   - *As-built status*: only the unit-level half of this contract is executable today — this repository has **no integration or E2E runner** (no integration/E2E harness or configuration), so those receipts cannot be produced. Current status: [ADR-009](../adr/ADR-009-implementation-verification-status.md). Article VI states the requirement; it is not evidence that such tests exist.
 3. **KISS & YAGNI Enforcement**: Speculative abstractions, unused parameters, dead code, and unrequested boilerplate are outlawed. Deletion of unnecessary code is preferred over addition.

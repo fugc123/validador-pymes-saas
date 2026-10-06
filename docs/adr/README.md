@@ -16,6 +16,15 @@ This directory contains the immutable, historical Architecture Decision Records 
 | **[ADR-006](ADR-006-merchant-onboarding-and-subscription-billing.md)** | Merchant Onboarding, Approval Requests & $15/mo Subscription Billing | `Accepted` | 2026-09-15 | Onboarding Flow, Merchant Approval, Stripe/Local Checkout |
 | **[ADR-007](ADR-007-premium-fast-pos-design-system.md)** | Premium Fast-POS UX/UI Design System & High-Velocity Operation | `Accepted` | 2026-09-15 | Frontend Architecture, React, Tailwind, Web Audio Chimes, Kiosk UI |
 | **[ADR-008](ADR-008-multi-tenant-memberships-and-tenant-switching.md)** | Multi-Tenant Organization Memberships & Tenant Switching | `Accepted` | 2026-09-16 | Auth, Memberships, Multi-Store, Organization Switcher, JWT |
+| **[ADR-009](ADR-009-implementation-verification-status.md)** | Implementation & Verification Status (E2E, Persistence, Billing, Edge Controls) | `Accepted` | 2026-10-06 | As-Built Status, Unit-Only Tests, Manual Billing, Nginx Edge Controls |
+
+ADR-009 records the current as-built and verification status. It clarifies ADR-001, ADR-006 and ADR-008 (E2E expectations and payment adapters) without modifying them; read it for what exists today.
+
+---
+
+## Pricing Note
+
+The `$15/month` (USD) figures that appear in `ADR-001`, `ADR-003`, `ADR-006` and `ADR-007` are **historical proposals**, preserved verbatim because those ADRs are immutable. The current amount is the manually reported **Gs. 150.000/month**, with no USD equivalence and no future price implied; see [ADR-009](ADR-009-implementation-verification-status.md).
 
 ---
 

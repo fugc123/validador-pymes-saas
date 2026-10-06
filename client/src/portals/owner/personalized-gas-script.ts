@@ -1,25 +1,45 @@
 /**
+ * Pure builder for the owner dashboard's personalized Google Apps Script.
+ *
+ * The generated script never receives, embeds, or logs a webhook secret: it
+ * reads `WEBHOOK_SECRET` from `PropertiesService.getScriptProperties()` at
+ * runtime and fails closed when the Script Property is missing or blank. The
+ * base API URL and the merchant slug are interpolated through
+ * `JSON.stringify`, so hostile input cannot break out of the generated source.
+ *
+ * Keep this body in sync with `google-apps-script/code.gs`.
+ *
+ * @param baseApiUrl Origin the merchant's Apps Script will call.
+ * @param merchantSlug Tenant slug used in the webhook path.
+ * @returns The complete Apps Script source, ready to paste.
+ */
+export function buildPersonalizedGasScript(
+  baseApiUrl: string,
+  merchantSlug: string,
+): string {
+  return `/**
  * ============================================================================
- * VALIDADOR PYME SAAS — GOOGLE APPS SCRIPT MULTI-TENANT (v2.0)
+ * VALIDADOR PYME SAAS — INGESTOR DE GMAIL PERSONALIZADO
  * ============================================================================
- * 
- * Ingestor automático de correos SIPAP bancarios para comercios minoristas.
+ *
+ * Ingestor automático de correos SIPAP bancarios para tu comercio.
  * Compatible con: Banco Itaú, GNB, UENO, Familiar, Atlas y Continental.
- * 
+ *
  * INSTRUCCIONES DE CONFIGURACIÓN:
- * 1. Ingresá a https://script.google.com con la cuenta de Gmail donde llegan los avisos bancarios.
- * 2. Pegá este código completo en el editor.
- * 3. Reemplazá las constantes BASE_API_URL y MERCHANT_SLUG con las de tu local.
- * 4. Guardá el secreto del webhook como Propiedad del Script (NO en el código):
- *    en el editor, andá a Configuración del proyecto > Propiedades del script y
- *    agregá WEBHOOK_SECRET con el valor que copiaste desde el Panel de Dueño.
- * 5. Hacé clic en "Ejecutar" una vez para autorizar los permisos de lectura de Gmail.
- * 6. Configurá un Activador (Trigger) temporizado para que se ejecute cada 1 minuto.
+ * 1. Pegá este código en https://script.google.com (borrá el contenido previo).
+ * 2. Guardá el secreto del webhook como Propiedad del Script (NO en el código):
+ *    Configuración del proyecto > Propiedades del script > WEBHOOK_SECRET,
+ *    con el valor que copiaste desde el Panel de Dueño.
+ * 3. Ejecutá la función una vez para autorizar los permisos de lectura de Gmail.
+ * 4. Configurá un Activador (Trigger) temporizado de 1 minuto.
+ *
+ * Este código NO contiene el secreto: se lee desde las Propiedades del Script
+ * en cada ejecución y, si falta, la ejecución falla sin enviar nada.
  */
 
 // CONFIGURACIÓN POR COMERCIO (Obtenida desde el Panel de Dueño del Validador)
-const BASE_API_URL = 'https://tu-dominio.com'; // O URL de Cloudflare Tunnel / Ngrok
-const MERCHANT_SLUG = 'kiosko-san-roque';
+const BASE_API_URL = ${JSON.stringify(baseApiUrl)};
+const MERCHANT_SLUG = ${JSON.stringify(merchantSlug)};
 
 // ETIQUETA EN GMAIL PARA CORREOS YA REGISTRADOS
 const LABEL_NAME = 'SIPAP_Validador';
@@ -51,10 +71,10 @@ function procesarTransferenciasBancarias() {
 
   // Filtro de búsqueda que cubre los 6 bancos paraguayos y descarta los ya procesados
   const searchQuery = '("itau" OR "itaú" OR "gnb" OR "ueno" OR "familiar" OR "atlas" OR "continental" OR "sipap" OR "transferencia" OR "acreditada") -label:' + LABEL_NAME;
-  Logger.log('🔍 Buscando avisos bancarios con filtro: ' + searchQuery);
+  Logger.log('Buscando avisos bancarios con filtro: ' + searchQuery);
 
   const threads = GmailApp.search(searchQuery, 0, 15);
-  Logger.log('📬 Hilos no procesados encontrados: ' + threads.length);
+  Logger.log('Hilos no procesados encontrados: ' + threads.length);
 
   if (threads.length === 0) {
     return;
@@ -72,7 +92,7 @@ function procesarTransferenciasBancarias() {
       const bodyHtml = msg.getBody();
       const subject = msg.getSubject();
 
-      Logger.log('➡️ Procesando aviso: "' + subject + '" (ID: ' + msg.getId() + ')');
+      Logger.log('Procesando aviso: "' + subject + '" (ID: ' + msg.getId() + ')');
 
       try {
         const payload = JSON.stringify({
@@ -96,19 +116,21 @@ function procesarTransferenciasBancarias() {
         const statusCode = response.getResponseCode();
         const responseText = response.getContentText();
 
-        Logger.log('✅ Respuesta del servidor (HTTP ' + statusCode + '): ' + responseText);
+        Logger.log('Respuesta del servidor (HTTP ' + statusCode + '): ' + responseText);
 
         // Si el servidor lo creó (201) o ya existía (200), marcamos como procesado
         if (statusCode >= 200 && statusCode < 300) {
           thread.addLabel(label);
           thread.markRead();
-          Logger.log('🏷️ Etiqueta ' + LABEL_NAME + ' agregada exitosamente.');
+          Logger.log('Etiqueta ' + LABEL_NAME + ' agregada exitosamente.');
         } else {
-          Logger.log('⚠️ Servidor rechazó el mensaje (HTTP ' + statusCode + '). No se marcará como procesado para reintento.');
+          Logger.log('Servidor rechazó el mensaje (HTTP ' + statusCode + '). No se marcará como procesado para reintento.');
         }
       } catch (err) {
-        Logger.log('❌ Error enviando correo ' + msg.getId() + ': ' + err.toString());
+        Logger.log('Error enviando correo ' + msg.getId() + ': ' + err.toString());
       }
     }
   }
+}
+`;
 }

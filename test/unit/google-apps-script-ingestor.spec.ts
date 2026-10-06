@@ -22,13 +22,18 @@ interface FetchCall {
 interface Sandbox {
   fetchCalls: FetchCall[];
   labeledThreads: number;
+  markedRead: number;
   run: () => void;
 }
 
-function evaluateScript(scriptProperties: Record<string, string>): Sandbox {
+function evaluateScript(
+  scriptProperties: Record<string, string>,
+  statusCode = 201,
+): Sandbox {
   const source = readFileSync(SCRIPT_PATH, 'utf8');
   const fetchCalls: FetchCall[] = [];
   const labeledThreads = { count: 0 };
+  const readThreads = { count: 0 };
   const sandbox: Record<string, unknown> = {
     PropertiesService: {
       getScriptProperties: () => ({
@@ -39,7 +44,7 @@ function evaluateScript(scriptProperties: Record<string, string>): Sandbox {
     UrlFetchApp: {
       fetch: (url: string, options: Record<string, unknown>) => {
         fetchCalls.push({ url, options });
-        return { getResponseCode: () => 201, getContentText: () => 'created' };
+        return { getResponseCode: () => statusCode, getContentText: () => 'created' };
       },
     },
     GmailApp: {
@@ -59,7 +64,9 @@ function evaluateScript(scriptProperties: Record<string, string>): Sandbox {
           addLabel: () => {
             labeledThreads.count += 1;
           },
-          markRead: () => undefined,
+          markRead: () => {
+            readThreads.count += 1;
+          },
         },
       ],
     },
@@ -73,6 +80,9 @@ function evaluateScript(scriptProperties: Record<string, string>): Sandbox {
     fetchCalls,
     get labeledThreads(): number {
       return labeledThreads.count;
+    },
+    get markedRead(): number {
+      return readThreads.count;
     },
     run: sandbox.procesarTransferenciasBancarias as () => void,
   };
@@ -109,6 +119,29 @@ describe('google-apps-script/code.gs webhook secret', () => {
     expect(headers['X-Merchant-Webhook-Secret']).toBe('stored-secret-value');
     expect(script.labeledThreads).toBe(1);
   });
+
+  it('labels the Gmail thread and marks it read only on a 2xx response', () => {
+    const script = evaluateScript({ WEBHOOK_SECRET: 'stored-secret-value' }, 201);
+
+    script.run();
+
+    expect(script.fetchCalls).toHaveLength(1);
+    expect(script.labeledThreads).toBe(1);
+    expect(script.markedRead).toBe(1);
+  });
+
+  it.each([401, 500])(
+    'neither labels nor marks the Gmail thread read on HTTP %i, so the message is retried',
+    (statusCode) => {
+      const script = evaluateScript({ WEBHOOK_SECRET: 'stored-secret-value' }, statusCode);
+
+      script.run();
+
+      expect(script.fetchCalls).toHaveLength(1);
+      expect(script.labeledThreads).toBe(0);
+      expect(script.markedRead).toBe(0);
+    },
+  );
 
   it('keeps the secret out of the script source', () => {
     const source = readFileSync(SCRIPT_PATH, 'utf8');

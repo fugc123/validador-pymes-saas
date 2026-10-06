@@ -16,6 +16,8 @@
 | **`ACT-03`** | **`CASHIER`** (POS Operator) | Query pending transfers by amount + name, execute transfer claim, receive audio/visual confirmation. | Zero access to store financial turnover, bank account numbers, or cashier user management. |
 | **`ACT-04`** | **`INGEST_WEBHOOK`** (Automated System) | Ingest incoming parsed transfer payload from Google Apps Script. | Scoped to a specific tenant via secret; cannot query or alter existing claimed transfers. |
 
+> **Requirement, not evidence**: the actors, privileges and scenarios in this document describe what the system must do. Where the current implementation differs (for example, there is no active-bank selection and no rejection of onboarding requests), the as-built record lives in [ADR-009](../adr/ADR-009-implementation-verification-status.md) and in the as-built notes below. Verification of this repository is unit-only: **no integration or E2E runner exists**.
+
 ---
 
 ## 2. Core Functional Requirements (User Stories)
@@ -58,8 +60,8 @@
 > **So that** incoming funds are attributed to the exact store and duplicates are rejected idempotently.
 
 - **Scenario 1: Valid New Transfer Ingestion**
-  - **Given** an active merchant `kiosko-san-roque` with secret `sec_xyz123`,
-  - **When** Google Apps Script posts a valid transfer email to `POST /api/v1/webhook/kiosko-san-roque` with header `X-Merchant-Webhook-Secret: sec_xyz123`,
+  - **Given** an active merchant `kiosko-san-roque` with secret `<stored-webhook-secret>`,
+  - **When** Google Apps Script posts a valid transfer email to `POST /api/v1/webhook/kiosko-san-roque` with header `X-Merchant-Webhook-Secret: <stored-webhook-secret>`,
   - **Then** the system parses operation ID `45601`, amount `26000`, and payer `ALEJANDRA CHENA`,
   - **And** saves the transfer with status `PENDING` linked to `kiosko-san-roque`,
   - **And** returns `HTTP 201 Created { status: "created", id: 101 }`.
@@ -115,20 +117,26 @@
 > **And as a** SuperAdmin, I want to approve the application with one click,  
 > **So that** the merchant is provisioned with a 7-day trial and custom webhook URL immediately.
 
+> **Requirement vs as-built**: the two-step story below (public submit → `REQUESTED` → one-click SuperAdmin approval) is the **required** design. As built, the public endpoint performs the provisioning itself, so the approval endpoint only serves records that are still `requested`.
+
 - **Scenario 1: Public Merchant Application**
   - **When** an owner submits `{ businessName: "Farmacia Central", email: "dueño@farmacia.com", phone: "+595981123456", city: "Asunción" }`,
-  - **Then** a `merchant_requests` record is created with status `REQUESTED`.
+  - **Then** *(required)* a `merchant_requests` record is created with status `REQUESTED`.
+  - *As-built* — `POST /api/v1/onboarding/request`: the record is stored with status **`approved`**, and the same call provisions the merchant (slug + webhook secret), the `MERCHANT_OWNER` user, its membership and a 7-day `trial` subscription. An already-registered email is rejected with `409 Conflict`, so no existing account is altered or linked.
 
 - **Scenario 2: SuperAdmin Approval & Transactional Provisioning**
-  - **Given** application `#12` is in `REQUESTED` status,
-  - **When** the SuperAdmin calls `POST /api/v1/superadmin/merchant-requests/12/approve`,
-  - **Then** in a single ACID transaction:
+  - **Given** application `#12` (business `Farmacia Central`) is in `REQUESTED` status,
+  - **When** the SuperAdmin calls `POST /api/v1/onboarding/superadmin/merchant-requests/12/approve`,
+  - **Then** *(required)* in a single ACID transaction:
     1. `merchants` record is created with slug `farmacia-central`.
     2. A 32-byte cryptographic webhook secret is generated.
     3. A `MERCHANT_OWNER` user account is created.
     4. A `merchant_memberships` record is linked.
     5. A 7-day `TRIAL` subscription is activated.
     6. Application `#12` status transitions to `APPROVED`.
+  - *As-built*: the endpoint exists behind `RolesGuard` with the `SUPER_ADMIN` role and performs those provisioning steps as **sequential repository saves — not a single database transaction**. It requires the record to be in status `requested`: approving a record that is already `approved` (which includes every record written by Scenario 1) returns `409 Conflict`. The queue endpoint `GET /api/v1/onboarding/superadmin/merchant-requests` returns **every** record regardless of status, and `SuperAdminPanel` renders the Approve action only for `requested` rows.
+
+- **Rejection — requirement only**: declining an application is **not implemented**. There is no rejection route and no Reject action in the UI; the domain entity's `reject()` transition is never called by any controller. No route or behavior is claimed for it here.
 
 ---
 
@@ -148,13 +156,15 @@ stateDiagram-v2
 ```mermaid
 stateDiagram-v2
     [*] --> TRIAL: Approved by SuperAdmin (7 days free)
-    TRIAL --> ACTIVE: $15/mo payment confirmed
+    TRIAL --> ACTIVE: reported payment (Gs. 150.000) validated
     TRIAL --> SUSPENDED: Trial expired without payment
-    ACTIVE --> PAST_DUE: Recurring billing failed
-    PAST_DUE --> ACTIVE: Payment retry succeeded
+    ACTIVE --> PAST_DUE: SuperAdmin marks the subscription past due
+    PAST_DUE --> ACTIVE: a later payment report is validated
     PAST_DUE --> SUSPENDED: 3-day grace period expired
     SUSPENDED --> ACTIVE: Invoice settled
 ```
+
+> **As-built status (2026-10-06)**: there is no automatic or recurring billing. `ACTIVE` is reached only when the owner reports the monthly transfer of **Gs. 150.000** (`POST /api/v1/subscription/report-payment`) and `SUPER_ADMIN` validates it against an incoming transfer (`POST /api/v1/subscription/validate-payment-report/:id`); `PAST_DUE` is set manually (`POST /api/v1/subscription/mark-past-due`). The stored subscription statuses are `trial`, `active`, `past_due` and `cancelled` — **`suspended` is not implemented**. The backend does not gate webhook ingestion or cashier verification by subscription status; the POS client disables its search submission and displays warnings for `past_due`/`cancelled`. Verification of this document is unit-only: **no integration or E2E runner exists** in this repository. See [ADR-009](../adr/ADR-009-implementation-verification-status.md).
 
 ---
 

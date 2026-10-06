@@ -14,7 +14,7 @@ This roadmap defines the sequential development phases, deliverables, and accept
 | **Phase 4** | **Merchant Onboarding & Approval Queue** | `COMPLETED` | Public signup form API, SuperAdmin approval workflow, Auto-provisioning |
 | **Phase 5** | **Gs. 150.000/mo Subscription Billing & Dogfooding Engine** | `COMPLETED` | Alias SIPAP 5644334, Payment reporting, Incoming transfer matching & Auto-extension |
 | **Phase 6** | **Premium Frontend SPA (React + Vite + Tailwind)** | `COMPLETED` | Fast-POS Cashier UI, Merchant Portal, SuperAdmin Dashboard, Responsive Mobile UI |
-| **Phase 7** | **Testing & Production Readiness** | `COMPLETED` | 11 test suites, 69 unit tests passing (100%), Docker Compose & Seed scripts |
+| **Phase 7** | **Testing & Production Readiness** | `COMPLETED (unit only)` | Jest unit suite (`npm test`), `tsc --noEmit`, backend/client builds, Docker Compose, env-driven seed. **No E2E harness exists.** |
 
 ---
 
@@ -24,7 +24,7 @@ This roadmap defines the sequential development phases, deliverables, and accept
 - [ ] Initialize NestJS project structure with strict Clean Architecture separation:
   - `src/core/domain/`: Pure entities (`Merchant`, `User`, `MerchantMembership`, `Transfer`, `Subscription`, `MerchantRequest`).
   - `src/core/application/`: Use cases with explicit `tenantId` contracts and membership resolution.
-  - `src/infrastructure/`: PostgreSQL adapters, Drizzle/Prisma repositories.
+  - `src/infrastructure/`: PostgreSQL adapters (raw parameterized SQL via `pg`), repositories behind application ports.
   - `src/presentation/`: NestJS controllers, guards, interceptors.
 - [ ] Database Schema Definition (Decoupled Identity & Memberships):
   - `users`: `id`, `email`, `password_hash`, `full_name`, `is_super_admin`, `created_at`.
@@ -41,7 +41,7 @@ This roadmap defines the sequential development phases, deliverables, and accept
 - [ ] Implement `TenantContextInterceptor` & `TenantGuard`:
   - Enforce `tenant_id` extraction from scoped JWT claims for all operational routes.
   - Guarantee zero cross-tenant data leakage.
-- [ ] Seed SuperAdmin account via environment variables (`SUPERADMIN_EMAIL`, `SUPERADMIN_PASSWORD`).
+- [ ] Seed SuperAdmin account via environment variables (`SUPERADMIN_PASSWORD`, plus `DATABASE_URL` for the target database). The seed email is fixed in `seed-pilot.ts`; `SUPERADMIN_EMAIL` is not read.
 
 ---
 
@@ -63,22 +63,24 @@ This roadmap defines the sequential development phases, deliverables, and accept
 ---
 
 ### 🎯 Phase 4: Merchant Onboarding & SuperAdmin Approval Queue
-- [ ] Public Application Endpoint: `POST /api/v1/public/merchant-requests`.
-  - Captures store name, contact info, city, estimated transfer volume.
+> **Current state:** the implemented routes are `POST /api/v1/onboarding/request` (public application), `GET /api/v1/onboarding/superadmin/merchant-requests` (queue) and `POST /api/v1/onboarding/superadmin/merchant-requests/:id/approve` — all under the `onboarding` controller prefix, not a `superadmin` prefix. **No rejection endpoint and no reject action in the UI exist today**; declining an application is planned, not implemented. The bullets below are the planned API surface, and only the routes named in this note exist.
+- [x] Public Application Endpoint: `POST /api/v1/onboarding/request`.
+  - Captures business name, owner name, email, password, phone and city (there is **no** estimated-transfer-volume field).
 - [ ] SuperAdmin Review Portal API:
-  - `GET /api/v1/superadmin/merchant-requests`: Paginated queue with status filters.
-  - `POST /api/v1/superadmin/merchant-requests/:id/approve`:
+  - `GET /api/v1/onboarding/superadmin/merchant-requests`: Queue of merchant requests. *(Implemented — returns the full list; no pagination or status filters.)*
+  - `POST /api/v1/onboarding/superadmin/merchant-requests/:id/approve`: *(Implemented)*
     - Auto-generates merchant tenant and slug.
     - Generates 32-byte cryptographic webhook secret.
     - Provisions `MERCHANT_OWNER` user account.
     - Activates 7-day free trial.
-  - `POST /api/v1/superadmin/merchant-requests/:id/reject`: Declines application with note.
+  - **Rejection of an application — planned, not implemented**: there is no decline endpoint and no Reject button; no route or behavior is claimed for it here.
 
 ---
 
-### 🎯 Phase 5: $15/mo Subscription Billing Engine
+### 🎯 Phase 5: Subscription Billing Engine (manual, Gs. 150.000 reported)
+> **Current state:** billing is manual (bank transfer + superadmin validation of the reported payment). No payment gateway, Stripe adapter, or `IPaymentGateway` implementation exists yet, and a `past_due` subscription does **not** suspend webhook ingestion or cashier verification in the backend — subscription status is never consulted there. The only effect is client-side: warning banners plus a disabled POS search submit while the subscription is `past_due` or `cancelled`. The items below are planned, not implemented.
 - [ ] Pluggable Payment Provider Interface (`IPaymentGateway`):
-  - **Stripe Adapter**: Recurring subscription checkout session ($15 USD / month).
+  - **Stripe Adapter**: Recurring subscription checkout session (price not defined here; no gateway is integrated).
   - **Local Adapter (Pagopar / Bancard vPOS)**: Recurring debit / QR invoice in Guaraníes.
 - [ ] Webhook Reconciliation:
   - Listens for payment confirmation / failure.
@@ -88,6 +90,7 @@ This roadmap defines the sequential development phases, deliverables, and accept
 ---
 
 ### 🎯 Phase 6: Premium Frontend SPA (React + Vite + Tailwind)
+> **Current state:** the SPA is built, but it has **no client-side router** — `client/src/App.tsx` picks the view from the session state (landing / login / register, then Fast-POS, Owner or SuperAdmin by role), so the `/pos`, `/merchant` and `/superadmin` paths below are descriptive names, not real routes. Tailwind CSS is loaded from the Play CDN in `client/index.html` (no Tailwind build dependency). Items such as active-bank preferences, CSV/Excel export and a payment-method card are **not** implemented.
 - [ ] **Design System & Shell**:
   - Sleek dark mode palette (`#0B0F19` deep slate + electric blue accents).
   - Web Audio API sound synthesizer (positive harmonic chime and low replay tone).
@@ -103,7 +106,7 @@ This roadmap defines the sequential development phases, deliverables, and accept
   - Full audit ledger with CSV/Excel export.
   - Subscription management and payment method card.
 - [ ] **SuperAdmin Control Plane (`/superadmin`)**:
-  - Pending merchant onboarding request cards (1-click Approve / Reject).
+  - Pending merchant onboarding request cards (1-click Approve; Reject not implemented).
   - Global tenant directory with health and volume indicators.
   - System-wide transfer metrics and monthly recurring revenue (MRR) tracker.
 - [ ] **Public Landing Page (`/`)**:
@@ -114,6 +117,7 @@ This roadmap defines the sequential development phases, deliverables, and accept
 ---
 
 ### 🎯 Phase 7: Verification, Security Audit & Cloud Blueprint
+> **Current state:** all automated verification runs through the single Jest unit config (`npm test`), plus `npx tsc --noEmit`, `npm run build`, and `npm --prefix client run build`. There is **no E2E harness or E2E configuration** in this repository — the broken `test:e2e` script (pointing at a missing config file) was removed, so no E2E claim is valid. Docker Compose files exist for local and production (Nginx edge); `nginx -t` remains an operator validation step because no Nginx binary and no running Docker daemon are available in this environment.
 - [ ] Comprehensive test suite:
   - Unit tests for all 6 bank parsers.
   - Multi-tenant boundary isolation E2E tests (verifying that Tenant A cannot read Tenant B's transfers under any condition).

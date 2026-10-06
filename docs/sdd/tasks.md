@@ -31,12 +31,13 @@
 - **Description**: Create immutable TypeScript domain classes. Implement state methods: `transfer.claim()`, `subscription.isActive()`.
 - **Verification**: Unit tests in `test/unit/domain-entities.spec.ts` testing state transitions and invariant violations.
 
-#### `[T03]` [COMPLETED] PostgreSQL DDL Schema & Drizzle/Prisma Client
+#### `[T03]` [COMPLETED] PostgreSQL DDL Schema & Persistence Module
 - **Phase**: Infrastructure Persistence
 - **Target Files**: `src/infrastructure/database/schema.ts`, `src/infrastructure/database/database.module.ts`
 - **Depends On**: `T02`
 - **Description**: Implement tables for `merchants`, `users`, `merchant_memberships`, `transfers`, `subscriptions`, `merchant_requests` with indexes on `tenant_id` and unique constraints.
-- **Verification**: Migration scripts execute cleanly; schema inspection verifies foreign keys and unique indexes.
+- **Verification (planned)**: Migration scripts execute cleanly; schema inspection verifies foreign keys and unique indexes.
+  - *As-built*: persistence is raw `pg` (`Pool` + parameterized SQL through `DatabaseService`) with checked-in DDL/migrations — **no Drizzle or Prisma client exists**, and there is no ORM dependency. Verification is **unit-only** (`test/unit/database-schema.spec.ts`); this repository has no integration or E2E runner, so no migration or schema-inspection run exists beyond those unit assertions. See [ADR-009](../adr/ADR-009-implementation-verification-status.md).
 
 #### `[T04]` [COMPLETED] TenantContextInterceptor & Scoped Execution
 - **Phase**: Security & Multi-Tenancy
@@ -61,7 +62,7 @@
 - **Target Files**: `src/presentation/guards/roles.guard.ts`, `src/presentation/decorators/roles.decorator.ts`
 - **Depends On**: `T05`
 - **Description**: Implement role evaluation based on scoped JWT claims.
-- **Verification**: Unit & E2E tests verifying that `CASHIER` cannot hit merchant admin routes while `MERCHANT_OWNER` and `SUPER_ADMIN` have appropriate authorization.
+- **Verification**: Unit & E2E tests verifying that `CASHIER` cannot hit merchant admin routes while `MERCHANT_OWNER` and `SUPER_ADMIN` have appropriate authorization. *(As-built: the authorization matrix is covered by unit tests — `test/unit/roles-guard.spec.ts` — because the repository has no E2E harness; see [ADR-009](../adr/ADR-009-implementation-verification-status.md).)*
 
 ---
 
@@ -79,7 +80,8 @@
 - **Target Files**: `src/presentation/controllers/webhook.controller.ts`, `src/core/application/use-cases/ingest-webhook.use-case.ts`
 - **Depends On**: `T07`, `T04`
 - **Description**: Route `POST /api/v1/webhook/:tenantSlug`. Validate secret with `timingSafeEqual`. Handle `(tenant_id, operation_id)` unique collision gracefully (HTTP 200 `already_exists`).
-- **Verification**: Unit & integration test verifying creation, duplicate delivery, and secret validation.
+- **Verification (planned)**: Unit & integration test verifying creation, duplicate delivery, and secret validation.
+  - *As-built*: covered by unit tests only (`test/unit/webhook-ingest.spec.ts`, `test/unit/merchant-webhook-secret.spec.ts`); this repository has no integration or E2E runner. See [ADR-009](../adr/ADR-009-implementation-verification-status.md).
 
 ---
 
@@ -97,24 +99,26 @@
 - **Target Files**: `src/presentation/controllers/cashier.controller.ts`
 - **Depends On**: `T09`, `T06`
 - **Description**: `POST /api/v1/cashier/transfers/verify` and `POST /api/v1/cashier/transfers/claim`.
-- **Verification**: Tested POS endpoints under RolesGuard and TenantGuard.
+- **Verification (planned)**: Tested POS endpoints under RolesGuard and TenantGuard.
+  - *As-built*: covered by unit tests (`test/unit/cashier-pos.spec.ts`, `test/unit/roles-guard.spec.ts`); this repository has no integration or E2E runner. See [ADR-009](../adr/ADR-009-implementation-verification-status.md).
 
 ---
 
-### 📦 SPRINT 5: Onboarding Queue & $15/mo Subscription Billing
+### 📦 SPRINT 5: Onboarding Queue & Manual Subscription Billing
 
 #### `[T11]` [COMPLETED] Public Merchant Request & SuperAdmin Approval Workflow
 - **Phase**: Commercial Onboarding
 - **Target Files**: `src/core/application/use-cases/onboarding/*.ts`, `src/presentation/controllers/onboarding.controller.ts`
 - **Depends On**: `T05`
 - **Description**: Public signup form API + SuperAdmin approval transaction (provisions merchant, owner user, membership, 7-day trial).
-- **Verification**: Unit & integration test verifying full application submission and approval flow.
+- **Verification (planned)**: Unit & integration test verifying full application submission and approval flow.
+  - *As-built*: covered by unit tests (`test/unit/onboarding-billing.spec.ts`, `test/unit/create-free-merchant.spec.ts`); this repository has no integration or E2E runner. See [ADR-009](../adr/ADR-009-implementation-verification-status.md).
 
-#### `[T12]` [COMPLETED] Subscription Billing Engine ($15/mo)
+#### `[T12]` [COMPLETED] Subscription Lifecycle & Manual Payment Reporting
 - **Phase**: Billing Integration
 - **Target Files**: `src/core/application/use-cases/billing/*.ts`
 - **Depends On**: `T11`
-- **Description**: Subscription lifecycle management ($15/mo) covering trial, payment confirmation, and past-due transitions.
+- **Description**: Subscription lifecycle management covering trial, payment confirmation, and past-due transitions. *As-built*: billing is manual and reported in Guaraníes — the owner reports the monthly transfer of **Gs. 150.000** (`POST /api/v1/subscription/report-payment`) and `SUPER_ADMIN` validates it against an incoming transfer before the subscription is extended. The backend does not gate webhook ingestion; the POS client disables its search submission for `past_due`/`cancelled` and shows warnings. There is no gateway, no automatic charge, and no other currency or price is asserted by the code.
 - **Verification**: Unit tests verifying state machine transitions on payment events.
 
 ---

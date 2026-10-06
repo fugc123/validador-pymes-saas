@@ -56,7 +56,7 @@ SDD replaces speculative coding and prompt-and-pray development with a determini
 - **Question**: *Does every atomic task in `tasks.md` build a verifiable slice of `design.md`?*
 - **Checkpoints**:
   - Is every task ordered strictly by its prerequisites (`Depends On`)?
-  - Does every task include an automated test assertion (Unit or E2E)?
+  - Does every task include an automated test assertion (Unit or E2E)? *(As-built: unit assertions only — the repository has **no integration or E2E runner**, see [ADR-009](../adr/ADR-009-implementation-verification-status.md).)*
   - Can each task be proven green with verifiable command-line output?
 
 ### 🔁 Loop 4: Execution ⟷ Test (TDD & Pre-Commit Loop)

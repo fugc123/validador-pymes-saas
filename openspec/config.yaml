@@ -3,9 +3,11 @@ version: "2.0"
 
 context: |
   Project: validador-pymes-saas
-  Tech stack: TypeScript, NestJS 10, TypeORM, PostgreSQL, Redis, Jest
-  Architecture: Multi-Tenant SaaS, Hexagonal Architecture, Anti-Replay Ledger
-  Testing: Jest unit + integration tests
+  Tech stack: TypeScript, NestJS 10, React 18 + Vite, PostgreSQL through pg (parameterized raw SQL), Jest
+  Architecture: Multi-Tenant SaaS, Hexagonal Architecture (ports/adapters), Anti-Replay Ledger
+  Testing: Jest unit tests only; no E2E harness or E2E config exists in this repository
+  Billing: manual (owner reports a transfer, superadmin validates it); no payment gateway, no Stripe adapter
+  Edge: rate limiting and security headers are enforced by Nginx (client/nginx.conf), not by NestJS
   Governance: Gentle AI SDD, RDD & Financial Compliance
 
 rules:
@@ -16,7 +18,7 @@ rules:
     - Use Given/When/Then for transaction and idempotency scenarios
     - Number acceptance criteria as [AC-01], [AC-02]
   design:
-    - Detail idempotency keys, Redis TTL, and database DDL
+    - Detail idempotency keys, claim-window invariants, and database DDL (no cache layer in this stack)
   tasks:
     - Keep each task bounded to <= 400 diff lines
   apply:

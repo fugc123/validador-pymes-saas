@@ -188,7 +188,7 @@ describe('Domain Entities & Invariants (T02)', () => {
     });
   });
 
-  describe('Subscription Entity ($15/mo Lifecycle)', () => {
+  describe('Subscription Entity (manual subscription lifecycle, Gs. 150.000/month)', () => {
     it('should initialize in trial status and compute active status correctly', () => {
       const futureDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
       const sub = new Subscription({

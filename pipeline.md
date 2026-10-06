@@ -1,11 +1,11 @@
 # 🏛 Universal 5-Phase Engineering Pipeline (Gentle AI 3.1.0 + Full SDD Suite + RDD + ADR)
 
-Cualquier cambio, desarrollo o refactor en este proyecto DEBE ejecutarse bajo este pipeline inmutable de 5 fases, garantizando trazabilidad clínica, calidad de código y cero alucinaciones mediante **Spec-Driven Development (SDD)**, la suite **Ponytail** y **Receipt-Driven Development (RDD)**.
+Cualquier cambio, desarrollo o refactor en este proyecto DEBE ejecutarse bajo este pipeline inmutable de 5 fases, garantizando trazabilidad verificable, calidad de código y cero alucinaciones mediante **Spec-Driven Development (SDD)**, la suite **Ponytail** y **Receipt-Driven Development (RDD)**.
 
 ---
 
 ## 🏛 Gobernanza Inmutable — Constitución
-Antes de iniciar cualquier fase, todo agente debe verificar la alineación con la **Constitución de MoodsJournal** (`docs/constitution.md`). Cualquier cambio que viole la ética clínica, la privacidad de datos (PII/cifrado AES-256-GCM) o el aislamiento de Bounded Contexts es inválido por definición.
+Antes de iniciar cualquier fase, todo agente debe verificar la alineación con la **Constitución de Validador PYME SaaS** (`docs/sdd/constitution.md`). Cualquier cambio que viole el aislamiento de datos entre tenants, la protección de secretos y credenciales o los invariantes financieros definidos en esa constitución es inválido por definición.
 
 ---
 
@@ -47,12 +47,12 @@ Antes de iniciar cualquier fase, todo agente debe verificar la alineación con l
 - **Skills de Auditoría y Compliance**:
   - `skills/rdd-defect-workflow`: Verificación de invariantes causales de rollback y reproducción en limpio.
   - `skills/security-review`: Cifrado en reposo (AES-256-GCM), sanitización de PII y seguridad en APIs y tokens.
-  - `skills/security-scan`: Escaneo de dependencias CVE (`pnpm audit`) y análisis estático.
+  - `skills/security-scan`: Escaneo de dependencias CVE (`npm audit`) y análisis estático.
   - `skills/ecc-compliance`: Estándares enterprise (NestJS/React) y cumplimiento clínico estricto (HIPAA/GDPR).
   - `skills/gentle-code-review`: Auditoría asistida por Gentleman Guardian Angel (GGA) para política de 0 bugs.
 - **Garantías de Calidad**:
-  - 100% de suites de tests pasando (`pnpm test`).
-  - 0 errores de compilación o tipado (`pnpm build`).
+  - 100% de suites de tests pasando (`npm test`, suites unitarias de Jest; este repositorio no incluye harness de E2E, por lo que no se afirma cobertura end-to-end).
+  - 0 errores de compilación o tipado (`npx tsc --noEmit`, `npm run build`, `npm --prefix client run build`).
   - Cada Criterio de Aceptación `[AC-XX]` con prueba unitaria o de integración verificada en vivo.
 
 ---

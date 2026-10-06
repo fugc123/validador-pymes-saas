@@ -20,7 +20,7 @@
 │ - CashierController (Verify, Claim)                                                              │
 │ - MerchantController (Cashiers CRUD, Settings, Audit)                                            │
 │ - SuperAdminController (Merchants, ApprovalQueue, Metrics)                                      │
-│ - Guards: JwtAuthGuard, RolesGuard, TenantGuard                                                  │
+│ - Guards: RolesGuard, TenantGuard (JWT via AuthMiddleware)                                       │
 │ - Interceptors: TenantContextInterceptor (AsyncLocalStorage binding)                             │
 └────────────────────────────────────────────────┬─────────────────────────────────────────────────┘
                                                  │
@@ -54,6 +54,8 @@
 │ - Payment Adapters (StripeBillingAdapter, LocalGatewayAdapter)                                   │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+> **As-built status (2026-10-06)**: the layer diagram above is the target design. Today the service uses raw `pg` with parameterized SQL (no ORM), `bcryptjs` (not Argon2id/PBKDF2), and **no payment adapters** — billing is manual owner-report plus superadmin validation. On the presentation side there is **no `JwtAuthGuard` class** (authentication runs through `AuthMiddleware` plus `RolesGuard`/`TenantGuard`) and the six controllers are `auth`, `cashier`, `merchant`, `onboarding`, `subscription` and `webhook` — the diagram's `SuperAdminController` and the `Settings`/`Audit` merchant endpoints are not implemented. Verification is unit-only; no integration or E2E runner exists. See [ADR-009](../adr/ADR-009-implementation-verification-status.md).
 
 ---
 
@@ -120,7 +122,7 @@ CREATE TABLE transfers (
 );
 CREATE INDEX idx_transfers_tenant_lookup ON transfers(tenant_id, amount, status, created_at);
 
--- 5. Subscriptions Table ($15/mo Lifecycle)
+-- 5. Subscriptions Table (lifecycle: trial / active / past_due / cancelled)
 CREATE TABLE subscriptions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID UNIQUE NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,

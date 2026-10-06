@@ -10,7 +10,7 @@ The independent review found unsigned bearer tokens, universal password bypasses
 - Repository: this project only; local source and documentation changes on branch `fix/pymes-saas-security`.
 - User decisions: strict RED/GREEN/REFACTOR TDD; public onboarding using an existing email returns HTTP 409 and never changes or links that account.
 - No production access, deployment, external service setup, payment-provider integration, or use of production credentials is authorized. The user explicitly authorized pushing the completed changes to `https://github.com/fugc123/validador-pymes-saas` on `main`; no PR is requested.
-- Preserve subscription behavior documented as warning-only; do not block ingestion or cashier verification without a separate product decision.
+- Preserve current subscription behavior: the backend does not gate webhook ingestion, and the POS client disables search for `past_due`/`cancelled`. Do not add backend subscription gating or change that client policy without a separate product decision.
 - Do not add dependencies without renewed authorization for their retrieval. Existing lockfile dependencies were installed from `registry.npmjs.org` with lifecycle scripts disabled.
 
 ## Constraints and Resolved Configuration
@@ -49,7 +49,7 @@ The independent review found unsigned bearer tokens, universal password bypasses
 - Baseline: repository was clean on `main`; created local branch `fix/pymes-saas-security`.
 - Exploration: independent read-only map covered backend, frontend, persistence, tests, deployment, and docs; exact evidence is recorded in the session and Engram review memory.
 - Dependency setup: root and client `npm ci --ignore-scripts --registry=https://registry.npmjs.org` both exited 0; no tracked files changed. Npm reported 54 root and 2 client dependency advisories; no remediation audit was authorized or performed.
-- Implementation: TASK-01 through TASK-06 are complete and committed; TASK-07 remains open.
+- Implementation: TASK-01 through TASK-06 are committed; TASK-07 docs/script/tests are complete in the staged candidate, with its GREEN commit pending.
 - Baseline verification: `npm test -- --runInBand` — 13 suites / 81 tests passed.
 - TASK-01 RED checkpoints: `292205f` (15 failed / 4 passed of 19); `6ba96a7` (20 failed / 3 passed of 23 against vulnerable source); `638d04c` (3 invalid-expiry failures / 22 passed of 25); `27b9fa4` (2 unsafe-default failures / 26 passed of 28).
 - TASK-01 GREEN: focused suite 28/28; full suite 14 suites / 109 tests; `npm run build` and `npx tsc --noEmit` exited 0.
@@ -81,7 +81,11 @@ The independent review found unsigned bearer tokens, universal password bypasses
 - TASK-06 independent verification passed; parent full-suite spot-check also passed (22 suites / 245 tests). `nginx -t` could not run because Nginx/Docker are unavailable locally; static Nginx config assertions passed.
 - Operational requirements: production now needs explicit `DB_PASSWORD` and `JWT_SECRET`; seed execution requires `DATABASE_URL` and `SUPERADMIN_PASSWORD`; backend host port 3000 is no longer published (API must enter through Nginx). HSTS is deferred until TLS termination is known; CSP is deferred for a content audit.
 - TASK-06 GREEN work-unit commit: `f47c436` (`fix(ops): require production secrets and throttle API`).
-- Next step: begin TASK-07 under strict TDD.
+- TASK-07 RED checkpoints: `456b9ac` (5 failed / 1 passed for fail-closed Script Properties); `b293361` (personalized GAS helper missing-module TS2307).
+- TASK-07 GREEN: focused GAS specs 17/17; full suite 24 suites / 262 tests; `npx tsc --noEmit`, backend build, and client build exited 0. Compose config/JSON/YAML and `git diff --check` passed.
+- Final independent review passed after correcting the reject-flow claim, SDD route/link claims, and user-confirmed Gs. 150.000/month display; native risk remains medium. No `nginx -t` could run (binary/Docker unavailable).
+- Remaining limits: `.env.example`/`.env*` were not accessed due read-deny; no live PostgreSQL or automated E2E exists; legacy derived webhook scripts must be recopied from the owner panel; payment-confirmation/report persistence remains non-atomic and may require manual reconciliation on a later save failure.
+- Next step: commit the verified TASK-07 GREEN work unit, record its hash, then push the completed branch to the explicitly authorized `main` destination.
 
 ## Delivery and Commit Evidence
 - Forecast: approximately 800 authored changed lines; planning heuristic only, not a hard cap.
