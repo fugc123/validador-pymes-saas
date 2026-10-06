@@ -138,8 +138,11 @@ describe('IUserRepository.save create-only contract', () => {
 
     it('does not fall back to an in-memory write after a unique violation', async () => {
       const { query, repo } = dbModeRepository();
-      query.mockImplementation(async () => {
-        throw UNIQUE_VIOLATION;
+      query.mockImplementation(async (sql: string) => {
+        if (/^\s*insert into users/i.test(String(sql))) {
+          throw UNIQUE_VIOLATION;
+        }
+        return { rows: [], rowCount: 0 };
       });
 
       await expect(
@@ -152,8 +155,11 @@ describe('IUserRepository.save create-only contract', () => {
 
     it('propagates a non-unique database write error instead of succeeding in memory', async () => {
       const { query, repo } = dbModeRepository();
-      query.mockImplementation(async () => {
-        throw WRITE_FAILURE;
+      query.mockImplementation(async (sql: string) => {
+        if (/^\s*insert into users/i.test(String(sql))) {
+          throw WRITE_FAILURE;
+        }
+        return { rows: [], rowCount: 0 };
       });
 
       await expect(

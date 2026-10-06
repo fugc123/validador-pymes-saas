@@ -98,4 +98,20 @@ describe('SubscriptionController', () => {
     expect(subStatus.status).toBe('active');
     expect(subStatus.isTrial).toBe(false);
   });
+
+  it('does not credit a payment report when the matching transfer claim does not persist', async () => {
+    const ownerReq = { user: { tenantId: 'kiosko-san-roque', id: 'usr-franco-1' } };
+    const report = await controller.reportPayment(ownerReq, { payerName: 'Franco Galeano' });
+    await controller.simulateIncomingTransfer({ payerName: 'FRANCO GALEANO' });
+
+    // A claim that matched no row must never be reported as a successful claim,
+    // so the report stays unvalidated and the subscription is not extended.
+    const claimSpy = jest.spyOn(transferRepo, 'updateClaimed').mockResolvedValue(false);
+    const adminReq = { user: { id: 'usr-admin-1', role: 'SUPER_ADMIN' } };
+
+    await expect(controller.validatePaymentReport(adminReq, report.id)).rejects.toThrow();
+    expect(report.status).toBe('pending');
+    expect((await controller.getStatus(ownerReq)).status).toBe('trial');
+    claimSpy.mockRestore();
+  });
 });
