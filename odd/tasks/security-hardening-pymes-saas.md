@@ -25,7 +25,7 @@ The independent review found unsigned bearer tokens, universal password bypasses
 - [x] **TASK-03**: Validate webhook secrets only by constant-time equality with the stored secret; provide an owner-authorized way to retrieve/use the actual secret and remove slug-derived client secrets.
 - [x] **TASK-04**: Scope membership deletion to the active tenant and test cross-tenant denial.
 - [x] **TASK-05**: Remove silent database-mode memory fallbacks and swallowed persistence errors; fail startup/requests safely when configured persistence is unavailable.
-- [ ] **TASK-06**: Add the smallest production-suitable security headers and abuse throttling supported by the existing deployment; remove unsafe production secret defaults.
+- [x] **TASK-06**: Add the smallest production-suitable security headers and abuse throttling supported by the existing deployment; remove unsafe production secret defaults.
 - [ ] **TASK-07**: Align docs and scripts with actual implementation, remove or repair the nonexistent E2E command, and record final checks and remaining operational limits.
 
 ## Acceptance Criteria
@@ -49,7 +49,7 @@ The independent review found unsigned bearer tokens, universal password bypasses
 - Baseline: repository was clean on `main`; created local branch `fix/pymes-saas-security`.
 - Exploration: independent read-only map covered backend, frontend, persistence, tests, deployment, and docs; exact evidence is recorded in the session and Engram review memory.
 - Dependency setup: root and client `npm ci --ignore-scripts --registry=https://registry.npmjs.org` both exited 0; no tracked files changed. Npm reported 54 root and 2 client dependency advisories; no remediation audit was authorized or performed.
-- Implementation: TASK-01 through TASK-05 are complete and committed; TASK-06 code/tests are green in the working tree pending its GREEN commit; TASK-07 remains open.
+- Implementation: TASK-01 through TASK-06 are complete and committed; TASK-07 remains open.
 - Baseline verification: `npm test -- --runInBand` — 13 suites / 81 tests passed.
 - TASK-01 RED checkpoints: `292205f` (15 failed / 4 passed of 19); `6ba96a7` (20 failed / 3 passed of 23 against vulnerable source); `638d04c` (3 invalid-expiry failures / 22 passed of 25); `27b9fa4` (2 unsafe-default failures / 26 passed of 28).
 - TASK-01 GREEN: focused suite 28/28; full suite 14 suites / 109 tests; `npm run build` and `npx tsc --noEmit` exited 0.
@@ -80,7 +80,8 @@ The independent review found unsigned bearer tokens, universal password bypasses
 - TASK-06 GREEN: focused suites 25/25; full suite 22 suites / 245 tests; `npx tsc --noEmit`, backend build, client build, and Compose config checks exited 0.
 - TASK-06 independent verification passed; parent full-suite spot-check also passed (22 suites / 245 tests). `nginx -t` could not run because Nginx/Docker are unavailable locally; static Nginx config assertions passed.
 - Operational requirements: production now needs explicit `DB_PASSWORD` and `JWT_SECRET`; seed execution requires `DATABASE_URL` and `SUPERADMIN_PASSWORD`; backend host port 3000 is no longer published (API must enter through Nginx). HSTS is deferred until TLS termination is known; CSP is deferred for a content audit.
-- Next step: commit the verified TASK-06 GREEN work unit, then begin TASK-07 under strict TDD.
+- TASK-06 GREEN work-unit commit: `f47c436` (`fix(ops): require production secrets and throttle API`).
+- Next step: begin TASK-07 under strict TDD.
 
 ## Delivery and Commit Evidence
 - Forecast: approximately 800 authored changed lines; planning heuristic only, not a hard cap.
