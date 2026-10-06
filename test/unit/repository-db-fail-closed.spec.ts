@@ -250,6 +250,31 @@ describe('Repository adapters fail closed in database mode', () => {
     });
   });
 
+  describe('claims honor the 45-minute anti-replay window in database mode', () => {
+    it('TransferRepository.updateClaimed applies an inclusive 45-minute created_at cutoff so an expired transfer cannot be claimed', async () => {
+      const claimTime = new Date('2026-10-05T12:45:00.000Z');
+      const { repo, query } = await seededTransferRepo();
+      query.mockImplementation(async (sql: string) => {
+        if (/SELECT id FROM users/.test(sql)) return { rows: [{ id: USER_UUID }], rowCount: 1 };
+        // UPDATE matches no row: the transfer was created outside the 45-minute window.
+        return EMPTY;
+      });
+
+      expect(
+        await repo.updateClaimed('copy-shop-impresiones', TRANSFER_UUID, 'usr-cashier-1', claimTime),
+      ).toBe(false);
+
+      const updateCall = query.mock.calls.find(([sql]) => /UPDATE transfers/i.test(String(sql)));
+      expect(updateCall).toBeDefined();
+      const [sql, params] = updateCall as unknown as [string, unknown[]];
+      // Inclusive bound: Transfer.isExpired only rejects age > 45 minutes, so a transfer
+      // created exactly 45 minutes before claimTime must still be claimable -> `>=`.
+      expect(sql).toMatch(/created_at\s*>=/);
+      const cutoff = claimTime.getTime() - 45 * 60 * 1000;
+      expect(params.some((p) => p instanceof Date && p.getTime() === cutoff)).toBe(true);
+    });
+  });
+
   describe('writes reject on database errors and zero-row results', () => {
     it('TransferRepository.save rejects when the tenant cannot be resolved', async () => {
       const query = jest.fn().mockResolvedValue(EMPTY);
