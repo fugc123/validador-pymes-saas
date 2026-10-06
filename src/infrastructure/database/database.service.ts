@@ -21,8 +21,12 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   async onModuleInit(): Promise<void> {
     const dbUrl = this.configService.get<string>('DATABASE_URL');
     const host = this.configService.get<string>('DB_HOST');
+    const isProduction = this.configService.get<string>('NODE_ENV')?.toLowerCase() === 'production';
 
     if (!dbUrl && !host) {
+      if (isProduction) {
+        throw new Error('DATABASE_URL or DB_HOST must be configured in production; refusing to start without a database.');
+      }
       this.logger.warn('No PostgreSQL connection string configured. DatabaseService running in simulated mode.');
       this.isMemoryMode = true;
       return;
@@ -47,8 +51,10 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
       await this.runMigrations();
     } catch (err: any) {
-      this.logger.warn(`PostgreSQL connection failed (${err.message}). Defaulting to simulated mode for unit/testing.`);
-      this.isMemoryMode = true;
+      // A configured database must never silently degrade to simulated mode:
+      // startup fails so the outage is observable instead of looking healthy.
+      this.pool = null;
+      throw new Error(`PostgreSQL initialization failed: ${err.message}`);
     }
   }
 
@@ -69,7 +75,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   }
 
   async query<T extends QueryResultRow = any>(text: string, params?: any[]): Promise<QueryResult<T>> {
-    if (this.isMemoryMode || !this.pool) {
+    if (this.isMemoryMode) {
       return {
         rows: [],
         rowCount: 0,
@@ -77,6 +83,9 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         oid: 0,
         fields: [],
       };
+    }
+    if (!this.pool) {
+      throw new Error('Database query attempted without an established connection pool.');
     }
     return this.pool.query<T>(text, params);
   }

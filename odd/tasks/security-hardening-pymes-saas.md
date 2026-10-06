@@ -49,7 +49,7 @@ The independent review found unsigned bearer tokens, universal password bypasses
 - Baseline: repository was clean on `main`; created local branch `fix/pymes-saas-security`.
 - Exploration: independent read-only map covered backend, frontend, persistence, tests, deployment, and docs; exact evidence is recorded in the session and Engram review memory.
 - Dependency setup: root and client `npm ci --ignore-scripts --registry=https://registry.npmjs.org` both exited 0; no tracked files changed. Npm reported 54 root and 2 client dependency advisories; no remediation audit was authorized or performed.
-- Implementation: TASK-01 through TASK-04 are complete and committed; TASK-05 through TASK-07 remain open.
+- Implementation: TASK-01 through TASK-04 are complete and committed; TASK-05 code/tests are green in the working tree pending its GREEN commit; TASK-06 and TASK-07 remain open.
 - Baseline verification: `npm test -- --runInBand` — 13 suites / 81 tests passed.
 - TASK-01 RED checkpoints: `292205f` (15 failed / 4 passed of 19); `6ba96a7` (20 failed / 3 passed of 23 against vulnerable source); `638d04c` (3 invalid-expiry failures / 22 passed of 25); `27b9fa4` (2 unsafe-default failures / 26 passed of 28).
 - TASK-01 GREEN: focused suite 28/28; full suite 14 suites / 109 tests; `npm run build` and `npx tsc --noEmit` exited 0.
@@ -70,7 +70,12 @@ The independent review found unsigned bearer tokens, universal password bypasses
 - TASK-04 GREEN: focused membership/cashier suites 28/28; full suite 18 suites / 177 tests; backend `tsc`/build and client build exited 0.
 - TASK-04 independent source verification passed; parent full-suite spot-check also passed (18 suites / 177 tests). DB error fallback remains TASK-05; superadmin-without-tenant delete fails closed before repository access but may surface as 500.
 - TASK-04 GREEN work-unit commit: `77b5f0a` (`fix(auth): scope membership deletion to tenant`).
-- Next step: begin TASK-05 under strict TDD.
+- TASK-05 RED checkpoints: `616acc0` (37 failed / 17 passed of 54 persistence cases); `61439ed` (payment report remained matched after failed confirmation); `116d517` (45-minute DB claim cutoff missing).
+- TASK-05 GREEN: full suite 20 suites / 220 tests; `npx tsc --noEmit`, backend build, and client build exited 0. Local boot checks: production without DB config and configured unreachable DB both exited 1; unconfigured development stayed in memory mode.
+- TASK-05 independent verification passed; parent full-suite spot-check passed (20 suites / 220 tests); native assessment returned medium risk.
+- Operational limit: if subscription confirmation succeeds but payment-report persistence then fails, the transfer stays claimed and credit is not repeated, but its report remains pending and may need manual reconciliation; no cross-repository transaction was introduced.
+- The DB claim query now enforces the same inclusive 45-minute window as the transfer domain. Older transfers will not auto-claim for subscription reports; no production billing behavior was inspected.
+- Next step: commit the verified TASK-05 GREEN work unit, then begin TASK-06 under strict TDD.
 
 ## Delivery and Commit Evidence
 - Forecast: approximately 800 authored changed lines; planning heuristic only, not a hard cap.

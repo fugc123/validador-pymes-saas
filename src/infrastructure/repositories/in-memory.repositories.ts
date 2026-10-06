@@ -165,26 +165,23 @@ export class InMemoryUserRepository implements IUserRepository {
   async findByEmail(email: string): Promise<User | null> {
     const clean = email.toLowerCase().trim();
     if (this.dbService && !this.dbService.isMemoryMode) {
-      try {
-        const res = await this.dbService.query<UserRow>(
-          'SELECT id, email, password_hash, full_name, is_super_admin, created_at, updated_at FROM users WHERE LOWER(email) = LOWER($1)',
-          [clean],
-        );
-        if (res && res.rows && res.rows.length > 0) {
-          const row = res.rows[0];
-          return new User({
-            id: row.id,
-            email: row.email,
-            passwordHash: row.password_hash,
-            fullName: row.full_name,
-            isSuperAdmin: Boolean(row.is_super_admin),
-            createdAt: row.created_at ? new Date(row.created_at) : undefined,
-            updatedAt: row.updated_at ? new Date(row.updated_at) : undefined,
-          });
-        }
-      } catch (err) {
-        // Fallback to in-memory seed
+      const res = await this.dbService.query<UserRow>(
+        'SELECT id, email, password_hash, full_name, is_super_admin, created_at, updated_at FROM users WHERE LOWER(email) = LOWER($1)',
+        [clean],
+      );
+      if (res && res.rows && res.rows.length > 0) {
+        const row = res.rows[0];
+        return new User({
+          id: row.id,
+          email: row.email,
+          passwordHash: row.password_hash,
+          fullName: row.full_name,
+          isSuperAdmin: Boolean(row.is_super_admin),
+          createdAt: row.created_at ? new Date(row.created_at) : undefined,
+          updatedAt: row.updated_at ? new Date(row.updated_at) : undefined,
+        });
       }
+      return null;
     }
 
     if (clean === 'franco@cajasegura.com.py' || clean === 'francogirala@gmail.com' || clean === 'franco@validador.com') {
@@ -198,26 +195,23 @@ export class InMemoryUserRepository implements IUserRepository {
 
   async findById(id: string): Promise<User | null> {
     if (this.dbService && !this.dbService.isMemoryMode) {
-      try {
-        const res = await this.dbService.query<UserRow>(
-          'SELECT id, email, password_hash, full_name, is_super_admin, created_at, updated_at FROM users WHERE id::text = $1',
-          [id],
-        );
-        if (res && res.rows && res.rows.length > 0) {
-          const row = res.rows[0];
-          return new User({
-            id: row.id,
-            email: row.email,
-            passwordHash: row.password_hash,
-            fullName: row.full_name,
-            isSuperAdmin: Boolean(row.is_super_admin),
-            createdAt: row.created_at ? new Date(row.created_at) : undefined,
-            updatedAt: row.updated_at ? new Date(row.updated_at) : undefined,
-          });
-        }
-      } catch (err) {
-        // Fallback to in-memory seed
+      const res = await this.dbService.query<UserRow>(
+        'SELECT id, email, password_hash, full_name, is_super_admin, created_at, updated_at FROM users WHERE id::text = $1',
+        [id],
+      );
+      if (res && res.rows && res.rows.length > 0) {
+        const row = res.rows[0];
+        return new User({
+          id: row.id,
+          email: row.email,
+          passwordHash: row.password_hash,
+          fullName: row.full_name,
+          isSuperAdmin: Boolean(row.is_super_admin),
+          createdAt: row.created_at ? new Date(row.created_at) : undefined,
+          updatedAt: row.updated_at ? new Date(row.updated_at) : undefined,
+        });
       }
+      return null;
     }
     return this.users.find((u) => u.id === id) || null;
   }
@@ -335,79 +329,70 @@ export class InMemoryMerchantRepository implements IMerchantRepository {
 
   async findById(id: string): Promise<Merchant | null> {
     if (this.dbService && !this.dbService.isMemoryMode) {
-      try {
-        const res = await this.dbService.query<MerchantRow>(
-          'SELECT id, name, slug, webhook_secret, status FROM merchants WHERE id::text = $1 OR slug = $1',
-          [id],
-        );
-        if (res && res.rows && res.rows.length > 0) {
-          const row = res.rows[0];
-          return new Merchant({
-            id: row.slug || row.id,
-            name: row.name,
-            slug: row.slug,
-            webhookSecret: row.webhook_secret,
-            status: row.status as any,
-          });
-        }
-      } catch (err) {
-        // Fallback
+      const res = await this.dbService.query<MerchantRow>(
+        'SELECT id, name, slug, webhook_secret, status FROM merchants WHERE id::text = $1 OR slug = $1',
+        [id],
+      );
+      if (res && res.rows && res.rows.length > 0) {
+        const row = res.rows[0];
+        return new Merchant({
+          id: row.slug || row.id,
+          name: row.name,
+          slug: row.slug,
+          webhookSecret: row.webhook_secret,
+          status: row.status as any,
+        });
       }
+      return null;
     }
     return this.merchants.find((m) => m.id === id || m.slug === id) || null;
   }
 
   async findBySlug(slug: string): Promise<Merchant | null> {
     if (this.dbService && !this.dbService.isMemoryMode) {
-      try {
-        const res = await this.dbService.query<MerchantRow>(
-          'SELECT id, name, slug, webhook_secret, status FROM merchants WHERE LOWER(slug) = LOWER($1)',
-          [slug],
-        );
-        if (res && res.rows && res.rows.length > 0) {
-          const row = res.rows[0];
-          return new Merchant({
-            id: row.slug || row.id,
-            name: row.name,
-            slug: row.slug,
-            webhookSecret: row.webhook_secret,
-            status: row.status as any,
-          });
-        }
-      } catch (err) {
-        // Fallback
+      const res = await this.dbService.query<MerchantRow>(
+        'SELECT id, name, slug, webhook_secret, status FROM merchants WHERE LOWER(slug) = LOWER($1)',
+        [slug],
+      );
+      if (res && res.rows && res.rows.length > 0) {
+        const row = res.rows[0];
+        return new Merchant({
+          id: row.slug || row.id,
+          name: row.name,
+          slug: row.slug,
+          webhookSecret: row.webhook_secret,
+          status: row.status as any,
+        });
       }
+      return null;
     }
     return this.merchants.find((m) => m.slug.toLowerCase() === slug.toLowerCase()) || null;
   }
 
   async save(merchant: Merchant): Promise<Merchant> {
     if (this.dbService && !this.dbService.isMemoryMode) {
-      try {
-        const res = await this.dbService.query<MerchantRow>(
-          `INSERT INTO merchants (name, slug, webhook_secret, status, updated_at)
-           VALUES ($1, $2, $3, $4, NOW())
-           ON CONFLICT (slug) DO UPDATE SET name = $1, webhook_secret = $3, status = $4, updated_at = NOW()
-           RETURNING id, name, slug, webhook_secret, status`,
-          [merchant.name, merchant.slug, merchant.webhookSecret, merchant.status],
-        );
-        if (res && res.rows && res.rows.length > 0) {
-          const row = res.rows[0];
-          const saved = new Merchant({
-            id: row.slug || row.id,
-            name: row.name,
-            slug: row.slug,
-            webhookSecret: row.webhook_secret,
-            status: row.status as any,
-          });
-          const idx = this.merchants.findIndex((m) => m.id === saved.id || m.slug === saved.slug);
-          if (idx >= 0) this.merchants[idx] = saved;
-          else this.merchants.push(saved);
-          return saved;
-        }
-      } catch (err) {
-        // Fallback
+      const res = await this.dbService.query<MerchantRow>(
+        `INSERT INTO merchants (name, slug, webhook_secret, status, updated_at)
+         VALUES ($1, $2, $3, $4, NOW())
+         ON CONFLICT (slug) DO UPDATE SET name = $1, webhook_secret = $3, status = $4, updated_at = NOW()
+         RETURNING id, name, slug, webhook_secret, status`,
+        [merchant.name, merchant.slug, merchant.webhookSecret, merchant.status],
+      );
+      if (!res || !res.rows || res.rows.length === 0) {
+        throw new Error('Merchant upsert returned no rows; the tenant was not persisted.');
       }
+      const row = res.rows[0];
+      const saved = new Merchant({
+        id: row.slug || row.id,
+        name: row.name,
+        slug: row.slug,
+        webhookSecret: row.webhook_secret,
+        status: row.status as any,
+      });
+      const idx = this.merchants.findIndex((m) => m.id === saved.id || m.slug === saved.slug);
+      if (idx >= 0) this.merchants[idx] = saved;
+      else this.merchants.push(saved);
+      return saved;
     }
     const idx = this.merchants.findIndex((m) => m.id === merchant.id || m.slug === merchant.slug);
     if (idx >= 0) this.merchants[idx] = merchant;
@@ -542,65 +527,59 @@ export class InMemoryMembershipRepository implements IMembershipRepository {
 
   async findActiveByUser(userId: string): Promise<UserMembershipDetail[]> {
     if (this.dbService && !this.dbService.isMemoryMode) {
-      try {
-        const res = await this.dbService.query(
-          `SELECT mm.id as mem_id, mm.user_id, mm.merchant_id, mm.role, mm.is_active,
-                  m.id as merch_id, m.name as merch_name, m.slug as merch_slug,
-                  m.webhook_secret as merch_webhook_secret, m.status as merch_status
-           FROM merchant_memberships mm
-           JOIN merchants m ON mm.merchant_id = m.id
-           WHERE mm.user_id::text = $1 AND mm.is_active = true`,
-          [userId],
-        );
-        if (res && res.rows && res.rows.length > 0) {
-          return res.rows.map((row: any) => ({
-            membership: new MerchantMembership({
-              id: row.mem_id,
-              userId: row.user_id,
-              merchantId: row.merch_slug || row.merch_id,
-              role: row.role,
-              isActive: row.is_active,
-            }),
-            merchant: new Merchant({
-              id: row.merch_slug || row.merch_id,
-              name: row.merch_name,
-              slug: row.merch_slug,
-              webhookSecret: row.merch_webhook_secret,
-              status: row.merch_status,
-            }),
-          }));
-        }
-      } catch (err) {
-        // Fallback
+      const res = await this.dbService.query(
+        `SELECT mm.id as mem_id, mm.user_id, mm.merchant_id, mm.role, mm.is_active,
+                m.id as merch_id, m.name as merch_name, m.slug as merch_slug,
+                m.webhook_secret as merch_webhook_secret, m.status as merch_status
+         FROM merchant_memberships mm
+         JOIN merchants m ON mm.merchant_id = m.id
+         WHERE mm.user_id::text = $1 AND mm.is_active = true`,
+        [userId],
+      );
+      if (res && res.rows && res.rows.length > 0) {
+        return res.rows.map((row: any) => ({
+          membership: new MerchantMembership({
+            id: row.mem_id,
+            userId: row.user_id,
+            merchantId: row.merch_slug || row.merch_id,
+            role: row.role,
+            isActive: row.is_active,
+          }),
+          merchant: new Merchant({
+            id: row.merch_slug || row.merch_id,
+            name: row.merch_name,
+            slug: row.merch_slug,
+            webhookSecret: row.merch_webhook_secret,
+            status: row.merch_status,
+          }),
+        }));
       }
+      return [];
     }
     return this.memberships.filter((m) => m.membership.userId === userId && m.membership.isActive);
   }
 
   async findByUserAndMerchant(userId: string, merchantId: string, role?: string): Promise<MerchantMembership | null> {
     if (this.dbService && !this.dbService.isMemoryMode) {
-      try {
-        const res = await this.dbService.query(
-          `SELECT mm.id, mm.user_id, mm.merchant_id, mm.role, mm.is_active
-           FROM merchant_memberships mm
-           JOIN merchants m ON mm.merchant_id = m.id
-           WHERE mm.user_id::text = $1 AND (m.slug = $2 OR m.id::text = $2)
-           ${role ? 'AND mm.role = $3' : ''}`,
-          role ? [userId, merchantId, role] : [userId, merchantId],
-        );
-        if (res && res.rows && res.rows.length > 0) {
-          const row = res.rows[0];
-          return new MerchantMembership({
-            id: row.id,
-            userId: row.user_id,
-            merchantId,
-            role: row.role,
-            isActive: row.is_active,
-          });
-        }
-      } catch (err) {
-        // Fallback
+      const res = await this.dbService.query(
+        `SELECT mm.id, mm.user_id, mm.merchant_id, mm.role, mm.is_active
+         FROM merchant_memberships mm
+         JOIN merchants m ON mm.merchant_id = m.id
+         WHERE mm.user_id::text = $1 AND (m.slug = $2 OR m.id::text = $2)
+         ${role ? 'AND mm.role = $3' : ''}`,
+        role ? [userId, merchantId, role] : [userId, merchantId],
+      );
+      if (res && res.rows && res.rows.length > 0) {
+        const row = res.rows[0];
+        return new MerchantMembership({
+          id: row.id,
+          userId: row.user_id,
+          merchantId,
+          role: row.role,
+          isActive: row.is_active,
+        });
       }
+      return null;
     }
     const item = this.memberships.find(
       (m) =>
@@ -613,37 +592,34 @@ export class InMemoryMembershipRepository implements IMembershipRepository {
 
   async findMembersByMerchant(merchantId: string): Promise<MerchantMemberDetail[]> {
     if (this.dbService && !this.dbService.isMemoryMode) {
-      try {
-        const res = await this.dbService.query(
-          `SELECT mm.id as mem_id, mm.user_id, mm.merchant_id, mm.role, mm.is_active, mm.created_at as mem_created_at,
-                  u.id as u_id, u.email as u_email, u.full_name as u_full_name, u.is_super_admin as u_is_super_admin, u.created_at as u_created_at,
-                  m.id as merch_id, m.slug as merch_slug
-           FROM merchant_memberships mm
-           JOIN users u ON mm.user_id = u.id
-           JOIN merchants m ON mm.merchant_id = m.id
-           WHERE (m.slug = $1 OR m.id::text = $1)
-           ORDER BY mm.created_at DESC`,
-          [merchantId],
-        );
-        if (res && res.rows && res.rows.length > 0) {
-          return res.rows.map((row: any) => ({
-            id: row.mem_id,
-            userId: row.user_id,
-            merchantId: row.merch_slug || row.merch_id,
-            role: row.role,
-            isActive: Boolean(row.is_active),
-            createdAt: new Date(row.mem_created_at),
-            user: {
-              id: row.u_id,
-              email: row.u_email,
-              fullName: row.u_full_name,
-              isSuperAdmin: Boolean(row.u_is_super_admin),
-            },
-          }));
-        }
-      } catch (err) {
-        // Fallback
+      const res = await this.dbService.query(
+        `SELECT mm.id as mem_id, mm.user_id, mm.merchant_id, mm.role, mm.is_active, mm.created_at as mem_created_at,
+                u.id as u_id, u.email as u_email, u.full_name as u_full_name, u.is_super_admin as u_is_super_admin, u.created_at as u_created_at,
+                m.id as merch_id, m.slug as merch_slug
+         FROM merchant_memberships mm
+         JOIN users u ON mm.user_id = u.id
+         JOIN merchants m ON mm.merchant_id = m.id
+         WHERE (m.slug = $1 OR m.id::text = $1)
+         ORDER BY mm.created_at DESC`,
+        [merchantId],
+      );
+      if (res && res.rows && res.rows.length > 0) {
+        return res.rows.map((row: any) => ({
+          id: row.mem_id,
+          userId: row.user_id,
+          merchantId: row.merch_slug || row.merch_id,
+          role: row.role,
+          isActive: Boolean(row.is_active),
+          createdAt: new Date(row.mem_created_at),
+          user: {
+            id: row.u_id,
+            email: row.u_email,
+            fullName: row.u_full_name,
+            isSuperAdmin: Boolean(row.u_is_super_admin),
+          },
+        }));
       }
+      return [];
     }
     return this.memberships
       .filter((m) => m.membership.merchantId === merchantId || m.merchant.slug === merchantId)
@@ -674,25 +650,21 @@ export class InMemoryMembershipRepository implements IMembershipRepository {
       );
 
     if (this.dbService && !this.dbService.isMemoryMode) {
-      try {
-        const res = await this.dbService.query(
-          `DELETE FROM merchant_memberships
-           WHERE id::text = $1
-             AND merchant_id IN (SELECT id FROM merchants WHERE slug = $2 OR id::text = $2)
-           RETURNING id`,
-          [membershipId, merchantId],
-        );
-        if (!res || !res.rows || res.rows.length === 0) {
-          return false;
-        }
-        const idx = scopedIndex();
-        if (idx >= 0) {
-          this.memberships.splice(idx, 1);
-        }
-        return true;
-      } catch (err) {
-        // Fallback
+      const res = await this.dbService.query(
+        `DELETE FROM merchant_memberships
+         WHERE id::text = $1
+           AND merchant_id IN (SELECT id FROM merchants WHERE slug = $2 OR id::text = $2)
+         RETURNING id`,
+        [membershipId, merchantId],
+      );
+      if (!res || !res.rows || res.rows.length === 0) {
+        return false;
       }
+      const idx = scopedIndex();
+      if (idx >= 0) {
+        this.memberships.splice(idx, 1);
+      }
+      return true;
     }
     const idx = scopedIndex();
     if (idx < 0) {
@@ -704,52 +676,53 @@ export class InMemoryMembershipRepository implements IMembershipRepository {
 
   async save(membership: MerchantMembership): Promise<MerchantMembership> {
     if (this.dbService && !this.dbService.isMemoryMode) {
-      try {
-        let userUuid = membership.userId;
-        const isUserUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userUuid);
-        if (!isUserUuid) {
-          const uRes = await this.dbService.query(
-            'SELECT id FROM users WHERE id::text = $1',
-            [userUuid],
-          );
-          if (uRes.rows.length > 0) {
-            userUuid = uRes.rows[0].id;
-          }
+      let userUuid = membership.userId;
+      const isUserUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userUuid);
+      if (!isUserUuid) {
+        const uRes = await this.dbService.query(
+          'SELECT id FROM users WHERE id::text = $1',
+          [userUuid],
+        );
+        if (uRes.rows.length > 0) {
+          userUuid = uRes.rows[0].id;
         }
-        const isResolvedUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userUuid);
-        if (isResolvedUuid) {
-          const mRes = await this.dbService.query(
-            'SELECT id FROM merchants WHERE slug = $1 OR id::text = $1',
-            [membership.merchantId],
-          );
-          if (mRes.rows.length > 0) {
-            const merchantUuid = mRes.rows[0].id;
-            const insertRes = await this.dbService.query(
-              `INSERT INTO merchant_memberships (user_id, merchant_id, role, is_active)
-               VALUES ($1, $2, $3, $4)
-               ON CONFLICT (user_id, merchant_id) DO UPDATE SET role = $3, is_active = $4
-               RETURNING id, created_at`,
-              [userUuid, merchantUuid, membership.role, membership.isActive],
-            );
-            if (insertRes && insertRes.rows && insertRes.rows.length > 0) {
-              const row = insertRes.rows[0];
-              const savedMem = new MerchantMembership({
-                id: row.id,
-                userId: membership.userId,
-                merchantId: membership.merchantId,
-                role: membership.role,
-                isActive: membership.isActive,
-                createdAt: new Date(row.created_at),
-              });
-              (savedMem as any).userEmail = (membership as any).userEmail;
-              (savedMem as any).userFullName = (membership as any).userFullName;
-              membership = savedMem;
-            }
-          }
-        }
-      } catch (err) {
-        // Fallback
       }
+      const isResolvedUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userUuid);
+      if (!isResolvedUuid) {
+        // Skipping the write and acknowledging success would only persist the
+        // membership in memory while the database stays untouched.
+        throw new Error(`Membership write aborted: user '${membership.userId}' was not found in the database.`);
+      }
+      const mRes = await this.dbService.query(
+        'SELECT id FROM merchants WHERE slug = $1 OR id::text = $1',
+        [membership.merchantId],
+      );
+      if (!mRes || !mRes.rows || mRes.rows.length === 0) {
+        throw new Error(`Membership write aborted: tenant '${membership.merchantId}' was not found in the database.`);
+      }
+      const merchantUuid = mRes.rows[0].id;
+      const insertRes = await this.dbService.query(
+        `INSERT INTO merchant_memberships (user_id, merchant_id, role, is_active)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (user_id, merchant_id) DO UPDATE SET role = $3, is_active = $4
+         RETURNING id, created_at`,
+        [userUuid, merchantUuid, membership.role, membership.isActive],
+      );
+      if (!insertRes || !insertRes.rows || insertRes.rows.length === 0) {
+        throw new Error('Membership INSERT returned no rows; the membership was not persisted.');
+      }
+      const row = insertRes.rows[0];
+      const savedMem = new MerchantMembership({
+        id: row.id,
+        userId: membership.userId,
+        merchantId: membership.merchantId,
+        role: membership.role,
+        isActive: membership.isActive,
+        createdAt: new Date(row.created_at),
+      });
+      (savedMem as any).userEmail = (membership as any).userEmail;
+      (savedMem as any).userFullName = (membership as any).userFullName;
+      membership = savedMem;
     }
     const userEmail = (membership as any).userEmail;
     const userFullName = (membership as any).userFullName;
@@ -778,6 +751,39 @@ export class InMemoryMembershipRepository implements IMembershipRepository {
   }
 }
 
+/** Shared metrics computation so database and memory mode can never drift apart. */
+function buildMetrics(tenantTransfers: Transfer[]): MerchantMetrics {
+  const claimedTransfers = tenantTransfers.filter((t) => t.isClaimed());
+  const pendingTransfers = tenantTransfers.filter((t) => t.isPending());
+
+  const totalCollectedToday = claimedTransfers.reduce((sum, t) => sum + t.amount, 0);
+  const countValidatedToday = claimedTransfers.length;
+  const pendingUnclaimedCount = pendingTransfers.length;
+
+  const uniqueCashiers = new Set(
+    claimedTransfers.map((t) => t.claimedByUserId).filter((id): id is string => Boolean(id)),
+  );
+
+  const recentTransfers = tenantTransfers.slice(0, 10).map((t) => ({
+    id: t.id || t.operationId,
+    operationId: t.operationId,
+    amount: t.amount,
+    payerName: t.payerName,
+    payerBank: t.payerBank,
+    status: t.status,
+    claimedAt: t.claimedAt ? t.claimedAt.toISOString() : null,
+    operationDate: t.operationDate,
+  }));
+
+  return {
+    totalCollectedToday,
+    countValidatedToday,
+    pendingUnclaimedCount,
+    activeCashiersCount: uniqueCashiers.size || 1,
+    recentTransfers,
+  };
+}
+
 @Injectable()
 export class InMemoryTransferRepository implements ITransferRepository {
   constructor(@Optional() private readonly dbService?: DatabaseService) {}
@@ -785,69 +791,167 @@ export class InMemoryTransferRepository implements ITransferRepository {
 
   async save(transfer: Transfer): Promise<Transfer> {
     if (this.dbService && !this.dbService.isMemoryMode) {
-      try {
-        const mRes = await this.dbService.query(
-          'SELECT id FROM merchants WHERE slug = $1 OR id::text = $1',
-          [transfer.tenantId],
+      const mRes = await this.dbService.query(
+        'SELECT id FROM merchants WHERE slug = $1 OR id::text = $1',
+        [transfer.tenantId],
+      );
+      if (!mRes || !mRes.rows || mRes.rows.length === 0) {
+        throw new Error(`Transfer INSERT aborted: tenant '${transfer.tenantId}' was not found in the database.`);
+      }
+      const tenantUuid = mRes.rows[0].id;
+      let claimedByUuid: string | null = null;
+      if (transfer.claimedByUserId) {
+        const uRes = await this.dbService.query(
+          'SELECT id FROM users WHERE id::text = $1 OR email = $1',
+          [transfer.claimedByUserId],
         );
-        if (mRes.rows.length > 0) {
-          const tenantUuid = mRes.rows[0].id;
-          let claimedByUuid: string | null = null;
-          if (transfer.claimedByUserId) {
-            const uRes = await this.dbService.query(
-              'SELECT id FROM users WHERE id::text = $1 OR email = $1',
-              [transfer.claimedByUserId],
-            );
-            if (uRes.rows.length > 0) {
-              claimedByUuid = uRes.rows[0].id;
-            }
-          }
+        if (uRes.rows.length > 0) {
+          claimedByUuid = uRes.rows[0].id;
+        }
+      }
 
-          const res = await this.dbService.query<TransferRow>(
-            `INSERT INTO transfers (
-               tenant_id, operation_id, receipt_number, operation_date,
-               payer_name, payer_account, payer_bank, currency, amount,
-               credit_account, concept, raw_body, status, claimed_at,
-               claimed_by_user_id, created_at
-             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-             ON CONFLICT (tenant_id, operation_id) DO UPDATE SET
-               receipt_number = $3,
-               payer_name = $5,
-               payer_account = $6,
-               payer_bank = $7,
-               currency = $8,
-               amount = $9,
-               credit_account = $10,
-               concept = $11,
-               raw_body = $12,
-               status = $13,
-               claimed_at = $14,
-               claimed_by_user_id = $15
-             RETURNING *`,
-            [
-              tenantUuid,
-              transfer.operationId,
-              transfer.receiptNumber || null,
-              transfer.operationDate,
-              transfer.payerName,
-              transfer.payerAccount || null,
-              transfer.payerBank || null,
-              transfer.currency || 'PYG',
-              transfer.amount,
-              transfer.creditAccount || null,
-              transfer.concept || null,
-              transfer.rawBody || null,
-              transfer.status,
-              transfer.claimedAt || null,
-              claimedByUuid,
-              transfer.createdAt || new Date(),
-            ],
-          );
-          if (res && res.rows && res.rows.length > 0) {
-            const row = res.rows[0];
-            const saved = new Transfer({
+      const res = await this.dbService.query<TransferRow>(
+        `INSERT INTO transfers (
+           tenant_id, operation_id, receipt_number, operation_date,
+           payer_name, payer_account, payer_bank, currency, amount,
+           credit_account, concept, raw_body, status, claimed_at,
+           claimed_by_user_id, created_at
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+         ON CONFLICT (tenant_id, operation_id) DO UPDATE SET
+           receipt_number = $3,
+           payer_name = $5,
+           payer_account = $6,
+           payer_bank = $7,
+           currency = $8,
+           amount = $9,
+           credit_account = $10,
+           concept = $11,
+           raw_body = $12,
+           status = $13,
+           claimed_at = $14,
+           claimed_by_user_id = $15
+         RETURNING *`,
+        [
+          tenantUuid,
+          transfer.operationId,
+          transfer.receiptNumber || null,
+          transfer.operationDate,
+          transfer.payerName,
+          transfer.payerAccount || null,
+          transfer.payerBank || null,
+          transfer.currency || 'PYG',
+          transfer.amount,
+          transfer.creditAccount || null,
+          transfer.concept || null,
+          transfer.rawBody || null,
+          transfer.status,
+          transfer.claimedAt || null,
+          claimedByUuid,
+          transfer.createdAt || new Date(),
+        ],
+      );
+      if (!res || !res.rows || res.rows.length === 0) {
+        throw new Error('Transfer upsert returned no rows; the transfer was not persisted.');
+      }
+      const row = res.rows[0];
+      const saved = new Transfer({
+        id: row.id,
+        tenantId: transfer.tenantId,
+        operationId: row.operation_id,
+        receiptNumber: row.receipt_number || undefined,
+        operationDate: row.operation_date,
+        payerName: row.payer_name,
+        payerAccount: row.payer_account || undefined,
+        payerBank: row.payer_bank || undefined,
+        currency: row.currency,
+        amount: row.amount,
+        creditAccount: row.credit_account || undefined,
+        concept: row.concept || undefined,
+        rawBody: row.raw_body || undefined,
+        status: row.status as any,
+        claimedAt: row.claimed_at ? new Date(row.claimed_at) : null,
+        claimedByUserId: row.claimed_by_user_id,
+        createdAt: new Date(row.created_at),
+      });
+      const idx = this.transfers.findIndex(
+        (t) => t.tenantId === transfer.tenantId && t.operationId === transfer.operationId,
+      );
+      if (idx >= 0) this.transfers[idx] = saved;
+      else this.transfers.unshift(saved);
+      return saved;
+    }
+    const idx = this.transfers.findIndex(
+      (t) => t.tenantId === transfer.tenantId && t.operationId === transfer.operationId,
+    );
+    if (idx >= 0) this.transfers[idx] = transfer;
+    else this.transfers.unshift(transfer);
+    return transfer;
+  }
+
+  async findByTenantAndOperationId(tenantId: string, operationId: string): Promise<Transfer | null> {
+    if (this.dbService && !this.dbService.isMemoryMode) {
+      const res = await this.dbService.query<TransferRow>(
+        `SELECT t.* FROM transfers t
+         JOIN merchants m ON t.tenant_id = m.id
+         WHERE (m.slug = $1 OR m.id::text = $1) AND t.operation_id = $2`,
+        [tenantId, operationId],
+      );
+      if (res && res.rows && res.rows.length > 0) {
+        const row = res.rows[0];
+        return new Transfer({
+          id: row.id,
+          tenantId,
+          operationId: row.operation_id,
+          receiptNumber: row.receipt_number || undefined,
+          operationDate: row.operation_date,
+          payerName: row.payer_name,
+          payerAccount: row.payer_account || undefined,
+          payerBank: row.payer_bank || undefined,
+          currency: row.currency,
+          amount: row.amount,
+          creditAccount: row.credit_account || undefined,
+          concept: row.concept || undefined,
+          rawBody: row.raw_body || undefined,
+          status: row.status as any,
+          claimedAt: row.claimed_at ? new Date(row.claimed_at) : null,
+          claimedByUserId: row.claimed_by_user_id,
+          createdAt: new Date(row.created_at),
+        });
+      }
+      return null;
+    }
+    return (
+      this.transfers.find((t) => t.tenantId === tenantId && t.operationId === operationId) || null
+    );
+  }
+
+  async findPendingByAmountAndPayer(
+    tenantId: string,
+    amount: number,
+    payerFilter?: string,
+  ): Promise<Transfer[]> {
+    if (this.dbService && !this.dbService.isMemoryMode) {
+      const params: any[] = [tenantId, amount];
+      let query = `
+        SELECT t.* FROM transfers t
+        JOIN merchants m ON t.tenant_id = m.id
+        WHERE (m.slug = $1 OR m.id::text = $1)
+          AND t.amount = $2
+          AND t.status = 'pending'
+      `;
+      if (payerFilter && payerFilter.trim().length > 0) {
+        params.push(`%${payerFilter.trim()}%`);
+        query += ` AND t.payer_name ILIKE $${params.length}`;
+      }
+      query += ` ORDER BY t.created_at DESC`;
+
+      const res = await this.dbService.query<TransferRow>(query, params);
+      if (res && res.rows && res.rows.length > 0) {
+        return res.rows.map(
+          (row) =>
+            new Transfer({
               id: row.id,
-              tenantId: transfer.tenantId,
+              tenantId,
               operationId: row.operation_id,
               receiptNumber: row.receipt_number || undefined,
               operationDate: row.operation_date,
@@ -863,116 +967,10 @@ export class InMemoryTransferRepository implements ITransferRepository {
               claimedAt: row.claimed_at ? new Date(row.claimed_at) : null,
               claimedByUserId: row.claimed_by_user_id,
               createdAt: new Date(row.created_at),
-            });
-            const idx = this.transfers.findIndex(
-              (t) => t.tenantId === transfer.tenantId && t.operationId === transfer.operationId,
-            );
-            if (idx >= 0) this.transfers[idx] = saved;
-            else this.transfers.unshift(saved);
-            return saved;
-          }
-        }
-      } catch (err) {
-        // Fallback
-      }
-    }
-    const idx = this.transfers.findIndex(
-      (t) => t.tenantId === transfer.tenantId && t.operationId === transfer.operationId,
-    );
-    if (idx >= 0) this.transfers[idx] = transfer;
-    else this.transfers.unshift(transfer);
-    return transfer;
-  }
-
-  async findByTenantAndOperationId(tenantId: string, operationId: string): Promise<Transfer | null> {
-    if (this.dbService && !this.dbService.isMemoryMode) {
-      try {
-        const res = await this.dbService.query<TransferRow>(
-          `SELECT t.* FROM transfers t
-           JOIN merchants m ON t.tenant_id = m.id
-           WHERE (m.slug = $1 OR m.id::text = $1) AND t.operation_id = $2`,
-          [tenantId, operationId],
+            }),
         );
-        if (res && res.rows && res.rows.length > 0) {
-          const row = res.rows[0];
-          return new Transfer({
-            id: row.id,
-            tenantId,
-            operationId: row.operation_id,
-            receiptNumber: row.receipt_number || undefined,
-            operationDate: row.operation_date,
-            payerName: row.payer_name,
-            payerAccount: row.payer_account || undefined,
-            payerBank: row.payer_bank || undefined,
-            currency: row.currency,
-            amount: row.amount,
-            creditAccount: row.credit_account || undefined,
-            concept: row.concept || undefined,
-            rawBody: row.raw_body || undefined,
-            status: row.status as any,
-            claimedAt: row.claimed_at ? new Date(row.claimed_at) : null,
-            claimedByUserId: row.claimed_by_user_id,
-            createdAt: new Date(row.created_at),
-          });
-        }
-      } catch (err) {
-        // Fallback
       }
-    }
-    return (
-      this.transfers.find((t) => t.tenantId === tenantId && t.operationId === operationId) || null
-    );
-  }
-
-  async findPendingByAmountAndPayer(
-    tenantId: string,
-    amount: number,
-    payerFilter?: string,
-  ): Promise<Transfer[]> {
-    if (this.dbService && !this.dbService.isMemoryMode) {
-      try {
-        const params: any[] = [tenantId, amount];
-        let query = `
-          SELECT t.* FROM transfers t
-          JOIN merchants m ON t.tenant_id = m.id
-          WHERE (m.slug = $1 OR m.id::text = $1)
-            AND t.amount = $2
-            AND t.status = 'pending'
-        `;
-        if (payerFilter && payerFilter.trim().length > 0) {
-          params.push(`%${payerFilter.trim()}%`);
-          query += ` AND t.payer_name ILIKE $${params.length}`;
-        }
-        query += ` ORDER BY t.created_at DESC`;
-
-        const res = await this.dbService.query<TransferRow>(query, params);
-        if (res && res.rows && res.rows.length > 0) {
-          return res.rows.map(
-            (row) =>
-              new Transfer({
-                id: row.id,
-                tenantId,
-                operationId: row.operation_id,
-                receiptNumber: row.receipt_number || undefined,
-                operationDate: row.operation_date,
-                payerName: row.payer_name,
-                payerAccount: row.payer_account || undefined,
-                payerBank: row.payer_bank || undefined,
-                currency: row.currency,
-                amount: row.amount,
-                creditAccount: row.credit_account || undefined,
-                concept: row.concept || undefined,
-                rawBody: row.raw_body || undefined,
-                status: row.status as any,
-                claimedAt: row.claimed_at ? new Date(row.claimed_at) : null,
-                claimedByUserId: row.claimed_by_user_id,
-                createdAt: new Date(row.created_at),
-              }),
-          );
-        }
-      } catch (err) {
-        // Fallback
-      }
+      return [];
     }
     return this.transfers.filter((t) => {
       if (t.tenantId !== tenantId) return false;
@@ -983,39 +981,36 @@ export class InMemoryTransferRepository implements ITransferRepository {
 
   async findById(tenantId: string, id: string): Promise<Transfer | null> {
     if (this.dbService && !this.dbService.isMemoryMode) {
-      try {
-        const res = await this.dbService.query<TransferRow>(
-          `SELECT t.* FROM transfers t
-           JOIN merchants m ON t.tenant_id = m.id
-           WHERE (m.slug = $1 OR m.id::text = $1)
-             AND (t.id::text = $2 OR t.operation_id = $2)`,
-          [tenantId, id],
-        );
-        if (res && res.rows && res.rows.length > 0) {
-          const row = res.rows[0];
-          return new Transfer({
-            id: row.id,
-            tenantId,
-            operationId: row.operation_id,
-            receiptNumber: row.receipt_number || undefined,
-            operationDate: row.operation_date,
-            payerName: row.payer_name,
-            payerAccount: row.payer_account || undefined,
-            payerBank: row.payer_bank || undefined,
-            currency: row.currency,
-            amount: row.amount,
-            creditAccount: row.credit_account || undefined,
-            concept: row.concept || undefined,
-            rawBody: row.raw_body || undefined,
-            status: row.status as any,
-            claimedAt: row.claimed_at ? new Date(row.claimed_at) : null,
-            claimedByUserId: row.claimed_by_user_id,
-            createdAt: new Date(row.created_at),
-          });
-        }
-      } catch (err) {
-        // Fallback
+      const res = await this.dbService.query<TransferRow>(
+        `SELECT t.* FROM transfers t
+         JOIN merchants m ON t.tenant_id = m.id
+         WHERE (m.slug = $1 OR m.id::text = $1)
+           AND (t.id::text = $2 OR t.operation_id = $2)`,
+        [tenantId, id],
+      );
+      if (res && res.rows && res.rows.length > 0) {
+        const row = res.rows[0];
+        return new Transfer({
+          id: row.id,
+          tenantId,
+          operationId: row.operation_id,
+          receiptNumber: row.receipt_number || undefined,
+          operationDate: row.operation_date,
+          payerName: row.payer_name,
+          payerAccount: row.payer_account || undefined,
+          payerBank: row.payer_bank || undefined,
+          currency: row.currency,
+          amount: row.amount,
+          creditAccount: row.credit_account || undefined,
+          concept: row.concept || undefined,
+          rawBody: row.raw_body || undefined,
+          status: row.status as any,
+          claimedAt: row.claimed_at ? new Date(row.claimed_at) : null,
+          claimedByUserId: row.claimed_by_user_id,
+          createdAt: new Date(row.created_at),
+        });
       }
+      return null;
     }
     return (
       this.transfers.find(
@@ -1031,40 +1026,48 @@ export class InMemoryTransferRepository implements ITransferRepository {
     claimTime: Date,
   ): Promise<boolean> {
     if (this.dbService && !this.dbService.isMemoryMode) {
-      try {
-        let userUuid: string | null = null;
-        const uRes = await this.dbService.query(
-          'SELECT id FROM users WHERE id::text = $1 OR email = $1',
-          [cashierUserId],
-        );
-        if (uRes.rows.length > 0) {
-          userUuid = uRes.rows[0].id;
-        }
-
-        const res = await this.dbService.query(
-          `UPDATE transfers t
-           SET status = 'claimed',
-               claimed_at = $3,
-               claimed_by_user_id = $4
-           FROM merchants m
-           WHERE t.tenant_id = m.id
-             AND (m.slug = $1 OR m.id::text = $1)
-             AND (t.id::text = $2 OR t.operation_id = $2)
-             AND t.status = 'pending'`,
-          [tenantId, transferId, claimTime, userUuid],
-        );
-        if (res && (res.rowCount ?? 0) > 0) {
-          const item = this.transfers.find(
-            (t) => t.tenantId === tenantId && (t.id === transferId || t.operationId === transferId),
-          );
-          if (item) {
-            item.claim(cashierUserId, claimTime);
-          }
-          return true;
-        }
-      } catch (err) {
-        // Fallback
+      const uRes = await this.dbService.query(
+        'SELECT id FROM users WHERE id::text = $1 OR email = $1',
+        [cashierUserId],
+      );
+      if (!uRes || !uRes.rows || uRes.rows.length === 0) {
+        // A claim without a resolvable cashier would persist an unattributable
+        // financial mutation, so it fails before any row is touched.
+        throw new Error(`Claim aborted: cashier '${cashierUserId}' was not found in the database.`);
       }
+      const userUuid = uRes.rows[0].id;
+
+      const res = await this.dbService.query(
+        `UPDATE transfers t
+         SET status = 'claimed',
+             claimed_at = $3,
+             claimed_by_user_id = $4
+         FROM merchants m
+         WHERE t.tenant_id = m.id
+           AND (m.slug = $1 OR m.id::text = $1)
+           AND (t.id::text = $2 OR t.operation_id = $2)
+           AND t.status = 'pending'
+           AND t.created_at >= $5`,
+        [
+          tenantId,
+          transferId,
+          claimTime,
+          userUuid,
+          // Inclusive bound: a transfer created exactly 45m before claimTime is
+          // still claimable; anything older is outside the anti-replay window.
+          new Date(claimTime.getTime() - 45 * 60 * 1000),
+        ],
+      );
+      if (res && (res.rowCount ?? 0) > 0) {
+        const item = this.transfers.find(
+          (t) => t.tenantId === tenantId && (t.id === transferId || t.operationId === transferId),
+        );
+        if (item) {
+          item.claim(cashierUserId, claimTime);
+        }
+        return true;
+      }
+      return false;
     }
     const transfer = this.transfers.find(
       (t) => t.tenantId === tenantId && (t.id === transferId || t.operationId === transferId),
@@ -1076,102 +1079,40 @@ export class InMemoryTransferRepository implements ITransferRepository {
 
   async getMetricsByTenant(tenantId: string): Promise<MerchantMetrics> {
     if (this.dbService && !this.dbService.isMemoryMode) {
-      try {
-        const res = await this.dbService.query<TransferRow>(
-          `SELECT t.* FROM transfers t
-           JOIN merchants m ON t.tenant_id = m.id
-           WHERE (m.slug = $1 OR m.id::text = $1)
-           ORDER BY t.created_at DESC`,
-          [tenantId],
-        );
-        if (res && res.rows) {
-          const tenantTransfers = res.rows.map(
-            (row) =>
-              new Transfer({
-                id: row.id,
-                tenantId,
-                operationId: row.operation_id,
-                receiptNumber: row.receipt_number || undefined,
-                operationDate: row.operation_date,
-                payerName: row.payer_name,
-                payerAccount: row.payer_account || undefined,
-                payerBank: row.payer_bank || undefined,
-                currency: row.currency,
-                amount: row.amount,
-                creditAccount: row.credit_account || undefined,
-                concept: row.concept || undefined,
-                rawBody: row.raw_body || undefined,
-                status: row.status as any,
-                claimedAt: row.claimed_at ? new Date(row.claimed_at) : null,
-                claimedByUserId: row.claimed_by_user_id,
-                createdAt: new Date(row.created_at),
-              }),
-          );
-
-          const claimedTransfers = tenantTransfers.filter((t) => t.isClaimed());
-          const pendingTransfers = tenantTransfers.filter((t) => t.isPending());
-
-          const totalCollectedToday = claimedTransfers.reduce((sum, t) => sum + t.amount, 0);
-          const countValidatedToday = claimedTransfers.length;
-          const pendingUnclaimedCount = pendingTransfers.length;
-
-          const uniqueCashiers = new Set(
-            claimedTransfers.map((t) => t.claimedByUserId).filter((id): id is string => Boolean(id)),
-          );
-
-          const recentTransfers = tenantTransfers.slice(0, 10).map((t) => ({
-            id: t.id || t.operationId,
-            operationId: t.operationId,
-            amount: t.amount,
-            payerName: t.payerName,
-            payerBank: t.payerBank,
-            status: t.status,
-            claimedAt: t.claimedAt ? t.claimedAt.toISOString() : null,
-            operationDate: t.operationDate,
-          }));
-
-          return {
-            totalCollectedToday,
-            countValidatedToday,
-            pendingUnclaimedCount,
-            activeCashiersCount: uniqueCashiers.size || 1,
-            recentTransfers,
-          };
-        }
-      } catch (err) {
-        // Fallback
-      }
+      const res = await this.dbService.query<TransferRow>(
+        `SELECT t.* FROM transfers t
+         JOIN merchants m ON t.tenant_id = m.id
+         WHERE (m.slug = $1 OR m.id::text = $1)
+         ORDER BY t.created_at DESC`,
+        [tenantId],
+      );
+      const rows = res?.rows ?? [];
+      return buildMetrics(
+        rows.map(
+          (row) =>
+            new Transfer({
+              id: row.id,
+              tenantId,
+              operationId: row.operation_id,
+              receiptNumber: row.receipt_number || undefined,
+              operationDate: row.operation_date,
+              payerName: row.payer_name,
+              payerAccount: row.payer_account || undefined,
+              payerBank: row.payer_bank || undefined,
+              currency: row.currency,
+              amount: row.amount,
+              creditAccount: row.credit_account || undefined,
+              concept: row.concept || undefined,
+              rawBody: row.raw_body || undefined,
+              status: row.status as any,
+              claimedAt: row.claimed_at ? new Date(row.claimed_at) : null,
+              claimedByUserId: row.claimed_by_user_id,
+              createdAt: new Date(row.created_at),
+            }),
+        ),
+      );
     }
-    const tenantTransfers = this.transfers.filter((t) => t.tenantId === tenantId);
-    const claimedTransfers = tenantTransfers.filter((t) => t.isClaimed());
-    const pendingTransfers = tenantTransfers.filter((t) => t.isPending());
-
-    const totalCollectedToday = claimedTransfers.reduce((sum, t) => sum + t.amount, 0);
-    const countValidatedToday = claimedTransfers.length;
-    const pendingUnclaimedCount = pendingTransfers.length;
-
-    const uniqueCashiers = new Set(
-      claimedTransfers.map((t) => t.claimedByUserId).filter((id): id is string => Boolean(id)),
-    );
-
-    const recentTransfers = tenantTransfers.slice(0, 10).map((t) => ({
-      id: t.id || t.operationId,
-      operationId: t.operationId,
-      amount: t.amount,
-      payerName: t.payerName,
-      payerBank: t.payerBank,
-      status: t.status,
-      claimedAt: t.claimedAt ? t.claimedAt.toISOString() : null,
-      operationDate: t.operationDate,
-    }));
-
-    return {
-      totalCollectedToday,
-      countValidatedToday,
-      pendingUnclaimedCount,
-      activeCashiersCount: uniqueCashiers.size || 1,
-      recentTransfers,
-    };
+    return buildMetrics(this.transfers.filter((t) => t.tenantId === tenantId));
   }
 }
 
@@ -1182,14 +1123,43 @@ export class InMemoryMerchantRequestRepository implements IMerchantRequestReposi
 
   async save(request: MerchantRequest): Promise<MerchantRequest> {
     if (this.dbService && !this.dbService.isMemoryMode) {
-      try {
-        await this.dbService.query(
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        request.id ?? '',
+      );
+      if (isUuid) {
+        // A persisted request is updated in place so an approval really flips
+        // the stored row instead of inserting a duplicate that leaves the
+        // original still pending.
+        const res = await this.dbService.query(
+          `UPDATE merchant_requests
+           SET business_name = $2, owner_name = $3, email = $4, phone = $5, city = $6, status = $7
+           WHERE id::text = $1
+           RETURNING id`,
+          [
+            request.id,
+            request.businessName,
+            request.ownerName,
+            request.email,
+            request.phone,
+            request.city,
+            request.status,
+          ],
+        );
+        if (!res || !res.rows || res.rows.length === 0) {
+          throw new Error('Merchant request UPDATE returned no rows; the request was not persisted.');
+        }
+      } else {
+        const res = await this.dbService.query(
           `INSERT INTO merchant_requests (business_name, owner_name, email, phone, city, status, created_at)
-           VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
+           VALUES ($1, $2, $3, $4, $5, $6, NOW())
+           RETURNING id`,
           [request.businessName, request.ownerName, request.email, request.phone, request.city, request.status],
         );
-      } catch (err) {
-        // Fallback
+        if (!res || !res.rows || res.rows.length === 0) {
+          throw new Error('Merchant request INSERT returned no rows; the request was not persisted.');
+        }
+        // Hand back the persisted id so callers can read the row they just wrote.
+        (request as any).id = res.rows[0].id;
       }
     }
     const idx = this.requests.findIndex((r) => r.id === request.id);
@@ -1200,83 +1170,74 @@ export class InMemoryMerchantRequestRepository implements IMerchantRequestReposi
 
   async findById(id: string): Promise<MerchantRequest | null> {
     if (this.dbService && !this.dbService.isMemoryMode) {
-      try {
-        const res = await this.dbService.query(
-          'SELECT * FROM merchant_requests WHERE id::text = $1',
-          [id],
-        );
-        if (res && res.rows && res.rows.length > 0) {
-          const r = res.rows[0];
-          return new MerchantRequest({
-            id: r.id,
-            businessName: r.business_name,
-            ownerName: r.owner_name,
-            email: r.email,
-            phone: r.phone,
-            city: r.city,
-            status: r.status,
-            createdAt: new Date(r.created_at),
-          });
-        }
-      } catch (err) {
-        // Fallback
+      const res = await this.dbService.query(
+        'SELECT * FROM merchant_requests WHERE id::text = $1',
+        [id],
+      );
+      if (res && res.rows && res.rows.length > 0) {
+        const r = res.rows[0];
+        return new MerchantRequest({
+          id: r.id,
+          businessName: r.business_name,
+          ownerName: r.owner_name,
+          email: r.email,
+          phone: r.phone,
+          city: r.city,
+          status: r.status,
+          createdAt: new Date(r.created_at),
+        });
       }
+      return null;
     }
     return this.requests.find((r) => r.id === id) || null;
   }
 
   async findPending(): Promise<MerchantRequest[]> {
     if (this.dbService && !this.dbService.isMemoryMode) {
-      try {
-        const res = await this.dbService.query(
-          "SELECT * FROM merchant_requests WHERE status = 'requested' ORDER BY created_at DESC",
+      const res = await this.dbService.query(
+        "SELECT * FROM merchant_requests WHERE status = 'requested' ORDER BY created_at DESC",
+      );
+      if (res && res.rows && res.rows.length > 0) {
+        return res.rows.map(
+          (r: any) =>
+            new MerchantRequest({
+              id: r.id,
+              businessName: r.business_name,
+              ownerName: r.owner_name,
+              email: r.email,
+              phone: r.phone,
+              city: r.city,
+              status: r.status,
+              createdAt: new Date(r.created_at),
+            }),
         );
-        if (res && res.rows && res.rows.length > 0) {
-          return res.rows.map(
-            (r: any) =>
-              new MerchantRequest({
-                id: r.id,
-                businessName: r.business_name,
-                ownerName: r.owner_name,
-                email: r.email,
-                phone: r.phone,
-                city: r.city,
-                status: r.status,
-                createdAt: new Date(r.created_at),
-              }),
-          );
-        }
-      } catch (err) {
-        // Fallback
       }
+      return [];
     }
     return this.requests.filter((r) => r.isPending());
   }
 
   async findAll(): Promise<MerchantRequest[]> {
     if (this.dbService && !this.dbService.isMemoryMode) {
-      try {
-        const res = await this.dbService.query(
-          'SELECT * FROM merchant_requests ORDER BY created_at DESC',
+      const res = await this.dbService.query(
+        'SELECT * FROM merchant_requests ORDER BY created_at DESC',
+      );
+      if (res && res.rows && res.rows.length > 0) {
+        return res.rows.map(
+          (r: any) =>
+            new MerchantRequest({
+              id: r.id,
+              businessName: r.business_name,
+              ownerName: r.owner_name,
+              email: r.email,
+              phone: r.phone,
+              city: r.city,
+              status: r.status,
+              createdAt: new Date(r.created_at),
+            }),
         );
-        if (res && res.rows && res.rows.length > 0) {
-          return res.rows.map(
-            (r: any) =>
-              new MerchantRequest({
-                id: r.id,
-                businessName: r.business_name,
-                ownerName: r.owner_name,
-                email: r.email,
-                phone: r.phone,
-                city: r.city,
-                status: r.status,
-                createdAt: new Date(r.created_at),
-              }),
-          );
-        }
-      } catch (err) {
-        // Fallback
       }
+      return [];
     }
     return [...this.requests.values()];
   }
@@ -1323,22 +1284,22 @@ export class InMemorySubscriptionRepository implements ISubscriptionRepository {
 
   async save(subscription: Subscription): Promise<Subscription> {
     if (this.dbService && !this.dbService.isMemoryMode) {
-      try {
-        const mRes = await this.dbService.query(
-          'SELECT id FROM merchants WHERE slug = $1 OR id::text = $1',
-          [subscription.tenantId],
-        );
-        if (mRes.rows.length > 0) {
-          const merchantUuid = mRes.rows[0].id;
-          await this.dbService.query(
-            `INSERT INTO subscriptions (tenant_id, status, current_period_end, external_customer_id, external_subscription_id)
-             VALUES ($1, $2, $3, $4, $5)
-             ON CONFLICT (tenant_id) DO UPDATE SET status = $2, current_period_end = $3, external_customer_id = $4, external_subscription_id = $5`,
-            [merchantUuid, subscription.status, subscription.currentPeriodEnd, subscription.externalCustomerId, subscription.externalSubscriptionId],
-          );
-        }
-      } catch (err) {
-        // Fallback
+      const mRes = await this.dbService.query(
+        'SELECT id FROM merchants WHERE slug = $1 OR id::text = $1',
+        [subscription.tenantId],
+      );
+      if (!mRes || !mRes.rows || mRes.rows.length === 0) {
+        throw new Error(`Subscription write aborted: tenant '${subscription.tenantId}' was not found in the database.`);
+      }
+      const merchantUuid = mRes.rows[0].id;
+      const res = await this.dbService.query(
+        `INSERT INTO subscriptions (tenant_id, status, current_period_end, external_customer_id, external_subscription_id)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (tenant_id) DO UPDATE SET status = $2, current_period_end = $3, external_customer_id = $4, external_subscription_id = $5`,
+        [merchantUuid, subscription.status, subscription.currentPeriodEnd, subscription.externalCustomerId, subscription.externalSubscriptionId],
+      );
+      if ((res?.rowCount ?? 0) === 0) {
+        throw new Error('Subscription upsert affected no rows; the subscription was not persisted.');
       }
     }
     const idx = this.subs.findIndex((s) => s.tenantId === subscription.tenantId);
@@ -1349,55 +1310,49 @@ export class InMemorySubscriptionRepository implements ISubscriptionRepository {
 
   async findByTenantId(tenantId: string): Promise<Subscription | null> {
     if (this.dbService && !this.dbService.isMemoryMode) {
-      try {
-        const res = await this.dbService.query<SubscriptionRow>(
-          `SELECT s.* FROM subscriptions s
-           JOIN merchants m ON s.tenant_id = m.id
-           WHERE m.slug = $1 OR m.id::text = $1`,
-          [tenantId],
-        );
-        if (res && res.rows && res.rows.length > 0) {
-          const row = res.rows[0];
-          return new Subscription({
-            id: row.id,
-            tenantId,
-            status: row.status,
-            currentPeriodEnd: new Date(row.current_period_end),
-            externalCustomerId: row.external_customer_id,
-            externalSubscriptionId: row.external_subscription_id,
-          });
-        }
-      } catch (err) {
-        // Fallback
+      const res = await this.dbService.query<SubscriptionRow>(
+        `SELECT s.* FROM subscriptions s
+         JOIN merchants m ON s.tenant_id = m.id
+         WHERE m.slug = $1 OR m.id::text = $1`,
+        [tenantId],
+      );
+      if (res && res.rows && res.rows.length > 0) {
+        const row = res.rows[0];
+        return new Subscription({
+          id: row.id,
+          tenantId,
+          status: row.status,
+          currentPeriodEnd: new Date(row.current_period_end),
+          externalCustomerId: row.external_customer_id,
+          externalSubscriptionId: row.external_subscription_id,
+        });
       }
+      return null;
     }
     return this.subs.find((s) => s.tenantId === tenantId) || null;
   }
 
   async findAll(): Promise<Subscription[]> {
     if (this.dbService && !this.dbService.isMemoryMode) {
-      try {
-        const res = await this.dbService.query<any>(
-          `SELECT s.*, m.slug as merchant_slug, m.name as merchant_name
-           FROM subscriptions s
-           JOIN merchants m ON s.tenant_id = m.id`,
+      const res = await this.dbService.query<any>(
+        `SELECT s.*, m.slug as merchant_slug, m.name as merchant_name
+         FROM subscriptions s
+         JOIN merchants m ON s.tenant_id = m.id`,
+      );
+      if (res && res.rows && res.rows.length > 0) {
+        return res.rows.map(
+          (row: any) =>
+            new Subscription({
+              id: row.id,
+              tenantId: row.merchant_slug || row.tenant_id,
+              status: row.status,
+              currentPeriodEnd: new Date(row.current_period_end),
+              externalCustomerId: row.external_customer_id,
+              externalSubscriptionId: row.external_subscription_id,
+            }),
         );
-        if (res && res.rows && res.rows.length > 0) {
-          return res.rows.map(
-            (row: any) =>
-              new Subscription({
-                id: row.id,
-                tenantId: row.merchant_slug || row.tenant_id,
-                status: row.status,
-                currentPeriodEnd: new Date(row.current_period_end),
-                externalCustomerId: row.external_customer_id,
-                externalSubscriptionId: row.external_subscription_id,
-              }),
-          );
-        }
-      } catch (err) {
-        // Fallback
       }
+      return [];
     }
     return [...this.subs.values()];
   }
@@ -1410,15 +1365,14 @@ export class InMemoryPaymentReportRepository implements IPaymentReportRepository
 
   async save(report: PaymentReport): Promise<PaymentReport> {
     if (this.dbService && !this.dbService.isMemoryMode) {
-      try {
-        await this.dbService.query(
-          `INSERT INTO payment_reports (id, tenant_id, reported_by_user_id, payer_name, amount, status, matched_transfer_id, created_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-           ON CONFLICT (id) DO UPDATE SET status = $6, matched_transfer_id = $7`,
-          [report.id, report.tenantId, report.reportedByUserId, report.payerName, report.amount, report.status, report.matchedTransferId || null, report.createdAt],
-        );
-      } catch (err) {
-        // Fallback
+      const res = await this.dbService.query(
+        `INSERT INTO payment_reports (id, tenant_id, reported_by_user_id, payer_name, amount, status, matched_transfer_id, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (id) DO UPDATE SET status = $6, matched_transfer_id = $7`,
+        [report.id, report.tenantId, report.reportedByUserId, report.payerName, report.amount, report.status, report.matchedTransferId || null, report.createdAt],
+      );
+      if ((res?.rowCount ?? 0) === 0) {
+        throw new Error('Payment report upsert affected no rows; the report was not persisted.');
       }
     }
     const idx = this.reports.findIndex((r) => r.id === report.id);
@@ -1429,37 +1383,10 @@ export class InMemoryPaymentReportRepository implements IPaymentReportRepository
 
   async findAll(): Promise<PaymentReport[]> {
     if (this.dbService && !this.dbService.isMemoryMode) {
-      try {
-        const res = await this.dbService.query('SELECT * FROM payment_reports ORDER BY created_at DESC');
-        if (res && res.rows) {
-          return res.rows.map(
-            (r: any) =>
-              new PaymentReport({
-                id: r.id,
-                tenantId: r.tenant_id,
-                reportedByUserId: r.reported_by_user_id,
-                payerName: r.payer_name,
-                amount: r.amount,
-                status: r.status,
-                matchedTransferId: r.matched_transfer_id,
-                createdAt: new Date(r.created_at),
-              }),
-          );
-        }
-      } catch (err) {
-        // Fallback
-      }
-    }
-    return [...this.reports];
-  }
-
-  async findById(id: string): Promise<PaymentReport | null> {
-    if (this.dbService && !this.dbService.isMemoryMode) {
-      try {
-        const res = await this.dbService.query('SELECT * FROM payment_reports WHERE id = $1', [id]);
-        if (res && res.rows && res.rows.length > 0) {
-          const r = res.rows[0];
-          return new PaymentReport({
+      const res = await this.dbService.query('SELECT * FROM payment_reports ORDER BY created_at DESC');
+      return ((res?.rows ?? []) as any[]).map(
+        (r: any) =>
+          new PaymentReport({
             id: r.id,
             tenantId: r.tenant_id,
             reportedByUserId: r.reported_by_user_id,
@@ -1468,40 +1395,52 @@ export class InMemoryPaymentReportRepository implements IPaymentReportRepository
             status: r.status,
             matchedTransferId: r.matched_transfer_id,
             createdAt: new Date(r.created_at),
-          });
-        }
-      } catch (err) {
-        // Fallback
+          }),
+      );
+    }
+    return [...this.reports];
+  }
+
+  async findById(id: string): Promise<PaymentReport | null> {
+    if (this.dbService && !this.dbService.isMemoryMode) {
+      const res = await this.dbService.query('SELECT * FROM payment_reports WHERE id = $1', [id]);
+      if (res && res.rows && res.rows.length > 0) {
+        const r = res.rows[0];
+        return new PaymentReport({
+          id: r.id,
+          tenantId: r.tenant_id,
+          reportedByUserId: r.reported_by_user_id,
+          payerName: r.payer_name,
+          amount: r.amount,
+          status: r.status,
+          matchedTransferId: r.matched_transfer_id,
+          createdAt: new Date(r.created_at),
+        });
       }
+      return null;
     }
     return this.reports.find((r) => r.id === id) || null;
   }
 
   async findByTenantId(tenantId: string): Promise<PaymentReport[]> {
     if (this.dbService && !this.dbService.isMemoryMode) {
-      try {
-        const res = await this.dbService.query(
-          'SELECT * FROM payment_reports WHERE tenant_id = $1 ORDER BY created_at DESC',
-          [tenantId],
-        );
-        if (res && res.rows) {
-          return res.rows.map(
-            (r: any) =>
-              new PaymentReport({
-                id: r.id,
-                tenantId: r.tenant_id,
-                reportedByUserId: r.reported_by_user_id,
-                payerName: r.payer_name,
-                amount: r.amount,
-                status: r.status,
-                matchedTransferId: r.matched_transfer_id,
-                createdAt: new Date(r.created_at),
-              }),
-          );
-        }
-      } catch (err) {
-        // Fallback
-      }
+      const res = await this.dbService.query(
+        'SELECT * FROM payment_reports WHERE tenant_id = $1 ORDER BY created_at DESC',
+        [tenantId],
+      );
+      return ((res?.rows ?? []) as any[]).map(
+        (r: any) =>
+          new PaymentReport({
+            id: r.id,
+            tenantId: r.tenant_id,
+            reportedByUserId: r.reported_by_user_id,
+            payerName: r.payer_name,
+            amount: r.amount,
+            status: r.status,
+            matchedTransferId: r.matched_transfer_id,
+            createdAt: new Date(r.created_at),
+          }),
+      );
     }
     return this.reports.filter((r) => r.tenantId === tenantId);
   }

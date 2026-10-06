@@ -8,6 +8,7 @@ import {
   Post,
   Req,
   UseGuards,
+  ConflictException,
   NotFoundException,
   Param,
 } from '@nestjs/common';
@@ -180,14 +181,22 @@ export class SubscriptionController {
     if (matchedTr) {
       const transferIdToUpdate = matchedTr.id || matchedTr.operationId;
       const adminId = req.user?.id || 'admin';
-      
-      await this.transferRepo.updateClaimed('cajasegura-platform', transferIdToUpdate, adminId, new Date());
-      
+
+      const claimed = await this.transferRepo.updateClaimed('cajasegura-platform', transferIdToUpdate, adminId, new Date());
+      if (!claimed) {
+        // A claim that persisted nothing must never be reported as a
+        // successful credit (anti-replay: the transfer is no longer claimable).
+        throw new ConflictException('The matching transfer could not be claimed; payment was not credited.');
+      }
+
+      // Credit the subscription first: a report must only advertise a match
+      // after the subscription credit actually persisted. If confirmation
+      // throws, the report stays pending and the failure propagates.
+      await this.subscriptionBillingUseCase.confirmPayment({ tenantId: report.tenantId, daysDuration: 30 });
+
       report.status = 'matched';
       report.matchedTransferId = transferIdToUpdate;
       await this.paymentReportRepo.save(report);
-      
-      await this.subscriptionBillingUseCase.confirmPayment({ tenantId: report.tenantId, daysDuration: 30 });
       
       return {
         matched: true,
