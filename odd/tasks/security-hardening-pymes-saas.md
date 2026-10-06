@@ -23,7 +23,7 @@ The independent review found unsigned bearer tokens, universal password bypasses
 - [x] **TASK-01**: Sign and expire scoped/temporary tokens, enforce token purpose, remove password bypasses, and make production secret configuration fail closed.
 - [x] **TASK-02**: Verify temporary-session ownership for tenant selection/switching; reject public onboarding for existing emails with 409; prevent password changes when adding existing cashier accounts; remove frontend fake-token fallback.
 - [x] **TASK-03**: Validate webhook secrets only by constant-time equality with the stored secret; provide an owner-authorized way to retrieve/use the actual secret and remove slug-derived client secrets.
-- [ ] **TASK-04**: Scope membership deletion to the active tenant and test cross-tenant denial.
+- [x] **TASK-04**: Scope membership deletion to the active tenant and test cross-tenant denial.
 - [ ] **TASK-05**: Remove silent database-mode memory fallbacks and swallowed persistence errors; fail startup/requests safely when configured persistence is unavailable.
 - [ ] **TASK-06**: Add the smallest production-suitable security headers and abuse throttling supported by the existing deployment; remove unsafe production secret defaults.
 - [ ] **TASK-07**: Align docs and scripts with actual implementation, remove or repair the nonexistent E2E command, and record final checks and remaining operational limits.
@@ -49,7 +49,7 @@ The independent review found unsigned bearer tokens, universal password bypasses
 - Baseline: repository was clean on `main`; created local branch `fix/pymes-saas-security`.
 - Exploration: independent read-only map covered backend, frontend, persistence, tests, deployment, and docs; exact evidence is recorded in the session and Engram review memory.
 - Dependency setup: root and client `npm ci --ignore-scripts --registry=https://registry.npmjs.org` both exited 0; no tracked files changed. Npm reported 54 root and 2 client dependency advisories; no remediation audit was authorized or performed.
-- Implementation: TASK-01 through TASK-03 are complete and committed; TASK-04 code/tests are green in the working tree pending its GREEN commit; TASK-05 through TASK-07 remain open.
+- Implementation: TASK-01 through TASK-04 are complete and committed; TASK-05 through TASK-07 remain open.
 - Baseline verification: `npm test -- --runInBand` — 13 suites / 81 tests passed.
 - TASK-01 RED checkpoints: `292205f` (15 failed / 4 passed of 19); `6ba96a7` (20 failed / 3 passed of 23 against vulnerable source); `638d04c` (3 invalid-expiry failures / 22 passed of 25); `27b9fa4` (2 unsafe-default failures / 26 passed of 28).
 - TASK-01 GREEN: focused suite 28/28; full suite 14 suites / 109 tests; `npm run build` and `npx tsc --noEmit` exited 0.
@@ -69,7 +69,8 @@ The independent review found unsigned bearer tokens, universal password bypasses
 - TASK-04 RED checkpoint `a36e7cb`: cross-tenant/absent deletion failed (2 failures / 6 passes) and old one-argument port calls produced compile-time RED.
 - TASK-04 GREEN: focused membership/cashier suites 28/28; full suite 18 suites / 177 tests; backend `tsc`/build and client build exited 0.
 - TASK-04 independent source verification passed; parent full-suite spot-check also passed (18 suites / 177 tests). DB error fallback remains TASK-05; superadmin-without-tenant delete fails closed before repository access but may surface as 500.
-- Next step: commit the verified TASK-04 GREEN work unit, then begin TASK-05 under strict TDD.
+- TASK-04 GREEN work-unit commit: `77b5f0a` (`fix(auth): scope membership deletion to tenant`).
+- Next step: begin TASK-05 under strict TDD.
 
 ## Delivery and Commit Evidence
 - Forecast: approximately 800 authored changed lines; planning heuristic only, not a hard cap.
