@@ -35,12 +35,12 @@ describe('.github/workflows/cd.yml — CD workflow contract', () => {
     expect(workflow).toMatch(/uses:\s*appleboy\/ssh-action@/);
   });
 
-  it('supports flexible SSH secrets fallback (VPS_HOST, SSH_HOST, HOST, etc.)', () => {
+  it('supports flexible SSH secrets fallback (DROPLET_HOST, VPS_HOST, SSH_HOST, HOST, etc.)', () => {
     workflowExists();
-    expect(workflow).toMatch(/secrets\.VPS_HOST|secrets\.SSH_HOST|secrets\.HOST/);
-    expect(workflow).toMatch(/secrets\.VPS_USER|secrets\.SSH_USER|secrets\.USERNAME/);
-    expect(workflow).toMatch(/secrets\.VPS_SSH_KEY|secrets\.SSH_KEY|secrets\.SSH_PRIVATE_KEY/);
-    expect(workflow).toMatch(/secrets\.VPS_PASSWORD|secrets\.SSH_PASSWORD|secrets\.PASSWORD/);
+    expect(workflow).toMatch(/secrets\.DROPLET_HOST|secrets\.VPS_HOST|secrets\.SSH_HOST|secrets\.HOST/);
+    expect(workflow).toMatch(/secrets\.DROPLET_USER|secrets\.VPS_USER|secrets\.SSH_USER|secrets\.USERNAME/);
+    expect(workflow).toMatch(/secrets\.DROPLET_SSH_KEY|secrets\.VPS_SSH_KEY|secrets\.SSH_KEY|secrets\.SSH_PRIVATE_KEY/);
+    expect(workflow).toMatch(/secrets\.DROPLET_PASSWORD|secrets\.VPS_PASSWORD|secrets\.SSH_PASSWORD|secrets\.PASSWORD/);
   });
 
   it('navigates to /var/www/cajasegura, pulls main, builds, and restarts PM2', () => {
