@@ -253,3 +253,70 @@ Fecha: 22/09/2026 12:00:00`;
     expect(parsed?.payerBank).toBe('Tu Financiera');
   });
 });
+
+/**
+ * TASK-01: UENO credit receipts using the alternate SIPAP field labels
+ * (Importe / Referencia SIPAP / Cliente pagador) must be parsed by the
+ * UENO-specific parser, and a payer may only be reported when a sender
+ * line is actually present — never guessed by the universal fallback.
+ * All fixtures are synthetic.
+ */
+describe('UENO alternate receipt labels (TASK-01)', () => {
+  const factory = new BankParserFactory();
+
+  const uenoAlternateWithSender = `UENO Bank - Crédito por transferencia SIPAP
+Importe: Gs. 150.000
+Referencia SIPAP: UENO-REF-445566
+Cliente pagador: LORENA BENITEZ
+Fecha y hora transferencia: 07/07/2026 22:18`;
+
+  const uenoAlternateNoSender = `UENO Bank - Crédito por transferencia SIPAP
+Importe: Gs. 150.000
+Referencia SIPAP: UENO-REF-445566
+Fecha y hora transferencia: 07/07/2026 22:18`;
+
+  // Realistic bank salutation: "cliente" here is NOT a sender name, so the
+  // parser must not turn it into a payer.
+  const uenoSalutationNoSender = `UENO Bank - Acreditación en tu cuenta
+Estimado cliente: tu cuenta acreditó una transferencia.
+Importe: Gs. 150.000
+Referencia SIPAP: UENO-REF-445566
+Fecha y hora transferencia: 07/07/2026 22:18`;
+
+  it('UENO parser extracts amount, SIPAP reference, and payer from the alternate labels', () => {
+    const parser = new UenoBankParser();
+    expect(parser.canParse(uenoAlternateWithSender)).toBe(true);
+
+    const res = parser.parse(uenoAlternateWithSender);
+    expect(res).not.toBeNull();
+    expect(res?.amount).toBe(150000);
+    expect(res?.operationId).toBe('UENO-REF-445566');
+    expect(res?.payerName).toBe('LORENA BENITEZ');
+    expect(res?.payerBank).toBe('UENO Bank');
+  });
+
+  it('UENO parser reports no payer when the alternate format has no sender line', () => {
+    const res = new UenoBankParser().parse(uenoAlternateNoSender);
+    expect(res).not.toBeNull();
+    expect(res?.amount).toBe(150000);
+    expect(res?.operationId).toBe('UENO-REF-445566');
+    expect(res?.payerName).toBe('DESCONOCIDO');
+  });
+
+  it('factory keeps the UENO-specific result for the alternate format with sender', () => {
+    const parsed = factory.parse(uenoAlternateWithSender);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.amount).toBe(150000);
+    expect(parsed?.operationId).toBe('UENO-REF-445566');
+    expect(parsed?.payerName).toBe('LORENA BENITEZ');
+    expect(parsed?.payerBank).toBe('UENO Bank');
+  });
+
+  it('factory does not invent a payer from a salutation when no sender line exists', () => {
+    const parsed = factory.parse(uenoSalutationNoSender);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.amount).toBe(150000);
+    expect(parsed?.operationId).toBe('UENO-REF-445566');
+    expect(parsed?.payerName).toBe('DESCONOCIDO');
+  });
+});
