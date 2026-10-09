@@ -69,7 +69,9 @@ function procesarTransferenciasBancarias() {
     label = GmailApp.createLabel(LABEL_NAME);
   }
 
-  // Filtro de búsqueda que cubre los 6 bancos paraguayos y descarta los ya procesados
+  // Filtro de búsqueda que cubre los 6 bancos paraguayos y descarta los hilos
+  // donde todos los mensajes ya fueron registrados. El criterio fino es por
+  // mensaje: el filtro -label solo reduce el alcance de la búsqueda.
   const searchQuery = '("itau" OR "itaú" OR "gnb" OR "ueno" OR "familiar" OR "atlas" OR "continental" OR "sipap" OR "transferencia" OR "acreditada") -label:' + LABEL_NAME;
   Logger.log('Buscando avisos bancarios con filtro: ' + searchQuery);
 
@@ -88,6 +90,22 @@ function procesarTransferenciasBancarias() {
 
     for (let j = 0; j < messages.length; j++) {
       const msg = messages[j];
+
+      // La etiqueta vive en el mensaje, no en el hilo: uno ya registrado no se
+      // reenvía, pero un hermano fallido o un mensaje posterior en el mismo
+      // hilo sigue elegible para el próximo intento.
+      const msgLabels = msg.getLabels();
+      let alreadyLabeled = false;
+      for (let k = 0; k < msgLabels.length; k++) {
+        if (msgLabels[k].getName() === LABEL_NAME) {
+          alreadyLabeled = true;
+          break;
+        }
+      }
+      if (alreadyLabeled) {
+        continue;
+      }
+
       const bodyText = msg.getPlainBody();
       const bodyHtml = msg.getBody();
       const subject = msg.getSubject();
@@ -118,11 +136,12 @@ function procesarTransferenciasBancarias() {
 
         Logger.log('Respuesta del servidor (HTTP ' + statusCode + '): ' + responseText);
 
-        // Si el servidor lo creó (201) o ya existía (200), marcamos como procesado
+        // Si el servidor lo creó (201) o ya existía (200), marcamos como
+        // procesado solo este mensaje; un fallo deja el hilo elegible.
         if (statusCode >= 200 && statusCode < 300) {
-          thread.addLabel(label);
-          thread.markRead();
-          Logger.log('Etiqueta ' + LABEL_NAME + ' agregada exitosamente.');
+          msg.addLabel(label);
+          msg.markRead();
+          Logger.log('Etiqueta ' + LABEL_NAME + ' agregada al mensaje ' + msg.getId() + '.');
         } else {
           Logger.log('Servidor rechazó el mensaje (HTTP ' + statusCode + '). No se marcará como procesado para reintento.');
         }

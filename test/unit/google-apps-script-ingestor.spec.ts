@@ -5,87 +5,38 @@
  * reads `WEBHOOK_SECRET` from the owner-controlled Script Properties and fails
  * closed (no request, no label) when the property is missing or blank, so a
  * stale or leaked constant can never be replayed against the tenant webhook.
+ *
+ * TASK-02: the shared sandbox (`helpers/gas-gmail-sandbox.ts`) emulates
+ * Gmail's label model — labels live on individual messages, `thread.addLabel`
+ * labels every message in the conversation, and the `-label:` search returns
+ * conversations that still contain at least one unlabeled message. A message
+ * that succeeded must not hide a failed or later message in the same
+ * conversation.
  */
 
 import { readFileSync } from 'fs';
 import * as path from 'path';
-import * as vm from 'vm';
+
+import {
+  gasPayloadText as payloadText,
+  evaluateGasScript,
+} from './helpers/gas-gmail-sandbox';
 
 const SCRIPT_PATH = path.join(__dirname, '..', '..', 'google-apps-script', 'code.gs');
 const README_PATH = path.join(__dirname, '..', '..', 'google-apps-script', 'README.md');
 
-interface FetchCall {
-  url: string;
-  options: Record<string, unknown>;
-}
-
-interface Sandbox {
-  fetchCalls: FetchCall[];
-  labeledThreads: number;
-  markedRead: number;
-  run: () => void;
-}
-
 function evaluateScript(
   scriptProperties: Record<string, string>,
-  statusCode = 201,
-): Sandbox {
-  const source = readFileSync(SCRIPT_PATH, 'utf8');
-  const fetchCalls: FetchCall[] = [];
-  const labeledThreads = { count: 0 };
-  const readThreads = { count: 0 };
-  const sandbox: Record<string, unknown> = {
-    PropertiesService: {
-      getScriptProperties: () => ({
-        getProperty: (key: string) =>
-          Object.prototype.hasOwnProperty.call(scriptProperties, key) ? scriptProperties[key] : null,
-      }),
-    },
-    UrlFetchApp: {
-      fetch: (url: string, options: Record<string, unknown>) => {
-        fetchCalls.push({ url, options });
-        return { getResponseCode: () => statusCode, getContentText: () => 'created' };
-      },
-    },
-    GmailApp: {
-      getUserLabelByName: () => null,
-      createLabel: () => ({}),
-      search: () => [
-        {
-          getMessages: () => [
-            {
-              getId: () => 'message-1',
-              getPlainBody: () => 'body text',
-              getBody: () => '<p>body html</p>',
-              getSubject: () => 'Aviso de transferencia',
-              getDate: () => new Date('2026-01-01T00:00:00.000Z'),
-            },
-          ],
-          addLabel: () => {
-            labeledThreads.count += 1;
-          },
-          markRead: () => {
-            readThreads.count += 1;
-          },
-        },
-      ],
-    },
-    Logger: { log: () => undefined },
-  };
-
-  vm.createContext(sandbox as vm.Context);
-  vm.runInContext(source, sandbox as vm.Context, { filename: 'code.gs' });
-
-  return {
-    fetchCalls,
-    get labeledThreads(): number {
-      return labeledThreads.count;
-    },
-    get markedRead(): number {
-      return readThreads.count;
-    },
-    run: sandbox.procesarTransferenciasBancarias as () => void,
-  };
+  statusCode: number | number[] = 201,
+  threadMessages: string[][] = [['message-1']],
+) {
+  return evaluateGasScript(
+    readFileSync(SCRIPT_PATH, 'utf8'),
+    scriptProperties,
+    statusCode,
+    threadMessages,
+    'code.gs',
+  );
 }
 
 describe('google-apps-script/code.gs webhook secret', () => {
@@ -99,7 +50,7 @@ describe('google-apps-script/code.gs webhook secret', () => {
 
     expect(() => script.run()).toThrow(/WEBHOOK_SECRET/);
     expect(script.fetchCalls).toHaveLength(0);
-    expect(script.labeledThreads).toBe(0);
+    expect(script.labeledMessages).toBe(0);
   });
 
   it('fails closed when the stored WEBHOOK_SECRET is blank', () => {
@@ -117,29 +68,31 @@ describe('google-apps-script/code.gs webhook secret', () => {
     expect(script.fetchCalls).toHaveLength(1);
     const headers = script.fetchCalls[0].options.headers as Record<string, string>;
     expect(headers['X-Merchant-Webhook-Secret']).toBe('stored-secret-value');
-    expect(script.labeledThreads).toBe(1);
+    expect(script.labeledMessages).toBe(1);
   });
 
-  it('labels the Gmail thread and marks it read only on a 2xx response', () => {
+  it('labels the message and marks it read only on a 2xx response', () => {
     const script = evaluateScript({ WEBHOOK_SECRET: 'stored-secret-value' }, 201);
 
     script.run();
 
     expect(script.fetchCalls).toHaveLength(1);
-    expect(script.labeledThreads).toBe(1);
+    expect(script.labeledMessages).toBe(1);
     expect(script.markedRead).toBe(1);
+    expect(script.isLabeled('message-1')).toBe(true);
   });
 
   it.each([401, 500])(
-    'neither labels nor marks the Gmail thread read on HTTP %i, so the message is retried',
+    'neither labels nor marks the message read on HTTP %i, so the message is retried',
     (statusCode) => {
       const script = evaluateScript({ WEBHOOK_SECRET: 'stored-secret-value' }, statusCode);
 
       script.run();
 
       expect(script.fetchCalls).toHaveLength(1);
-      expect(script.labeledThreads).toBe(0);
+      expect(script.labeledMessages).toBe(0);
       expect(script.markedRead).toBe(0);
+      expect(script.isLabeled('message-1')).toBe(false);
     },
   );
 
@@ -156,5 +109,59 @@ describe('google-apps-script/code.gs webhook secret', () => {
     expect(readme).toContain('WEBHOOK_SECRET');
     expect(readme).toMatch(/Propiedades del script/i);
     expect(readme).not.toMatch(/sec_[A-Za-z0-9]{8,}/);
+  });
+});
+
+describe('google-apps-script/code.gs conversation retry safety (TASK-02)', () => {
+  it('labels only the message that succeeded so a failed sibling stays eligible', () => {
+    const script = evaluateScript(
+      { WEBHOOK_SECRET: 'stored-secret-value' },
+      [201, 500],
+      [['message-1', 'message-2']],
+    );
+
+    script.run();
+
+    expect(script.fetchCalls).toHaveLength(2);
+    expect(script.isLabeled('message-1')).toBe(true);
+    expect(script.isLabeled('message-2')).toBe(false);
+    expect(script.markedRead).toBe(1);
+  });
+
+  it('retries only the failed message on the next run and never reposts the successful one', () => {
+    const script = evaluateScript(
+      { WEBHOOK_SECRET: 'stored-secret-value' },
+      [201, 500, 201],
+      [['message-1', 'message-2']],
+    );
+
+    script.run(); // message-1 accepted, message-2 rejected
+    expect(script.fetchCalls).toHaveLength(2);
+
+    script.run(); // run 2: only the failed message goes out again
+    expect(script.fetchCalls).toHaveLength(3);
+    expect(payloadText(script.fetchCalls[2])).toContain('message-2');
+    expect(payloadText(script.fetchCalls[2])).not.toContain('message-1');
+    expect(script.isLabeled('message-2')).toBe(true);
+
+    script.run(); // run 3: conversation fully processed, nothing is reposted
+    expect(script.fetchCalls).toHaveLength(3);
+  });
+
+  it('keeps a later message in an already-processed conversation eligible without reposting', () => {
+    const script = evaluateScript({ WEBHOOK_SECRET: 'stored-secret-value' }, 201, [
+      ['message-1'],
+    ]);
+
+    script.run(); // message-1 processed and labeled
+    expect(script.fetchCalls).toHaveLength(1);
+
+    script.addMessage(0, 'message-2'); // a new message arrives in the same thread
+    script.run();
+
+    expect(script.fetchCalls).toHaveLength(2);
+    expect(payloadText(script.fetchCalls[1])).toContain('message-2');
+    expect(payloadText(script.fetchCalls[1])).not.toContain('message-1');
+    expect(script.isLabeled('message-2')).toBe(true);
   });
 });
