@@ -414,13 +414,14 @@ Estado: Transferencia acreditada en cuenta`;
     const cleanAmount = Number(validationAmount.toString().replace(/[^0-9]/g, ''));
     if (!cleanAmount || isNaN(cleanAmount)) return;
 
+    const payerFilter = validationPayerName.trim() || undefined;
+    if (!payerFilter) return;
+
     stopOwnerRadar();
 
     setValidationIsLoading(true);
     setValidationResult(null);
     setValidationError(null);
-
-    const payerFilter = validationPayerName.trim() || undefined;
 
     // 1. Intento inicial
     const initialStatus = await checkOwnerTransfer(cleanAmount, payerFilter);
@@ -711,19 +712,19 @@ Estado: Transferencia acreditada en cuenta`;
                 />
               </div>
               <div className="flex-1">
-                <label className="block text-xs font-bold text-gray-400 mb-1">Nombre del Pagador (Opcional)</label>
+                <label className="block text-xs font-bold text-gray-400 mb-1">Nombre del Pagador o Referencia SIPAP</label>
                 <input
                   type="text"
                   value={validationPayerName}
                   onChange={(e) => setValidationPayerName(e.target.value)}
-                  placeholder="Ej: Alejandra Chena"
+                  placeholder="Ej: Alejandra Chena o nro. de operación"
                   className="w-full bg-[#151D2F] border border-[#24324D] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
                 />
               </div>
             </div>
             <button
               onClick={handleVerifyTransfer}
-              disabled={validationIsLoading || ownerRadarActive || !validationAmount}
+              disabled={validationIsLoading || ownerRadarActive || !validationAmount || !validationPayerName.trim()}
               className="w-full sm:w-auto px-4 py-2.5 bg-indigo-500 hover:bg-indigo-400 text-white font-bold text-xs rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 shadow-lg shadow-indigo-500/20"
             >
               {ownerRadarActive ? (

@@ -139,6 +139,9 @@ export const FastPosScreen: React.FC = () => {
     const cleanAmount = parseInt(amount.replace(/[^0-9]/g, ''), 10);
     if (!cleanAmount || isNaN(cleanAmount)) return;
 
+    const payerFilter = payerName.trim() || undefined;
+    if (!payerFilter) return;
+
     // Detener cualquier radar previo
     stopRadar();
 
@@ -147,8 +150,6 @@ export const FastPosScreen: React.FC = () => {
     setReplayAlert(null);
     setNotFound(false);
     setClaimedSuccess(false);
-
-    const payerFilter = payerName.trim() || undefined;
 
     // 1. Intento inmediato
     const initialStatus = await checkTransfer(cleanAmount, payerFilter);
@@ -337,21 +338,22 @@ export const FastPosScreen: React.FC = () => {
 
             <div>
               <label className="block text-xs font-extrabold uppercase tracking-wider text-gray-400 mb-2">
-                2. Apellido del Pagador (Opcional)
+                2. Nombre del Pagador o Referencia SIPAP/Operación
               </label>
               <input
                 type="text"
+                required
                 value={payerName}
                 onChange={(e) => setPayerName(e.target.value)}
                 className="w-full bg-[#0B0F19] border border-[#24324D] focus:border-emerald-500 rounded-xl px-5 py-3 text-base text-white focus:outline-none transition-colors"
-                placeholder="Ej. Chena, Duarte, Giménez..."
+                placeholder="Ej. Chena, Giménez o nro. de operación SIPAP..."
               />
             </div>
 
             <div className="flex space-x-3 pt-2">
               <button
                 type="submit"
-                disabled={searching || radarActive || subscription?.status === 'cancelled' || subscription?.status === 'past_due'}
+                disabled={searching || radarActive || !payerName.trim() || subscription?.status === 'cancelled' || subscription?.status === 'past_due'}
                 className="flex-1 py-3.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 text-base sm:text-lg font-extrabold rounded-2xl shadow-xl shadow-emerald-500/20 hover:shadow-emerald-500/30 transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {radarActive ? (
