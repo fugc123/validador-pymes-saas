@@ -103,7 +103,9 @@ export class UniversalSipapParser implements IBankParser {
       /(?:titular\s*(?:cuenta\s*)?d[eé]bito|cuenta\s*d[eé]bito\s*titular)\s*[:\-]?\s*([A-Za-zÁÉÍÓÚáéíóúÑñ\s.'-]{3,60})/i,
       /(?:cliente\s*pagador|nombre\s*del\s*pagador|pagador)\s*[:\-]?\s*([A-Za-zÁÉÍÓÚáéíóúÑñ\s.'-]{3,60})/i,
       /(?:debitado\s*de|enviado\s*por|enviada\s*por|remitente|titular\s*ordenante|ordenante)\s*[:\-]?\s*([A-Za-zÁÉÍÓÚáéíóúÑñ\s.'-]{3,60})/i,
-      /(?:usuario|cliente|persona\s*que\s*env[ií]a)\s*[:\-]?\s*([A-Za-zÁÉÍÓÚáéíóúÑñ\s.'-]{3,60})/i,
+      // Line-anchored with a mandatory separator: a vocative such as
+      // "Estimado cliente: ..." must not be parsed as the sender name.
+      /^(?:usuario|cliente|persona\s*que\s*env[ií]a)\s*[:\-]\s*([A-Za-zÁÉÍÓÚáéíóúÑñ\s.'-]{3,60})/im,
       /(?:origen|desde)\s*[:\-]?\s*([A-Za-zÁÉÍÓÚáéíóúÑñ\s.'-]{3,60})/i,
       /(?:\bde\b)\s*[:\-]\s*([A-Za-zÁÉÍÓÚáéíóúÑñ\s.'-]{3,60})/i,
       // Lenguaje natural de billeteras

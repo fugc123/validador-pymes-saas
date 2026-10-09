@@ -22,11 +22,27 @@ export class UenoBankParser implements IBankParser {
       return match && match[1] ? match[1].trim() : null;
     };
 
-    const rawAmount = getField(/Monto\s*([^\r\n]+)/i);
-    const payerName = getField(/Titular\s*cuenta\s*d[eé]bito\s*([^\r\n]+)/i);
+    // Alternate SIPAP receipt labels are accepted alongside the classic
+    // mobile-notification labels (Monto / Titular cuenta débito / Nro. de
+    // transacción), so the UENO-specific parser owns these receipts instead
+    // of falling through to the universal parser's heuristic payer guesses.
+    const rawAmount = getField(/(?:monto|importe)\s*[:\-]?\s*([^\r\n]+)/i);
+    const payerName = getField(
+      /(?:titular\s*(?:de\s+la\s+)?cuenta\s*d[eé]bito|cliente\s*pagador|enviado\s*por|titular\s*ordenante|ordenante)\s*[:\-]?\s*([^\r\n]+)/i,
+    );
     const payerBank = getField(/Entidad\s*d[eé]bito\s*([^\r\n]+)/i);
-    const receiptNumber = getField(/Nro\.?\s*de\s*transacci[oó]n\s*([A-Za-z0-9]+)/i);
     const operationDate = getField(/Fecha\s*y\s*hora\s*transferencia\s*([\d/]+(?:\s+[\d:]+)?)/i);
+
+    // SIPAP/operation reference: transacción, operación, referencia or comprobante.
+    const receiptNumber =
+      getField(/Nro\.?\s*de\s*transacci[oó]n\s*[:\-#]?\s*([A-Za-z0-9\-_]+)/i) ||
+      getField(
+        /(?:Nro\.?\s*de\s*)?operaci[oó]n\s*(?:Nro\.?|N[°º])?\s*[:\-#]\s*([A-Za-z0-9\-_]+)/i,
+      ) ||
+      getField(
+        /(?:referencia\s*sipap|(?:Nro\.?\s*de\s*)?referencia)\s*[:\-#]\s*([A-Za-z0-9\-_]+)/i,
+      ) ||
+      getField(/(?:Nro\.?\s*de\s*)?comprobante\s*[:\-#]\s*([A-Za-z0-9\-_]+)/i);
 
     const operationId = receiptNumber;
     if (!operationId) return null;
