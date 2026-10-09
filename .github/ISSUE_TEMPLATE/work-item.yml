@@ -1,0 +1,46 @@
+name: Work item
+description: Track a feature, fix, or documentation change with clear acceptance criteria.
+title: "[Work item]: "
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      description: Type of change.
+      multiple: false
+      options:
+        - Feature
+        - Bug fix
+        - Documentation
+        - Maintenance
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and motivation
+      description: What is wrong or missing, and why it matters for the business.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What is included and what is explicitly out of scope.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Observable outcomes that confirm the work is done.
+      placeholder: "- [ ] ..."
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification
+      description: Commands or checks that prove the outcome (for example, npm test, tsc, build).
+    validations:
+      required: false
