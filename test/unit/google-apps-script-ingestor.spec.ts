@@ -11,7 +11,8 @@
  * labels every message in the conversation, and the `-label:` search returns
  * conversations that still contain at least one unlabeled message. A message
  * that succeeded must not hide a failed or later message in the same
- * conversation.
+ * conversation. The sandbox also records every `GmailApp.search` argument
+ * list, so specs pin the discovery query text and the bounded paging.
  */
 
 import { readFileSync } from 'fs';
@@ -163,5 +164,33 @@ describe('google-apps-script/code.gs conversation retry safety (TASK-02)', () =>
     expect(payloadText(script.fetchCalls[1])).toContain('message-2');
     expect(payloadText(script.fetchCalls[1])).not.toContain('message-1');
     expect(script.isLabeled('message-2')).toBe(true);
+  });
+});
+
+describe('google-apps-script/code.gs Gmail discovery query (TASK-02)', () => {
+  it('broadens full-text discovery with plural and received-transfer phrases', () => {
+    const script = evaluateScript({ WEBHOOK_SECRET: 'stored-secret-value' });
+
+    script.run();
+
+    const query = String(script.searchCalls[0][0]);
+    expect(query).toContain('"transferencias"');
+    expect(query).toContain('"recibida"');
+    expect(query).toContain('"has recibido"');
+    expect(query).toContain('"te transfirió"');
+  });
+
+  it('keeps the OR shape, accent variants, label exclusion, and the 15-thread bound', () => {
+    const script = evaluateScript({ WEBHOOK_SECRET: 'stored-secret-value' });
+
+    script.run();
+
+    expect(script.searchCalls[0]).toHaveLength(3);
+    expect(script.searchCalls[0][1]).toBe(0);
+    expect(script.searchCalls[0][2]).toBe(15);
+    const query = String(script.searchCalls[0][0]);
+    expect(query).toContain('"itau" OR "itaú"');
+    expect(query).toContain('"te transfirio" OR "te transfirió"');
+    expect(query).toContain('-label:SIPAP_Validador');
   });
 });

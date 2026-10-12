@@ -19,7 +19,8 @@
  * TASK-02: the shared sandbox (`helpers/gas-gmail-sandbox.ts`) — the same one
  * used for `google-apps-script/code.gs` — keeps the generated copy
  * behaviorally synchronized: one successful message must not hide a failed or
- * later message in the same conversation.
+ * later message in the same conversation, and the recorded `GmailApp.search`
+ * arguments pin the same discovery query contract on both copies.
  */
 
 import {
@@ -216,5 +217,42 @@ describe('personalized Google Apps Script conversation retry safety (TASK-02)', 
     expect(payloadText(sandbox.fetchCalls[1])).toContain('message-2');
     expect(payloadText(sandbox.fetchCalls[1])).not.toContain('message-1');
     expect(sandbox.isLabeled('message-2')).toBe(true);
+  });
+});
+
+describe('personalized Google Apps Script Gmail discovery query (TASK-02)', () => {
+  const BASE_API_URL = 'https://api.example.com';
+  const MERCHANT_SLUG = 'kiosko-san-roque';
+
+  it('broadens full-text discovery with plural and received-transfer phrases', () => {
+    const script = buildPersonalizedGasScript(BASE_API_URL, MERCHANT_SLUG);
+    const sandbox = evaluatePersonalizedScript(script, {
+      WEBHOOK_SECRET: 'stored-secret-value',
+    });
+
+    sandbox.run();
+
+    const query = String(sandbox.searchCalls[0][0]);
+    expect(query).toContain('"transferencias"');
+    expect(query).toContain('"recibida"');
+    expect(query).toContain('"has recibido"');
+    expect(query).toContain('"te transfirió"');
+  });
+
+  it('keeps the OR shape, accent variants, label exclusion, and the 15-thread bound', () => {
+    const script = buildPersonalizedGasScript(BASE_API_URL, MERCHANT_SLUG);
+    const sandbox = evaluatePersonalizedScript(script, {
+      WEBHOOK_SECRET: 'stored-secret-value',
+    });
+
+    sandbox.run();
+
+    expect(sandbox.searchCalls[0]).toHaveLength(3);
+    expect(sandbox.searchCalls[0][1]).toBe(0);
+    expect(sandbox.searchCalls[0][2]).toBe(15);
+    const query = String(sandbox.searchCalls[0][0]);
+    expect(query).toContain('"itau" OR "itaú"');
+    expect(query).toContain('"te transfirio" OR "te transfirió"');
+    expect(query).toContain('-label:SIPAP_Validador');
   });
 });

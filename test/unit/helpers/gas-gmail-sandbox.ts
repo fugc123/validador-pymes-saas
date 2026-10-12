@@ -10,6 +10,8 @@
  *   message of the conversation (Gmail threads.modify semantics).
  * - The `-label:SIPAP_Validador` search returns conversations that still
  *   contain at least one unlabeled message.
+ * - Every `GmailApp.search(query, start, max)` call is recorded verbatim so
+ *   specs can pin the discovery query text and the bounded paging.
  * - Fetch status codes can be scripted per call (number or queue, the last
  *   value repeats) to model accepted/rejected webhook responses across runs.
  */
@@ -30,6 +32,8 @@ export interface GasSandbox {
   markedRead: number;
   isLabeled: (messageId: string) => boolean;
   addMessage: (threadIndex: number, messageId: string) => void;
+  /** Raw argument lists from every `GmailApp.search(...)` call the script made. */
+  searchCalls: unknown[][];
   run: () => void;
 }
 
@@ -52,6 +56,7 @@ export function evaluateGasScript(
 ): GasSandbox {
   const fetchCalls: GasFetchCall[] = [];
   const alerts: string[] = [];
+  const searchCalls: unknown[][] = [];
   const counters = { labeled: 0, read: 0 };
   const state: MessageState[][] = threadMessages.map((ids) =>
     ids.map((id) => ({ id, labels: [] as string[], read: false })),
@@ -111,11 +116,14 @@ export function evaluateGasScript(
       getUserLabelByName: () => null,
       createLabel: () => ({ getName: () => GAS_LABEL_NAME }),
       // `-label:SIPAP_Validador` returns conversations that still contain at
-      // least one message without the label.
-      search: () =>
-        state
+      // least one message without the label. The full argument list is
+      // recorded so specs can pin the query text and the (start, max) bound.
+      search: (...args: unknown[]) => {
+        searchCalls.push(args);
+        return state
           .filter((messages) => messages.some((m) => !m.labels.includes(GAS_LABEL_NAME)))
-          .map(makeThread),
+          .map(makeThread);
+      },
     },
     Logger: { log: () => undefined },
     alert: (message: string) => {
@@ -141,6 +149,7 @@ export function evaluateGasScript(
       ),
     addMessage: (threadIndex, messageId) =>
       state[threadIndex].push({ id: messageId, labels: [], read: false }),
+    searchCalls,
     run: sandbox.procesarTransferenciasBancarias as () => void,
   };
 }
