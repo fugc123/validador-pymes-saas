@@ -3,12 +3,64 @@ version: "2.0"
 
 context: |
   Project: validador-pymes-saas
-  Tech stack: TypeScript, NestJS 10, React 18 + Vite, PostgreSQL through pg (parameterized raw SQL), Jest
-  Architecture: Multi-Tenant SaaS, Hexagonal Architecture (ports/adapters), Anti-Replay Ledger
-  Testing: Jest unit tests only; no E2E harness or E2E config exists in this repository
+  Tech stack: NestJS 10/TypeScript backend; React 18/Vite/TypeScript client; PostgreSQL through parameterized pg
+  Architecture: Multi-tenant SaaS, Hexagonal Architecture (ports/adapters), anti-replay ledger
+  Testing: Root Jest unit tests; client has no test runner; no separate integration or E2E harness
   Billing: manual (owner reports a transfer, superadmin validates it); no payment gateway, no Stripe adapter
   Edge: rate limiting and security headers are enforced by Nginx (client/nginx.conf), not by NestJS
   Governance: Gentle AI SDD, RDD & Financial Compliance
+
+strict_tdd: false
+
+projects:
+  - path: .
+    stack: NestJS 10, TypeScript, PostgreSQL via pg
+    test_command: "npm test"
+    ci_test_command: "npm test -- --runInBand"
+    test_framework: Jest
+    build_command: "npm run build"
+    coverage_command: "npm run test:cov"
+    type_check_command: "npx tsc --noEmit"
+    lint_command: null
+    format_command: null
+  - path: client
+    stack: React 18, Vite, TypeScript
+    test_command: null
+    test_framework: null
+    build_command: "npm run build"
+    build_command_from_workspace: "npm --prefix client run build"
+    coverage_command: null
+    type_check_command: "npm run build (runs tsc && vite build; no standalone type-check script)"
+    lint_command: null
+    format_command: null
+
+testing:
+  detected: 2026-10-08
+  strict_tdd: false
+  strict_tdd_reason: >
+    No explicit workspace-level test command covers every discovered project.
+    The root Jest command covers backend unit tests; client has no test script.
+    Existing apply.tdd=true therefore fails closed to false.
+  workspace_test_command: null
+  projects:
+    - path: .
+      unit: { available: true, tool: Jest }
+      integration: { available: false, tool: null }
+      e2e: { available: false, tool: null }
+      coverage: { available: true, command: "npm run test:cov" }
+      quality:
+        linter: { available: false, command: null }
+        type_checker: { available: true, command: "npx tsc --noEmit" }
+        formatter: { available: false, command: null }
+    - path: client
+      unit: { available: false, tool: null }
+      integration: { available: false, tool: null }
+      e2e: { available: false, tool: null }
+      coverage: { available: false, command: null }
+      quality:
+        linter: { available: false, command: null }
+        type_checker: { available: true, command: "npm run build (includes tsc)" }
+        formatter: { available: false, command: null }
 
 rules:
   proposal:
@@ -22,8 +74,8 @@ rules:
   tasks:
     - Keep each task bounded to <= 400 diff lines
   apply:
-    tdd: true
-    test_command: "npm test"
+    tdd: false
+    test_command: "npm test" # Root backend only; not a workspace-wide test command.
   verify:
-    test_command: "npm test"
-    build_command: "npm run build"
+    test_command: "npm test" # Root backend only; client has no test command.
+    build_command: "npm run build" # Root backend only; client build is npm --prefix client run build.
