@@ -19,10 +19,14 @@ import {
 interface TransferResult {
   id: string;
   operationId: string;
+  receiptNumber?: string;
   payerName: string;
   amount: number;
+  currency: string;
   payerBank?: string;
   operationDate: string;
+  createdAt: string;
+  concept?: string;
   status: string;
 }
 
@@ -41,6 +45,7 @@ export const FastPosScreen: React.FC = () => {
   const [radarActive, setRadarActive] = useState(false);
   const [radarCountdown, setRadarCountdown] = useState(60);
   const [match, setMatch] = useState<TransferResult | null>(null);
+  const [matchCandidates, setMatchCandidates] = useState<TransferResult[]>([]);
   const [replayAlert, setReplayAlert] = useState<{ claimedAt: string; message: string } | null>(null);
   const [claimedSuccess, setClaimedSuccess] = useState(false);
   const [notFound, setNotFound] = useState(false);
@@ -90,7 +95,10 @@ export const FastPosScreen: React.FC = () => {
     fetchSub();
   }, [token]);
 
-  const checkTransfer = async (cleanAmount: number, payerFilter?: string): Promise<'match' | 'claimed' | 'not_found'> => {
+  const checkTransfer = async (
+    cleanAmount: number,
+    payerFilter?: string,
+  ): Promise<{ status: 'match' | 'claimed' | 'not_found'; matches: TransferResult[] }> => {
     try {
       const res = await fetch('/api/v1/cashier/transfers/verify', {
         method: 'POST',
@@ -107,31 +115,51 @@ export const FastPosScreen: React.FC = () => {
       if (res && res.ok) {
         const data = await res.json();
         if (data.found && data.transfers && data.transfers.length > 0) {
-          const item = data.transfers[0];
-          AudioSynthesizer.playSuccessChime();
-          setMatch({
+          const matches: TransferResult[] = data.transfers.map((item: any) => ({
             id: item.id,
             operationId: item.operationId,
+            receiptNumber: item.receiptNumber,
             payerName: item.payerName,
             payerBank: item.payerBank || 'SIPAP',
             amount: item.amount,
+            currency: item.currency || 'PYG',
             operationDate: item.operationDate,
+            createdAt: item.createdAt,
+            concept: item.concept,
             status: 'pending',
-          });
-          return 'match';
+          }));
+          return { status: 'match', matches };
         } else if (data.status === 'already_claimed') {
           AudioSynthesizer.playAlertWarning();
           setReplayAlert({
             claimedAt: data.claimedAt ? new Date(data.claimedAt).toLocaleTimeString() : 'Hace instantes',
             message: data.message || '⛔ NO entregar mercadería. Comprobante ya cobrado previamente.',
           });
-          return 'claimed';
+          return { status: 'claimed', matches: [] };
         }
       }
-      return 'not_found';
+      return { status: 'not_found', matches: [] };
     } catch {
-      return 'not_found';
+      return { status: 'not_found', matches: [] };
     }
+  };
+
+  // Single match shows the detail card directly; multiple matches render a
+  // selectable list — the cashier picks one, and only that id can be claimed.
+  const applyMatches = (matches: TransferResult[]) => {
+    AudioSynthesizer.playSuccessChime();
+    if (matches.length === 1) {
+      setMatch(matches[0]);
+      setMatchCandidates([]);
+    } else {
+      setMatch(null);
+      setMatchCandidates(matches);
+    }
+  };
+
+  const selectCandidate = (candidate: TransferResult) => {
+    setMatch(candidate);
+    setMatchCandidates([]);
   };
 
   const handleSearch = async (e?: React.FormEvent) => {
@@ -140,22 +168,26 @@ export const FastPosScreen: React.FC = () => {
     if (!cleanAmount || isNaN(cleanAmount)) return;
 
     const payerFilter = payerName.trim() || undefined;
-    if (!payerFilter) return;
 
     // Detener cualquier radar previo
     stopRadar();
 
     setSearching(true);
     setMatch(null);
+    setMatchCandidates([]);
     setReplayAlert(null);
     setNotFound(false);
     setClaimedSuccess(false);
 
     // 1. Intento inmediato
-    const initialStatus = await checkTransfer(cleanAmount, payerFilter);
+    const initial = await checkTransfer(cleanAmount, payerFilter);
     setSearching(false);
 
-    if (initialStatus === 'match' || initialStatus === 'claimed') {
+    if (initial.status === 'claimed') {
+      return;
+    }
+    if (initial.status === 'match') {
+      applyMatches(initial.matches);
       return;
     }
 
@@ -178,9 +210,14 @@ export const FastPosScreen: React.FC = () => {
 
     radarTimerRef.current = setInterval(async () => {
       if (searchAbortRef.current) return;
-      const pollStatus = await checkTransfer(cleanAmount, payerFilter);
-      if (pollStatus === 'match' || pollStatus === 'claimed') {
+      const poll = await checkTransfer(cleanAmount, payerFilter);
+      if (poll.status === 'claimed') {
         stopRadar();
+        return;
+      }
+      if (poll.status === 'match') {
+        stopRadar();
+        applyMatches(poll.matches);
       }
     }, 3000);
   };
@@ -188,6 +225,7 @@ export const FastPosScreen: React.FC = () => {
   const handleClaim = async () => {
     if (!match) return;
     stopRadar();
+    setMatchCandidates([]);
 
     if (token) {
       try {
@@ -220,6 +258,7 @@ export const FastPosScreen: React.FC = () => {
   const handleReset = () => {
     stopRadar();
     setMatch(null);
+    setMatchCandidates([]);
     setReplayAlert(null);
     setNotFound(false);
     setClaimedSuccess(false);
@@ -338,11 +377,10 @@ export const FastPosScreen: React.FC = () => {
 
             <div>
               <label className="block text-xs font-extrabold uppercase tracking-wider text-gray-400 mb-2">
-                2. Nombre del Pagador o Referencia SIPAP/Operación
+                2. Nombre del Pagador o Referencia SIPAP/Operación (Opcional)
               </label>
               <input
                 type="text"
-                required
                 value={payerName}
                 onChange={(e) => setPayerName(e.target.value)}
                 className="w-full bg-[#0B0F19] border border-[#24324D] focus:border-emerald-500 rounded-xl px-5 py-3 text-base text-white focus:outline-none transition-colors"
@@ -353,7 +391,7 @@ export const FastPosScreen: React.FC = () => {
             <div className="flex space-x-3 pt-2">
               <button
                 type="submit"
-                disabled={searching || radarActive || !payerName.trim() || subscription?.status === 'cancelled' || subscription?.status === 'past_due'}
+                disabled={searching || radarActive || !amount.trim() || subscription?.status === 'cancelled' || subscription?.status === 'past_due'}
                 className="flex-1 py-3.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 text-base sm:text-lg font-extrabold rounded-2xl shadow-xl shadow-emerald-500/20 hover:shadow-emerald-500/30 transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {radarActive ? (
@@ -434,6 +472,42 @@ export const FastPosScreen: React.FC = () => {
           </div>
         )}
 
+        {/* State Display: Selectable Match List (amount-only searches) */}
+        {matchCandidates.length > 0 && (
+          <div className="mt-6 bg-[#151D2F] border-2 border-emerald-500/50 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-2xl animate-fade-in">
+            <div className="text-xs uppercase font-extrabold tracking-wider text-emerald-400">
+              Múltiples transferencias con el mismo monto
+            </div>
+            <p className="text-sm text-gray-300 mt-1 mb-4">
+              Seleccioná la transferencia correcta antes de cobrar:
+            </p>
+            <div className="space-y-3">
+              {matchCandidates.map((candidate) => (
+                <button
+                  key={candidate.id}
+                  type="button"
+                  onClick={() => selectCandidate(candidate)}
+                  className="w-full text-left bg-[#0B0F19] border border-[#24324D] hover:border-emerald-500 rounded-xl p-4 transition-colors"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-bold text-white truncate">{candidate.payerName}</span>
+                    <span className="font-mono font-bold text-emerald-400 shrink-0">
+                      Gs. {candidate.amount.toLocaleString('es-PY')}
+                    </span>
+                  </div>
+                  <div className="text-xs text-gray-400 mt-1 font-mono">
+                    {candidate.payerBank} · Op. {candidate.operationId}
+                    {candidate.receiptNumber ? ` · Comp. ${candidate.receiptNumber}` : ''} · {candidate.operationDate}
+                  </div>
+                  {candidate.concept && (
+                    <div className="text-xs text-gray-500 mt-1 truncate">{candidate.concept}</div>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* State Display: Match Success Card */}
         {match && (
           <div className="mt-6 bg-emerald-950/40 border-2 border-emerald-500 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-2xl shadow-emerald-500/10 animate-fade-in">
@@ -470,9 +544,29 @@ export const FastPosScreen: React.FC = () => {
                 <span className="font-mono text-gray-300 text-xs">{match.operationId}</span>
               </div>
               <div>
+                <span className="text-gray-400 text-xs block">Nro. Comprobante:</span>
+                <span className="font-mono text-gray-300 text-xs">{match.receiptNumber || '—'}</span>
+              </div>
+              <div>
+                <span className="text-gray-400 text-xs block">Fecha de Operación:</span>
+                <span className="font-mono text-gray-300 text-xs">{match.operationDate}</span>
+              </div>
+              <div>
+                <span className="text-gray-400 text-xs block">Recibida:</span>
+                <span className="font-mono text-gray-300 text-xs">
+                  {new Date(match.createdAt).toLocaleTimeString()}
+                </span>
+              </div>
+              <div>
                 <span className="text-gray-400 text-xs block">Estado:</span>
                 <span className="text-emerald-400 font-bold">Pendiente de Cobro</span>
               </div>
+              {match.concept && (
+                <div className="col-span-2">
+                  <span className="text-gray-400 text-xs block">Concepto:</span>
+                  <span className="text-gray-300 text-xs">{match.concept}</span>
+                </div>
+              )}
             </div>
 
             <button

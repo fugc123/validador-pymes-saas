@@ -104,6 +104,7 @@ export const OwnerDashboard: React.FC = () => {
   const [validationPayerName, setValidationPayerName] = useState('');
   const [validationIsLoading, setValidationIsLoading] = useState(false);
   const [validationResult, setValidationResult] = useState<any>(null);
+  const [validationCandidates, setValidationCandidates] = useState<any[]>([]);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [claimIsLoading, setClaimIsLoading] = useState(false);
   const [ownerRadarActive, setOwnerRadarActive] = useState(false);
@@ -385,7 +386,7 @@ Estado: Transferencia acreditada en cuenta`;
     }
   };
 
-  const checkOwnerTransfer = async (cleanAmount: number, payerFilter?: string): Promise<'match' | 'not_found'> => {
+  const checkOwnerTransfer = async (cleanAmount: number, payerFilter?: string): Promise<{ status: 'match' | 'not_found'; matches: any[] }> => {
     try {
       const res = await fetch('/api/v1/cashier/transfers/verify', {
         method: 'POST',
@@ -398,14 +399,25 @@ Estado: Transferencia acreditada en cuenta`;
       if (res.ok) {
         const data = await res.json();
         if (data.found && data.transfers && data.transfers.length > 0) {
-          setValidationResult(data.transfers[0]);
           setValidationError(null);
-          return 'match';
+          return { status: 'match', matches: data.transfers };
         }
       }
-      return 'not_found';
+      return { status: 'not_found', matches: [] };
     } catch {
-      return 'not_found';
+      return { status: 'not_found', matches: [] };
+    }
+  };
+
+  // Single match shows the detail card directly; multiple matches render a
+  // selectable list — the owner picks one, and only that id can be claimed.
+  const applyOwnerMatches = (matches: any[]) => {
+    if (matches.length === 1) {
+      setValidationResult(matches[0]);
+      setValidationCandidates([]);
+    } else {
+      setValidationResult(null);
+      setValidationCandidates(matches);
     }
   };
 
@@ -415,19 +427,20 @@ Estado: Transferencia acreditada en cuenta`;
     if (!cleanAmount || isNaN(cleanAmount)) return;
 
     const payerFilter = validationPayerName.trim() || undefined;
-    if (!payerFilter) return;
 
     stopOwnerRadar();
 
     setValidationIsLoading(true);
     setValidationResult(null);
+    setValidationCandidates([]);
     setValidationError(null);
 
     // 1. Intento inicial
-    const initialStatus = await checkOwnerTransfer(cleanAmount, payerFilter);
+    const initial = await checkOwnerTransfer(cleanAmount, payerFilter);
     setValidationIsLoading(false);
 
-    if (initialStatus === 'match') {
+    if (initial.status === 'match') {
+      applyOwnerMatches(initial.matches);
       return;
     }
 
@@ -449,9 +462,10 @@ Estado: Transferencia acreditada en cuenta`;
 
     ownerRadarTimerRef.current = setInterval(async () => {
       if (ownerSearchAbortRef.current) return;
-      const pollStatus = await checkOwnerTransfer(cleanAmount, payerFilter);
-      if (pollStatus === 'match') {
+      const poll = await checkOwnerTransfer(cleanAmount, payerFilter);
+      if (poll.status === 'match') {
         stopOwnerRadar();
+        applyOwnerMatches(poll.matches);
       }
     }, 3000);
   };
@@ -459,6 +473,7 @@ Estado: Transferencia acreditada en cuenta`;
   const handleClaimTransfer = async () => {
     if (!token || !validationResult) return;
     stopOwnerRadar();
+    setValidationCandidates([]);
     setClaimIsLoading(true);
     try {
       const res = await fetch('/api/v1/cashier/transfers/claim', {
@@ -712,7 +727,7 @@ Estado: Transferencia acreditada en cuenta`;
                 />
               </div>
               <div className="flex-1">
-                <label className="block text-xs font-bold text-gray-400 mb-1">Nombre del Pagador o Referencia SIPAP</label>
+                <label className="block text-xs font-bold text-gray-400 mb-1">Nombre del Pagador o Referencia SIPAP (Opcional)</label>
                 <input
                   type="text"
                   value={validationPayerName}
@@ -724,7 +739,7 @@ Estado: Transferencia acreditada en cuenta`;
             </div>
             <button
               onClick={handleVerifyTransfer}
-              disabled={validationIsLoading || ownerRadarActive || !validationAmount || !validationPayerName.trim()}
+              disabled={validationIsLoading || ownerRadarActive || !validationAmount}
               className="w-full sm:w-auto px-4 py-2.5 bg-indigo-500 hover:bg-indigo-400 text-white font-bold text-xs rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 shadow-lg shadow-indigo-500/20"
             >
               {ownerRadarActive ? (
@@ -801,6 +816,41 @@ Estado: Transferencia acreditada en cuenta`;
               </div>
             )}
 
+            {validationCandidates.length > 0 && (
+              <div className="mt-4 p-4 bg-indigo-950/30 border border-indigo-500/40 rounded-xl space-y-3">
+                <div className="text-xs font-bold text-indigo-300">
+                  Múltiples transferencias con el mismo monto — seleccioná una:
+                </div>
+                <div className="space-y-2">
+                  {validationCandidates.map((candidate: any) => (
+                    <button
+                      key={candidate.id}
+                      type="button"
+                      onClick={() => {
+                        setValidationResult(candidate);
+                        setValidationCandidates([]);
+                      }}
+                      className="w-full text-left bg-[#151D2F] border border-[#24324D] hover:border-indigo-400 rounded-xl p-3 transition-colors"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="font-semibold text-white text-sm truncate">{candidate.payerName}</span>
+                        <span className="font-mono font-bold text-emerald-400 text-sm shrink-0">
+                          Gs. {candidate.amount?.toLocaleString('es-PY')}
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-400 mt-1 font-mono">
+                        {candidate.payerBank || 'SIPAP'} · Op. {candidate.operationId}
+                        {candidate.receiptNumber ? ` · Comp. ${candidate.receiptNumber}` : ''} · {candidate.operationDate}
+                      </div>
+                      {candidate.concept && (
+                        <div className="text-xs text-gray-500 mt-1 truncate">{candidate.concept}</div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {validationResult && (
               <div className="mt-4 p-4 bg-emerald-900/20 border border-emerald-500/30 rounded-xl space-y-4">
                 <div className="flex items-start space-x-3">
@@ -811,6 +861,10 @@ Estado: Transferencia acreditada en cuenta`;
                       <div>
                         <span className="text-gray-400 block mb-1">Operación ID</span>
                         <span className="text-white font-mono">{validationResult.operationId}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-400 block mb-1">Comprobante</span>
+                        <span className="text-white font-mono">{validationResult.receiptNumber || '—'}</span>
                       </div>
                       <div>
                         <span className="text-gray-400 block mb-1">Pagador</span>
@@ -826,6 +880,22 @@ Estado: Transferencia acreditada en cuenta`;
                           Gs. {validationResult.amount?.toLocaleString('es-PY')}
                         </span>
                       </div>
+                      <div>
+                        <span className="text-gray-400 block mb-1">Fecha de Operación</span>
+                        <span className="text-white font-mono">{validationResult.operationDate}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-400 block mb-1">Recibida</span>
+                        <span className="text-white font-mono">
+                          {validationResult.createdAt ? new Date(validationResult.createdAt).toLocaleTimeString() : '—'}
+                        </span>
+                      </div>
+                      {validationResult.concept && (
+                        <div className="col-span-2">
+                          <span className="text-gray-400 block mb-1">Concepto</span>
+                          <span className="text-white">{validationResult.concept}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

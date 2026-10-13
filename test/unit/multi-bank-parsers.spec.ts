@@ -5,6 +5,7 @@ import { UenoBankParser } from '../../src/infrastructure/parsers/ueno-bank.parse
 import { FamiliarBankParser } from '../../src/infrastructure/parsers/familiar-bank.parser';
 import { AtlasBankParser } from '../../src/infrastructure/parsers/atlas-bank.parser';
 import { ContinentalBankParser } from '../../src/infrastructure/parsers/continental-bank.parser';
+import { detectTransferDirection } from '../../src/infrastructure/parsers/transfer-direction.detector';
 
 describe('Multi-Bank Parsers Suite (6 Banks - T07)', () => {
   const factory = new BankParserFactory();
@@ -251,6 +252,97 @@ Fecha: 22/09/2026 12:00:00`;
     expect(parsed?.payerName).toBe('ANDREA SOLEDAD DUARTE');
     expect(parsed?.operationId).toBe('TF-55443322');
     expect(parsed?.payerBank).toBe('Tu Financiera');
+  });
+
+  /**
+   * TASK-03: direction detection. Only positively identified received
+   * transfers may be persisted; sent and direction-unknown messages are
+   * discarded. All fixtures are synthetic.
+   */
+  describe('Transfer direction detection (TASK-03)', () => {
+    const itauSentEmail = `Comprobante de Transferencia Enviada
+Has enviado una transferencia
+Beneficiario: MARIA ELENA GOMEZ
+Nro. de operación: 	ENV-998877
+Fecha y hora de operación: 	14/09/2026 10:17:26
+Moneda y Monto: 	PYG 45,000
+Débito de tu cuenta: 	0000000619411905`;
+
+    const uenoSentEmail = `Realizaste una transferencia
+Monto Gs. 152.000
+Beneficiario: FRANCO URIEL GIRALA CRISTALDO
+Nro. de transacción 1234567
+Fecha y hora transferencia 07/07/2026 22:18:54 h`;
+
+    const walletSentEmail = `Tigo Money - Comprobante de Envío
+Envío realizado
+Enviaste Gs. 50.000 a JUAN CARLOS GOMEZ
+Transacción N°: TM-88997711
+Fecha: 22/09/2026 14:15:00`;
+
+    const unknownDirectionEmail = `Aviso de movimiento en su cuenta
+Nro. de operación: 	OP-556677
+Fecha y hora de operación: 	16/09/2026 09:15:00
+Moneda y Monto: 	PYG 60.000
+Estado: 	Procesado`;
+
+    const contradictoryEmail = `Has enviado una transferencia
+Transferencia recibida de Gs. 50.000`;
+
+    const tigoReceivedEmail = `Tigo Money - Notificación de Envío
+¡Recibiste dinero en tu billetera!
+Recibiste Gs. 50.000 de JUAN CARLOS GOMEZ
+Transacción N°: TM-88997711
+Fecha: 22/09/2026 14:15:00`;
+
+    const mangoReceivedEmail = `¡Cobraste con Mango!
+Monto recibido: Gs. 120.000
+De: CARLOS ALBERTO BENITEZ
+ID de operación: MNG-998877
+Fecha y hora: 22/09/2026 18:05:12`;
+
+    const personalReceivedEmail = `Personal Pay - Transferencia Acreditada
+¡Te enviaron dinero!
+Monto: 35.000 Gs.
+Enviado por: MARIA ELENA BOGADO
+Comprobante: PP-443322
+Fecha: 22/09/2026 16:30`;
+
+    it('classifies all six bank received formats as received', () => {
+      expect(detectTransferDirection(itauEmail)).toBe('received');
+      expect(detectTransferDirection(gnbEmail)).toBe('received');
+      expect(detectTransferDirection(uenoEmail)).toBe('received');
+      expect(detectTransferDirection(familiarEmail)).toBe('received');
+      expect(detectTransferDirection(atlasEmail)).toBe('received');
+      expect(detectTransferDirection(continentalEmail)).toBe('received');
+    });
+
+    it('classifies wallet received notifications as received', () => {
+      expect(detectTransferDirection(tigoReceivedEmail)).toBe('received');
+      expect(detectTransferDirection(mangoReceivedEmail)).toBe('received');
+      expect(detectTransferDirection(personalReceivedEmail)).toBe('received');
+    });
+
+    it('classifies sent notifications as sent', () => {
+      expect(detectTransferDirection(itauSentEmail)).toBe('sent');
+      expect(detectTransferDirection(uenoSentEmail)).toBe('sent');
+      expect(detectTransferDirection(walletSentEmail)).toBe('sent');
+    });
+
+    it('classifies direction-unknown notifications as unknown', () => {
+      expect(detectTransferDirection(unknownDirectionEmail)).toBe('unknown');
+    });
+
+    it('fails closed to unknown on contradictory evidence', () => {
+      expect(detectTransferDirection(contradictoryEmail)).toBe('unknown');
+    });
+
+    it('returns unknown for empty or evidence-free text', () => {
+      expect(detectTransferDirection('')).toBe('unknown');
+      expect(
+        detectTransferDirection('Estimado cliente: su resumen mensual de cuenta ya está disponible.'),
+      ).toBe('unknown');
+    });
   });
 });
 

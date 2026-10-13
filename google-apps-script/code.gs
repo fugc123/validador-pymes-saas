@@ -52,7 +52,9 @@ function procesarTransferenciasBancarias() {
   // Filtro de búsqueda que cubre los 6 bancos paraguayos y descarta los hilos
   // donde todos los mensajes ya fueron registrados. El criterio fino es por
   // mensaje: el filtro -label solo reduce el alcance de la búsqueda.
-  const searchQuery = '("itau" OR "itaú" OR "gnb" OR "ueno" OR "familiar" OR "atlas" OR "continental" OR "sipap" OR "transferencia" OR "acreditada") -label:' + LABEL_NAME;
+  // "transferencias"/"recibida"/"has recibido"/"te transfirió" cubren
+  // redacciones alternativas de avisos recibidos; Gmail no hace stemming.
+  const searchQuery = '("itau" OR "itaú" OR "gnb" OR "ueno" OR "familiar" OR "atlas" OR "continental" OR "sipap" OR "transferencia" OR "transferencias" OR "recibida" OR "has recibido" OR "te transfirio" OR "te transfirió" OR "acreditada") -label:' + LABEL_NAME;
   Logger.log('🔍 Buscando avisos bancarios con filtro: ' + searchQuery);
 
   const threads = GmailApp.search(searchQuery, 0, 15);

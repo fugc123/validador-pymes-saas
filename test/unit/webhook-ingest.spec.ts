@@ -1,4 +1,4 @@
-import { UnauthorizedException, NotFoundException } from '@nestjs/common';
+import { UnauthorizedException, NotFoundException, Logger } from '@nestjs/common';
 import { IngestWebhookUseCase } from '../../src/core/application/use-cases/ingest-webhook.use-case';
 import { BankParserFactory } from '../../src/infrastructure/parsers/bank-parser.factory';
 import { Merchant } from '../../src/core/domain/entities/merchant.entity';
@@ -182,5 +182,176 @@ Fecha y hora transferencia 16/09/2026 15:30:00 h`;
     expect(result.operationId).toBe('99887766');
     expect(result.message).toContain('Duplicate transfer notification ignored idempotently');
     expect(mockTransferRepo.save).not.toHaveBeenCalled();
+  });
+
+  /**
+   * TASK-03: received-only persistence. Sent, direction-unknown, and
+   * unparseable notifications are acknowledged with a discarded outcome so
+   * the webhook responds 2xx, GAS labels the message, and no retry loop
+   * occurs. No TransferRepository.save may happen for discarded mail.
+   * All fixtures are synthetic.
+   */
+  describe('Received-only direction enforcement (TASK-03)', () => {
+    const itauSentEmail = `Comprobante de Transferencia Enviada
+Has enviado una transferencia
+Beneficiario: MARIA ELENA GOMEZ
+Nro. de operación: 	ENV-998877
+Fecha y hora de operación: 	14/09/2026 10:17:26
+Moneda y Monto: 	PYG 45,000
+Débito de tu cuenta: 	0000000619411905`;
+
+    const unknownDirectionEmail = `Aviso de movimiento en su cuenta
+Nro. de operación: 	OP-556677
+Fecha y hora de operación: 	16/09/2026 09:15:00
+Moneda y Monto: 	PYG 60.000
+Estado: 	Procesado`;
+
+    const unparseableEmail = 'Estimado cliente: su resumen mensual de cuenta ya está disponible.';
+
+    it('discards a sent transfer notification without persisting it', async () => {
+      mockMerchantRepo.findBySlug.mockResolvedValue(activeMerchant);
+      mockTransferRepo.findByTenantAndOperationId.mockResolvedValue(null);
+
+      const useCase = new IngestWebhookUseCase(mockMerchantRepo, mockTransferRepo, parserFactory);
+
+      const result = await useCase.execute({
+        tenantSlug: 'kiosko-san-roque',
+        secretHeader: 'super-secret-crypto-key-1234567890',
+        text: itauSentEmail,
+      });
+
+      expect(result.status).toBe('discarded');
+      expect(result.reason).toBe('sent_transfer');
+      expect(mockTransferRepo.save).not.toHaveBeenCalled();
+      expect(mockTransferRepo.findByTenantAndOperationId).not.toHaveBeenCalled();
+    });
+
+    it('discards a direction-unknown notification without persisting it', async () => {
+      mockMerchantRepo.findBySlug.mockResolvedValue(activeMerchant);
+      mockTransferRepo.findByTenantAndOperationId.mockResolvedValue(null);
+
+      const useCase = new IngestWebhookUseCase(mockMerchantRepo, mockTransferRepo, parserFactory);
+
+      const result = await useCase.execute({
+        tenantSlug: 'kiosko-san-roque',
+        secretHeader: 'super-secret-crypto-key-1234567890',
+        text: unknownDirectionEmail,
+      });
+
+      expect(result.status).toBe('discarded');
+      expect(result.reason).toBe('unknown_direction');
+      expect(result.operationId).toBe('OP-556677');
+      expect(mockTransferRepo.save).not.toHaveBeenCalled();
+      expect(mockTransferRepo.findByTenantAndOperationId).not.toHaveBeenCalled();
+    });
+
+    it('acknowledges unparseable mail as discarded instead of throwing 400', async () => {
+      mockMerchantRepo.findBySlug.mockResolvedValue(activeMerchant);
+      mockTransferRepo.findByTenantAndOperationId.mockResolvedValue(null);
+
+      const useCase = new IngestWebhookUseCase(mockMerchantRepo, mockTransferRepo, parserFactory);
+
+      const result = await useCase.execute({
+        tenantSlug: 'kiosko-san-roque',
+        secretHeader: 'super-secret-crypto-key-1234567890',
+        text: unparseableEmail,
+      });
+
+      expect(result.status).toBe('discarded');
+      expect(result.reason).toBe('unparseable_message');
+      expect(mockTransferRepo.save).not.toHaveBeenCalled();
+      expect(mockTransferRepo.findByTenantAndOperationId).not.toHaveBeenCalled();
+    });
+
+    it('still persists a positively identified received transfer', async () => {
+      mockMerchantRepo.findBySlug.mockResolvedValue(activeMerchant);
+      mockTransferRepo.findByTenantAndOperationId.mockResolvedValue(null);
+      mockTransferRepo.save.mockImplementation(async (t) => t);
+
+      const useCase = new IngestWebhookUseCase(mockMerchantRepo, mockTransferRepo, parserFactory);
+
+      const result = await useCase.execute({
+        tenantSlug: 'kiosko-san-roque',
+        secretHeader: 'super-secret-crypto-key-1234567890',
+        text: validSampleText,
+      });
+
+      expect(result.status).toBe('created');
+      expect(mockTransferRepo.save).toHaveBeenCalledTimes(1);
+    });
+
+    describe('discard log privacy (TASK-03 correction)', () => {
+      const privateSlug = 'kiosko-privado-xyz';
+
+      const collectLogs = (logSpy: jest.SpyInstance, warnSpy: jest.SpyInstance): string =>
+        [...logSpy.mock.calls, ...warnSpy.mock.calls]
+          .map((call) => call.map((arg: unknown) => String(arg)).join(' '))
+          .join('\n');
+
+      it('sent-discard log contains no tenant slug, operation ID, or amount', async () => {
+        const logSpy = jest.spyOn(Logger.prototype, 'log');
+        const warnSpy = jest.spyOn(Logger.prototype, 'warn');
+        mockMerchantRepo.findBySlug.mockResolvedValue(activeMerchant);
+        mockTransferRepo.findByTenantAndOperationId.mockResolvedValue(null);
+
+        const useCase = new IngestWebhookUseCase(mockMerchantRepo, mockTransferRepo, parserFactory);
+        const result = await useCase.execute({
+          tenantSlug: privateSlug,
+          secretHeader: 'super-secret-crypto-key-1234567890',
+          text: itauSentEmail,
+        });
+
+        expect(result.status).toBe('discarded');
+        const logged = collectLogs(logSpy, warnSpy);
+        expect(logged).not.toContain(privateSlug);
+        expect(logged).not.toContain('ENV-998877');
+        expect(logged).not.toContain('45000');
+        expect(logged).not.toContain('45,000');
+        jest.restoreAllMocks();
+      });
+
+      it('unknown-direction log contains no tenant slug, operation ID, or amount', async () => {
+        const logSpy = jest.spyOn(Logger.prototype, 'log');
+        const warnSpy = jest.spyOn(Logger.prototype, 'warn');
+        mockMerchantRepo.findBySlug.mockResolvedValue(activeMerchant);
+        mockTransferRepo.findByTenantAndOperationId.mockResolvedValue(null);
+
+        const useCase = new IngestWebhookUseCase(mockMerchantRepo, mockTransferRepo, parserFactory);
+        const result = await useCase.execute({
+          tenantSlug: privateSlug,
+          secretHeader: 'super-secret-crypto-key-1234567890',
+          text: unknownDirectionEmail,
+        });
+
+        expect(result.status).toBe('discarded');
+        const logged = collectLogs(logSpy, warnSpy);
+        expect(logged).not.toContain(privateSlug);
+        expect(logged).not.toContain('OP-556677');
+        expect(logged).not.toContain('60000');
+        expect(logged).not.toContain('60.000');
+        jest.restoreAllMocks();
+      });
+
+      it('unparseable-message warn contains no tenant slug, subject, or body content', async () => {
+        const logSpy = jest.spyOn(Logger.prototype, 'log');
+        const warnSpy = jest.spyOn(Logger.prototype, 'warn');
+        mockMerchantRepo.findBySlug.mockResolvedValue(activeMerchant);
+        mockTransferRepo.findByTenantAndOperationId.mockResolvedValue(null);
+
+        const useCase = new IngestWebhookUseCase(mockMerchantRepo, mockTransferRepo, parserFactory);
+        const result = await useCase.execute({
+          tenantSlug: privateSlug,
+          secretHeader: 'super-secret-crypto-key-1234567890',
+          text: unparseableEmail,
+        });
+
+        expect(result.status).toBe('discarded');
+        const logged = collectLogs(logSpy, warnSpy);
+        expect(logged).not.toContain(privateSlug);
+        expect(logged).not.toContain('resumen mensual');
+        expect(logged).not.toContain('Estimado cliente');
+        jest.restoreAllMocks();
+      });
+    });
   });
 });
