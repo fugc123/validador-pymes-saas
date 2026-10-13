@@ -19,6 +19,7 @@ export interface TransferMatchItem {
   currency: string;
   operationDate: string;
   createdAt: Date;
+  concept?: string;
 }
 
 export interface VerifyTransferOutput {
@@ -48,6 +49,7 @@ function buildFoundOutput(transfers: Transfer[]): VerifyTransferOutput {
       currency: t.currency,
       operationDate: t.operationDate,
       createdAt: t.createdAt,
+      concept: t.concept,
     })),
   };
 }
@@ -61,19 +63,6 @@ export class VerifyTransferUseCase {
     const now = new Date();
     const identifier = input.payerFilter?.trim() ?? '';
 
-    // A cashier lookup always carries an identifier: amount-only search is not
-    // permitted, and an empty/whitespace identifier must short-circuit before
-    // any repository method is invoked.
-    if (identifier.length === 0) {
-      return {
-        found: false,
-        status: 'not_found',
-        transfers: [],
-        message:
-          'Debe indicar el nombre del pagador o la referencia SIPAP/operación junto con el monto para buscar la transferencia.',
-      };
-    }
-
     // Candidate retrieval: tenant-scoped, exact amount, pending only — one
     // fetch for both matching passes. The identifier deliberately never
     // reaches SQL: the shared repository's optional `payer_name ILIKE`
@@ -84,6 +73,22 @@ export class VerifyTransferUseCase {
     const candidates = (
       await this.transferRepo.findPendingByAmountAndPayer(input.tenantId, input.amount)
     ).filter((t) => !t.isExpired(maxAgeMinutes, now));
+
+    // Amount-only search: return every in-window pending match so the
+    // cashier/owner can select the right transfer from a selectable list.
+    // The UI never auto-claims; claiming always targets the selected id.
+    if (identifier.length === 0) {
+      if (candidates.length === 0) {
+        return {
+          found: false,
+          status: 'not_found',
+          transfers: [],
+          message:
+            'No se encontró ninguna transferencia pendiente con ese monto en la ventana de 45 minutos.',
+        };
+      }
+      return buildFoundOutput(candidates);
+    }
 
     // Pass 1: existing payer-name word matching (diacritic-insensitive).
     const queryWords = removeDiacritics(identifier.toLowerCase())

@@ -140,16 +140,39 @@ describe('Cashier verify against the PostgreSQL query contract (TASK-03)', () =>
     expect(query.mock.calls.every(([, params]) => (params as unknown[]).length === 2)).toBe(true);
   });
 
-  it('returns not_found for an empty identifier without issuing any SQL', async () => {
+  it('amount-only search issues the tenant+amount SELECT and returns every in-window match', async () => {
     const { db, query } = postgresContractDb([
-      pendingRow({ payer_name: 'ALEJANDRA CHENA', operation_id: '45601', amount: 26000 }),
+      pendingRow({ id: 'tr-chena', payer_name: 'ALEJANDRA CHENA', operation_id: '45601', amount: 26000 }),
+      pendingRow({ id: 'tr-carlos', payer_name: 'CARLOS LOPEZ', operation_id: '45602', amount: 26000 }),
     ]);
 
-    const result = await verifyWith(db, 26000, '   ');
+    const result = await verifyWith(db, 26000);
 
-    expect(result.found).toBe(false);
-    expect(result.status).toBe('not_found');
-    expect(query).not.toHaveBeenCalled();
+    expect(result.found).toBe(true);
+    expect(result.transfers).toHaveLength(2);
+    expect(result.transfers.map((t) => t.id).sort()).toEqual(['tr-carlos', 'tr-chena']);
+    expect(query).toHaveBeenCalledTimes(1);
+    // Amount-only search must keep the two-parameter tenant + amount SELECT.
+    expect(query.mock.calls[0][1]).toHaveLength(2);
+  });
+
+  it('amount-only search drops rows outside the 45-minute window', async () => {
+    const { db } = postgresContractDb([
+      pendingRow({ id: 'tr-fresh', payer_name: 'PAGADOR NUEVO', operation_id: '900001', amount: 26000 }),
+      pendingRow({
+        id: 'tr-stale',
+        payer_name: 'PAGADOR VIEJO',
+        operation_id: '900002',
+        amount: 26000,
+        created_at: new Date(Date.now() - 50 * 60 * 1000).toISOString(),
+      }),
+    ]);
+
+    const result = await verifyWith(db, 26000);
+
+    expect(result.found).toBe(true);
+    expect(result.transfers).toHaveLength(1);
+    expect(result.transfers[0].id).toBe('tr-fresh');
   });
 
   it('keeps tenant, exact amount, and pending-only constraints when a reference matches', async () => {

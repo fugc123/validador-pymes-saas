@@ -105,7 +105,8 @@ describe('Cashier Fast-POS & Anti-Replay Invariants (T09, T10)', () => {
       expect(result.transfers[0].payerName).toBe('ALANN RODRIGO ARCE RODRIGUEZ');
     });
 
-    it('Scenario 1d: Empty/whitespace identifier returns not_found before any repository call', async () => {
+    it('Scenario 1d: Empty/whitespace identifier performs an amount-only lookup and returns every in-window match', async () => {
+      mockTransferRepo.findPendingByAmountAndPayer.mockResolvedValue([samplePending]);
       const useCase = new VerifyTransferUseCase(mockTransferRepo);
 
       const result = await useCase.execute({
@@ -114,22 +115,41 @@ describe('Cashier Fast-POS & Anti-Replay Invariants (T09, T10)', () => {
         payerFilter: '   ',
       });
 
-      expect(result.found).toBe(false);
-      expect(result.status).toBe('not_found');
-      expect(result.transfers).toHaveLength(0);
-      expect(mockTransferRepo.findPendingByAmountAndPayer).not.toHaveBeenCalled();
-      expect(mockTransferRepo.findByTenantAndOperationId).not.toHaveBeenCalled();
+      expect(result.found).toBe(true);
+      expect(result.status).toBe('pending');
+      expect(result.transfers).toHaveLength(1);
+      expect(result.transfers[0].payerName).toBe('ALEJANDRA CHENA');
+      expect(mockTransferRepo.findPendingByAmountAndPayer).toHaveBeenCalledTimes(1);
+      expect(mockTransferRepo.findPendingByAmountAndPayer).toHaveBeenCalledWith(
+        'tenant-100',
+        26000,
+      );
     });
 
-    it('Scenario 1e: Missing identifier (amount-only request) returns not_found without a lookup', async () => {
+    it('Scenario 1e: Amount-only request returns all in-window pending matches for the exact amount', async () => {
+      const secondPending = new Transfer({
+        id: 'transfer-002',
+        tenantId: 'tenant-100',
+        operationId: '45602',
+        operationDate: '16/09/2026 15:00',
+        payerName: 'CARLOS LOPEZ',
+        amount: 26000,
+        status: 'pending',
+      });
+      mockTransferRepo.findPendingByAmountAndPayer.mockResolvedValue([samplePending, secondPending]);
       const useCase = new VerifyTransferUseCase(mockTransferRepo);
 
       const result = await useCase.execute({ tenantId: 'tenant-100', amount: 26000 });
 
-      expect(result.found).toBe(false);
-      expect(result.status).toBe('not_found');
-      expect(result.transfers).toHaveLength(0);
-      expect(mockTransferRepo.findPendingByAmountAndPayer).not.toHaveBeenCalled();
+      expect(result.found).toBe(true);
+      expect(result.status).toBe('pending');
+      expect(result.transfers).toHaveLength(2);
+      expect(result.transfers.map((t) => t.id)).toEqual(['transfer-001', 'transfer-002']);
+      expect(mockTransferRepo.findPendingByAmountAndPayer).toHaveBeenCalledTimes(1);
+      expect(mockTransferRepo.findPendingByAmountAndPayer).toHaveBeenCalledWith(
+        'tenant-100',
+        26000,
+      );
     });
 
     it('Scenario 1f: Falls back to an exact case-insensitive operationId match when the payer name does not match', async () => {
@@ -201,6 +221,46 @@ describe('Cashier Fast-POS & Anti-Replay Invariants (T09, T10)', () => {
       expect(mockTransferRepo.findPendingByAmountAndPayer).toHaveBeenCalledTimes(1);
     });
 
+    it('Scenario 2: Amount-only match items expose safe structured fields only', async () => {
+      const withExtras = new Transfer({
+        id: 'transfer-005',
+        tenantId: 'tenant-100',
+        operationId: '778899',
+        receiptNumber: 'RC-7788',
+        operationDate: '16/09/2026 16:00',
+        payerName: 'CLIENTE SIPAP',
+        payerBank: 'Banco UENO',
+        concept: 'PRUEBA SISTEMA',
+        amount: 15000,
+        status: 'pending',
+        payerAccount: '123456789',
+        creditAccount: '987654321',
+        rawBody: 'SECRET EMAIL BODY',
+      });
+      mockTransferRepo.findPendingByAmountAndPayer.mockResolvedValue([withExtras]);
+      const useCase = new VerifyTransferUseCase(mockTransferRepo);
+
+      const result = await useCase.execute({ tenantId: 'tenant-100', amount: 15000 });
+
+      expect(result.found).toBe(true);
+      const item = result.transfers[0];
+      expect(item.payerName).toBe('CLIENTE SIPAP');
+      expect(item.payerBank).toBe('Banco UENO');
+      expect(item.operationId).toBe('778899');
+      expect(item.receiptNumber).toBe('RC-7788');
+      expect(item.amount).toBe(15000);
+      expect(item.currency).toBe('PYG');
+      expect(item.operationDate).toBe('16/09/2026 16:00');
+      expect(item.createdAt).toBeInstanceOf(Date);
+      expect(item.concept).toBe('PRUEBA SISTEMA');
+      expect(item).not.toHaveProperty('rawBody');
+      expect(item).not.toHaveProperty('payerAccount');
+      expect(item).not.toHaveProperty('creditAccount');
+      expect(JSON.stringify(result)).not.toContain('SECRET EMAIL BODY');
+      expect(JSON.stringify(result)).not.toContain('123456789');
+      expect(JSON.stringify(result)).not.toContain('987654321');
+    });
+
     it('Scenario 3: Transfer outside 45-minute window is not returned', async () => {
       const expiredTransfer = new Transfer({
         id: 'transfer-old',
@@ -222,6 +282,28 @@ describe('Cashier Fast-POS & Anti-Replay Invariants (T09, T10)', () => {
       });
 
       expect(result.found).toBe(false);
+      expect(result.transfers).toHaveLength(0);
+      expect(mockTransferRepo.findPendingByAmountAndPayer).toHaveBeenCalled();
+    });
+
+    it('Scenario 3b: Amount-only request excludes transfers outside the 45-minute window', async () => {
+      const expiredTransfer = new Transfer({
+        id: 'transfer-old',
+        tenantId: 'tenant-100',
+        operationId: '45699',
+        operationDate: '16/09/2026',
+        payerName: 'CARLOS LOPEZ',
+        amount: 10000,
+        status: 'pending',
+        createdAt: new Date(Date.now() - 50 * 60 * 1000), // 50 mins ago
+      });
+      mockTransferRepo.findPendingByAmountAndPayer.mockResolvedValue([expiredTransfer]);
+      const useCase = new VerifyTransferUseCase(mockTransferRepo);
+
+      const result = await useCase.execute({ tenantId: 'tenant-100', amount: 10000 });
+
+      expect(result.found).toBe(false);
+      expect(result.status).toBe('not_found');
       expect(result.transfers).toHaveLength(0);
       expect(mockTransferRepo.findPendingByAmountAndPayer).toHaveBeenCalled();
     });
@@ -286,23 +368,29 @@ describe('Cashier Fast-POS & Anti-Replay Invariants (T09, T10)', () => {
   });
 });
 
-describe('Cashier verification UI copy and empty-identifier request guards', () => {
+describe('Cashier verification UI copy and amount-only selection', () => {
   const rootDir = path.resolve(__dirname, '../..');
   const read = (relativePath: string) => readFileSync(path.join(rootDir, relativePath), 'utf8');
   const posSource = read('client/src/portals/pos/FastPosScreen.tsx');
   const ownerSource = read('client/src/portals/owner/OwnerDashboard.tsx');
 
-  it('POS screen asks for payer name or SIPAP reference and blocks empty-identifier requests', () => {
+  it('POS screen makes the payer identifier optional and renders a selectable list for amount-only matches', () => {
     expect(posSource).toContain('Nombre del Pagador o Referencia');
+    expect(posSource).toContain('(Opcional)');
     expect(posSource).not.toContain('Apellido del Pagador');
-    expect(posSource).toContain('if (!payerFilter) return;');
-    expect(posSource).toContain('|| !payerName.trim()');
+    expect(posSource).not.toContain('if (!payerFilter) return;');
+    expect(posSource).not.toContain('|| !payerName.trim()');
+    expect(posSource).toContain('matchCandidates');
+    expect(posSource).toContain('Múltiples transferencias');
+    expect(posSource).toContain('Nro. Comprobante');
+    expect(posSource).toContain('Concepto');
   });
 
-  it('Owner validation input asks for payer name or SIPAP reference and blocks empty-identifier requests', () => {
+  it('Owner validation input makes the payer identifier optional and renders a selectable list for amount-only matches', () => {
     expect(ownerSource).toContain('Nombre del Pagador o Referencia');
-    expect(ownerSource).not.toContain('Nombre del Pagador (Opcional)');
-    expect(ownerSource).toContain('if (!payerFilter) return;');
-    expect(ownerSource).toContain('|| !validationPayerName.trim()');
+    expect(ownerSource).toContain('(Opcional)');
+    expect(ownerSource).not.toContain('if (!payerFilter) return;');
+    expect(ownerSource).not.toContain('|| !validationPayerName.trim()');
+    expect(ownerSource).toContain('validationCandidates');
   });
 });
