@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   ForbiddenException,
   Injectable,
   Inject,
@@ -11,6 +10,7 @@ import * as crypto from 'crypto';
 import { IMerchantRepository } from '../ports/auth.ports';
 import { ITransferRepository } from '../ports/transfer.ports';
 import { BankParserFactory } from '../../../infrastructure/parsers/bank-parser.factory';
+import { detectTransferDirection } from '../../../infrastructure/parsers/transfer-direction.detector';
 import { Transfer } from '../../domain/entities/transfer.entity';
 
 export interface IngestWebhookInput {
@@ -22,10 +22,11 @@ export interface IngestWebhookInput {
 }
 
 export interface IngestWebhookOutput {
-  status: 'created' | 'already_exists';
-  operationId: string;
+  status: 'created' | 'already_exists' | 'discarded';
+  operationId?: string;
   id?: string;
-  amount: number;
+  amount?: number;
+  reason?: 'sent_transfer' | 'unknown_direction' | 'unparseable_message';
   message?: string;
 }
 
@@ -72,22 +73,52 @@ export class IngestWebhookUseCase {
 
     // Parse bank email notification - try plain text first (cleanest), then html, then subject + text
     let parsed = null;
+    let rawContent = '';
     if (input.text) {
+      rawContent = input.text;
       parsed = this.parserFactory.parse(input.text);
     }
     if (!parsed && input.html) {
+      rawContent = input.html;
       parsed = this.parserFactory.parse(input.html);
     }
     if (!parsed && input.subject) {
-      const combined = `${input.subject}\n${input.text || ''}`;
-      parsed = this.parserFactory.parse(combined);
+      rawContent = `${input.subject}\n${input.text || ''}`;
+      parsed = this.parserFactory.parse(rawContent);
     }
 
     if (!parsed) {
-      this.logger.warn(
-        `Failed to parse transfer for tenant '${input.tenantSlug}'. Subject: "${input.subject}". Text snippet: "${input.text?.slice(0, 300)}"`
-      );
-      throw new BadRequestException('Unable to extract valid transfer details from email body');
+      // TASK-03 correction: discard logs must not leak tenant slug, subject,
+      // or body content — category only.
+      this.logger.warn('Discarded unparseable message: no transfer details could be extracted');
+      // TASK-03: acknowledge unparseable mail with a discarded outcome (2xx)
+      // instead of a 400, so GAS labels the message and never retries it.
+      return {
+        status: 'discarded',
+        reason: 'unparseable_message',
+        message: 'Email body did not contain a parseable transfer; acknowledged without creating a transfer',
+      };
+    }
+
+    // TASK-03: received-only persistence. Sent and direction-unknown
+    // notifications are discarded without a TransferRepository.save so the
+    // webhook responds 2xx, GAS labels the message, and no retry loop runs.
+    // Unknown is never defaulted to received.
+    const direction = detectTransferDirection(rawContent);
+    if (direction !== 'received') {
+      const reason = direction === 'sent' ? 'sent_transfer' : 'unknown_direction';
+      // TASK-03 correction: discard logs must not leak tenant slug, operation
+      // ID, or amount — direction category and reason only.
+      this.logger.log(`Discarding transfer notification. Direction: ${direction}. Reason: ${reason}`);
+      return {
+        status: 'discarded',
+        reason,
+        operationId: parsed.operationId,
+        message:
+          direction === 'sent'
+            ? 'Sent transfer notification acknowledged and discarded'
+            : 'Transfer direction could not be confirmed as received; acknowledged and discarded',
+      };
     }
 
     this.logger.log(
