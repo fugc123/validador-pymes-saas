@@ -1,3 +1,4 @@
+import { RejectMerchantRequestUseCase } from "./core/application/use-cases/onboarding/reject-merchant-request.use-case";
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 
@@ -66,6 +67,7 @@ import { AuthMiddleware } from './presentation/middlewares/auth.middleware';
     GetMerchantMetricsUseCase,
     SubmitMerchantRequestUseCase,
     ApproveMerchantRequestUseCase,
+    RejectMerchantRequestUseCase,
     CreateFreeMerchantUseCase,
     SubscriptionBillingUseCase,
     // Repository Ports Implementations

@@ -1,4 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from "react";
+// Simple native history router for Task-03 (Issue #8)
+function useAppRouter() {
+  const [path, setPath] = useState(window.location.pathname);
+
+  useEffect(() => {
+    const onPop = () => setPath(window.location.pathname);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  const navigate = (to: string) => {
+    window.history.pushState({}, "", to);
+    setPath(to);
+  };
+
+  return { path, navigate };
+}
+
+
 import { useAuth } from './context/AuthContext';
 import { LoginView } from './portals/auth/LoginView';
 import { FastPosScreen } from './portals/pos/FastPosScreen';
