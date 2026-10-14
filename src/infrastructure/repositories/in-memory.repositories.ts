@@ -1,3 +1,32 @@
+
+function isTodayAsuncion(dateInput: Date | string | null | undefined): boolean {
+  if (!dateInput) return false;
+  const date = new Date(dateInput);
+  if (isNaN(date.getTime())) return false;
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Asuncion",
+    calendar: "gregory",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  });
+  return formatter.format(date) === formatter.format(new Date());
+}
+
+function computePeakHours(transfers: Transfer[]): number[] {
+  const hours = new Array(24).fill(0);
+  for (const t of transfers) {
+    if (t.isClaimed && t.isClaimed()) {
+      const d = t.claimedAt || t.createdAt;
+      if (d) {
+        const h = new Date(d).getHours();
+        if (h >= 0 && h < 24) hours[h]++;
+      }
+    }
+  }
+  return hours;
+}
+
 import { ConflictException, Injectable, Optional } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
@@ -756,13 +785,17 @@ function buildMetrics(tenantTransfers: Transfer[]): MerchantMetrics {
   const claimedTransfers = tenantTransfers.filter((t) => t.isClaimed());
   const pendingTransfers = tenantTransfers.filter((t) => t.isPending());
 
-  const totalCollectedToday = claimedTransfers.reduce((sum, t) => sum + t.amount, 0);
-  const countValidatedToday = claimedTransfers.length;
+  const todayClaimed = claimedTransfers.filter((t) => isTodayAsuncion(t.claimedAt || t.createdAt));
+
+  const totalCollectedToday = todayClaimed.reduce((sum, t) => sum + t.amount, 0);
+  const countValidatedToday = todayClaimed.length;
   const pendingUnclaimedCount = pendingTransfers.length;
 
   const uniqueCashiers = new Set(
     claimedTransfers.map((t) => t.claimedByUserId).filter((id): id is string => Boolean(id)),
   );
+
+  const peakHoursDistribution = computePeakHours(tenantTransfers);
 
   const recentTransfers = tenantTransfers.slice(0, 10).map((t) => ({
     id: t.id || t.operationId,
@@ -780,6 +813,7 @@ function buildMetrics(tenantTransfers: Transfer[]): MerchantMetrics {
     countValidatedToday,
     pendingUnclaimedCount,
     activeCashiersCount: uniqueCashiers.size || 1,
+    peakHoursDistribution,
     recentTransfers,
   };
 }
@@ -1079,38 +1113,66 @@ export class InMemoryTransferRepository implements ITransferRepository {
 
   async getMetricsByTenant(tenantId: string): Promise<MerchantMetrics> {
     if (this.dbService && !this.dbService.isMemoryMode) {
-      const res = await this.dbService.query<TransferRow>(
+      const metricsRes = await this.dbService.query<{
+        total_collected_today: string;
+        count_validated_today: string;
+        pending_unclaimed_count: string;
+        active_cashiers_count: string;
+      }>(
+        `SELECT
+           COALESCE(SUM(CASE WHEN t.status = 'CLAIMED' AND (t.claimed_at::date = CURRENT_DATE OR t.created_at::date = CURRENT_DATE) THEN t.amount END), 0) AS total_collected_today,
+           COALESCE(COUNT(CASE WHEN t.status = 'CLAIMED' AND (t.claimed_at::date = CURRENT_DATE OR t.created_at::date = CURRENT_DATE) THEN 1 END), 0) AS count_validated_today,
+           COALESCE(COUNT(CASE WHEN t.status = 'PENDING' THEN 1 END), 0) AS pending_unclaimed_count,
+           COALESCE(COUNT(DISTINCT CASE WHEN t.status = 'CLAIMED' THEN t.claimed_by_user_id END), 1) AS active_cashiers_count
+         FROM transfers t
+         JOIN merchants m ON t.tenant_id = m.id
+         WHERE (m.slug = $1 OR m.id::text = $1)`,
+        [tenantId]
+      );
+
+      const peakRes = await this.dbService.query<{ hour: number; count: string }>(
+        `SELECT EXTRACT(HOUR FROM COALESCE(t.claimed_at, t.created_at))::int as hour, COUNT(*)::text as count
+         FROM transfers t
+         JOIN merchants m ON t.tenant_id = m.id
+         WHERE (m.slug = $1 OR m.id::text = $1) AND t.status = 'CLAIMED'
+         GROUP BY 1`,
+        [tenantId]
+      );
+
+      const peakHoursDistribution = new Array(24).fill(0);
+      for (const r of peakRes?.rows ?? []) {
+        const h = Number(r.hour);
+        if (h >= 0 && h < 24) peakHoursDistribution[h] = Number(r.count);
+      }
+
+      const recentRes = await this.dbService.query<TransferRow>(
         `SELECT t.* FROM transfers t
          JOIN merchants m ON t.tenant_id = m.id
          WHERE (m.slug = $1 OR m.id::text = $1)
-         ORDER BY t.created_at DESC`,
-        [tenantId],
+         ORDER BY t.created_at DESC LIMIT 10`,
+        [tenantId]
       );
-      const rows = res?.rows ?? [];
-      return buildMetrics(
-        rows.map(
-          (row) =>
-            new Transfer({
-              id: row.id,
-              tenantId,
-              operationId: row.operation_id,
-              receiptNumber: row.receipt_number || undefined,
-              operationDate: row.operation_date,
-              payerName: row.payer_name,
-              payerAccount: row.payer_account || undefined,
-              payerBank: row.payer_bank || undefined,
-              currency: row.currency,
-              amount: row.amount,
-              creditAccount: row.credit_account || undefined,
-              concept: row.concept || undefined,
-              rawBody: row.raw_body || undefined,
-              status: row.status as any,
-              claimedAt: row.claimed_at ? new Date(row.claimed_at) : null,
-              claimedByUserId: row.claimed_by_user_id,
-              createdAt: new Date(row.created_at),
-            }),
-        ),
-      );
+
+      const row = metricsRes?.rows?.[0];
+      const recentTransfers = (recentRes?.rows ?? []).map((t) => ({
+        id: t.id || t.operation_id,
+        operationId: t.operation_id,
+        amount: t.amount,
+        payerName: t.payer_name,
+        payerBank: t.payer_bank || undefined,
+        status: t.status,
+        claimedAt: t.claimed_at ? new Date(t.claimed_at).toISOString() : null,
+        operationDate: t.operation_date,
+      }));
+
+      return {
+        totalCollectedToday: Number(row?.total_collected_today || 0),
+        countValidatedToday: Number(row?.count_validated_today || 0),
+        pendingUnclaimedCount: Number(row?.pending_unclaimed_count || 0),
+        activeCashiersCount: Number(row?.active_cashiers_count || 1),
+        peakHoursDistribution,
+        recentTransfers,
+      };
     }
     return buildMetrics(this.transfers.filter((t) => t.tenantId === tenantId));
   }
