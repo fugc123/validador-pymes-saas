@@ -172,6 +172,23 @@ export const SuperAdminPanel: React.FC = () => {
     }
   };
 
+  const handleReject = async (id: string) => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`/api/onboarding/superadmin/merchant-requests/${id}/reject`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        setRequests(requests.map(r => r.id === id ? { ...r, status: "rejected" } : r));
+      } else {
+        alert("Error al rechazar solicitud");
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const handleConfirmPayment = async (tenantId: string) => {
     if (!token) return;
     try {

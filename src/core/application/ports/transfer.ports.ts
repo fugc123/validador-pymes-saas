@@ -5,6 +5,7 @@ export interface MerchantMetrics {
   countValidatedToday: number;
   pendingUnclaimedCount: number;
   activeCashiersCount: number;
+  peakHoursDistribution: number[];
   recentTransfers: Array<{
     id: string;
     operationId: string;

@@ -1,3 +1,4 @@
+import { RejectMerchantRequestUseCase } from "../../core/application/use-cases/onboarding/reject-merchant-request.use-case";
 import {
   Body,
   Controller,
