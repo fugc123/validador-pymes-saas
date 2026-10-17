@@ -74,6 +74,7 @@ export const OwnerDashboard: React.FC = () => {
   const { user, activeTenant, logout, token, switchTenant, availableMemberships, openTenantSelector } = useAuth();
   const [copiedScript, setCopiedScript] = useState(false);
   const [copiedSecret, setCopiedSecret] = useState(false);
+  const [showWebhookSecret, setShowWebhookSecret] = useState(false);
   const [scriptError, setScriptError] = useState<string | null>(null);
   // Cached secret is bound to the slug it was read for, so a tenant switch can
   // never surface the previous tenant's value.
@@ -287,6 +288,8 @@ export const OwnerDashboard: React.FC = () => {
     // Clear before every tenant/token refetch: no window where a stale value
     // could be read. The `cancelled` flag drops responses that arrive late.
     setWebhookSecret(null);
+    setShowWebhookSecret(false);
+    setScriptError(null);
     if (!token) {
       return;
     }
@@ -294,7 +297,15 @@ export const OwnerDashboard: React.FC = () => {
       .then((secret) => {
         if (!cancelled) setWebhookSecret({ slug: tenantSlug, secret });
       })
-      .catch(() => undefined);
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const msg = err instanceof Error ? err.message : '';
+        if (msg.includes('401') || msg.includes('403')) {
+          setScriptError(
+            'Tu sesión venció o fue reiniciada en el servidor. Cerrá sesión (arriba a la derecha) y volvé a ingresar para copiar el WEBHOOK_SECRET.',
+          );
+        }
+      });
     return () => {
       cancelled = true;
     };
@@ -306,9 +317,34 @@ export const OwnerDashboard: React.FC = () => {
   // the secret copy stay separate.
   const personalizedGasScript = buildPersonalizedGasScript(hostUrl, tenantSlug);
 
+  const copyTextToClipboard = async (text: string): Promise<boolean> => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch {
+      // Fall through to synchronous textarea + execCommand fallback
+    }
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      const copied = document.execCommand('copy');
+      document.body.removeChild(textarea);
+      return copied;
+    } catch {
+      return false;
+    }
+  };
+
   const handleCopyPersonalizedScript = () => {
     setScriptError(null);
-    navigator.clipboard.writeText(personalizedGasScript);
+    void copyTextToClipboard(personalizedGasScript);
     setCopiedScript(true);
     setTimeout(() => setCopiedScript(false), 3000);
   };
@@ -316,15 +352,29 @@ export const OwnerDashboard: React.FC = () => {
   // The persisted secret is a second, separate copy the owner pastes as the
   // `WEBHOOK_SECRET` Script Property. It is held in memory only for this copy
   // action: never in the generated script, never in localStorage, never logged.
-  const handleCopyWebhookSecret = () => {
-    if (!activeWebhookSecret) {
-      setScriptError(
-        'No pudimos obtener el secreto web de tu comercio. Reintentá en unos segundos; si persiste, contactá a soporte.',
-      );
-      return;
-    }
+  const handleCopyWebhookSecret = async () => {
     setScriptError(null);
-    navigator.clipboard.writeText(activeWebhookSecret);
+    let secret = activeWebhookSecret;
+    if (!secret) {
+      try {
+        secret = await requestWebhookSecret(token);
+        setWebhookSecret({ slug: tenantSlug, secret });
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : '';
+        if (msg.includes('401') || msg.includes('403')) {
+          setScriptError(
+            'Tu sesión venció o fue reiniciada en el servidor. Cerrá sesión (arriba a la derecha) y volvé a ingresar para copiar el WEBHOOK_SECRET.',
+          );
+        } else {
+          setScriptError(
+            'No pudimos obtener el secreto web de tu comercio. Reintentá en unos segundos; si persiste, cerrá sesión y volvé a ingresar.',
+          );
+        }
+        return;
+      }
+    }
+    await copyTextToClipboard(secret);
+    setShowWebhookSecret(true);
     setCopiedSecret(true);
     setTimeout(() => setCopiedSecret(false), 3000);
   };
@@ -953,9 +1003,8 @@ Estado: Transferencia acreditada en cuenta`;
 
               <button
                 onClick={handleCopyWebhookSecret}
-                disabled={!activeWebhookSecret}
                 title="Copiar el secreto WEBHOOK_SECRET para pegarlo como Propiedad del Script"
-                className="w-full sm:w-auto px-5 py-2.5 bg-[#0B0F19] hover:bg-[#1A253C] border border-amber-500/40 hover:border-amber-400/60 text-amber-300 font-bold text-xs rounded-xl flex items-center justify-center space-x-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full sm:w-auto px-5 py-2.5 bg-[#0B0F19] hover:bg-[#1A253C] border border-amber-500/40 hover:border-amber-400/60 text-amber-300 font-bold text-xs rounded-xl flex items-center justify-center space-x-2 transition-all"
               >
                 {copiedSecret ? <Check className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
                 <span>{copiedSecret ? '¡Secreto Copiado al Portapapeles!' : '2. Copiar Secreto WEBHOOK_SECRET'}</span>
@@ -987,6 +1036,26 @@ Estado: Transferencia acreditada en cuenta`;
           {scriptError && (
             <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs">
               {scriptError}
+            </div>
+          )}
+
+          {showWebhookSecret && activeWebhookSecret && (
+            <div className="p-3 bg-[#0B0F19] border border-amber-500/30 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs">
+              <div className="space-y-1 min-w-0 flex-1">
+                <div className="text-amber-300 font-bold">
+                  Valor de <code className="font-mono">WEBHOOK_SECRET</code> (seleccionable con clic):
+                </div>
+                <code className="block p-2 bg-[#151D2F] rounded-lg text-emerald-300 font-mono text-[11px] break-all select-all">
+                  {activeWebhookSecret}
+                </code>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowWebhookSecret(false)}
+                className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold rounded-lg shrink-0"
+              >
+                Ocultar
+              </button>
             </div>
           )}
 

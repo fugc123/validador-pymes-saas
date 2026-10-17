@@ -15,6 +15,8 @@
  * it must never report demo success when the webhook was not accepted.
  */
 
+import { readFileSync } from 'fs';
+import * as path from 'path';
 import { requestWebhookSecret, sendTestWebhook } from '../../client/src/context/webhook-requests';
 
 const jsonResponse = (body: unknown, init?: { ok?: boolean; status?: number }) =>
@@ -146,6 +148,28 @@ describe('client webhook secret request helper', () => {
       await expect(sendTestWebhook(null, TENANT_SLUG, MESSAGE)).rejects.toBeInstanceOf(Error);
 
       expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('OwnerDashboard webhook secret copy button contract', () => {
+    const dashboardPath = path.join(
+      __dirname,
+      '..',
+      '..',
+      'client',
+      'src',
+      'portals',
+      'owner',
+      'OwnerDashboard.tsx',
+    );
+
+    it('never bricks the copy button with disabled={!activeWebhookSecret} and retries on click', () => {
+      const source = readFileSync(dashboardPath, 'utf8');
+
+      expect(source).not.toContain('disabled={!activeWebhookSecret}');
+      expect(source).toContain('await requestWebhookSecret(token)');
+      expect(source).toContain("document.execCommand('copy')");
+      expect(source).toContain('select-all');
     });
   });
 });
