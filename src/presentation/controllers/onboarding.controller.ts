@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Inject,
+  Optional,
   Param,
   Post,
   UseGuards,
@@ -80,6 +81,8 @@ export class OnboardingController {
     private readonly createFreeMerchantUseCase: CreateFreeMerchantUseCase,
     @Inject('IMerchantRequestRepository')
     private readonly requestRepo: IMerchantRequestRepository,
+    @Optional()
+    private readonly rejectUseCase?: RejectMerchantRequestUseCase,
   ) {}
 
   @Post('request')
@@ -102,6 +105,15 @@ export class OnboardingController {
   @HttpCode(HttpStatus.OK)
   async approveRequest(@Param('id') requestId: string) {
     return this.approveUseCase.execute({ requestId });
+  }
+
+  @Post('superadmin/merchant-requests/:id/reject')
+  @Roles('SUPER_ADMIN')
+  @UseGuards(RolesGuard)
+  @HttpCode(HttpStatus.OK)
+  async rejectRequest(@Param('id') requestId: string) {
+    const useCase = this.rejectUseCase ?? new RejectMerchantRequestUseCase(this.requestRepo);
+    return useCase.execute(requestId);
   }
 
   @Get('superadmin/merchant-requests')

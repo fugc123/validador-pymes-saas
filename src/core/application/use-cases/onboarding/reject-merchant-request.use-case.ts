@@ -1,10 +1,13 @@
-import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
-import { IMerchantRequestRepository } from "../../ports/onboarding.ports";
-import { MerchantRequest } from "../../../domain/entities/merchant-request.entity";
+import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
+import { IMerchantRequestRepository } from '../../ports/onboarding.ports';
+import { MerchantRequest } from '../../../domain/entities/merchant-request.entity';
 
 @Injectable()
 export class RejectMerchantRequestUseCase {
-  constructor(private readonly merchantRequestRepository: IMerchantRequestRepository) {}
+  constructor(
+    @Inject('IMerchantRequestRepository')
+    private readonly merchantRequestRepository: IMerchantRequestRepository,
+  ) {}
 
   async execute(requestId: string, reason?: string): Promise<MerchantRequest> {
     const request = await this.merchantRequestRepository.findById(requestId);

@@ -1,6 +1,19 @@
+import { Test } from '@nestjs/testing';
+import { AppModule } from '../../src/app.module';
 import { GetMerchantMetricsUseCase } from '../../src/core/application/use-cases/transfers/get-merchant-metrics.use-case';
 import { InMemoryTransferRepository } from '../../src/infrastructure/repositories/in-memory.repositories';
 import { Transfer } from '../../src/core/domain/entities/transfer.entity';
+
+describe('AppModule DI bootstrap contract', () => {
+  it('resolves every provider and controller in AppModule without missing @Inject tokens', async () => {
+    const moduleRef = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+
+    expect(moduleRef).toBeDefined();
+    await moduleRef.close();
+  });
+});
 
 describe('GetMerchantMetricsUseCase', () => {
   let transferRepo: InMemoryTransferRepository;
