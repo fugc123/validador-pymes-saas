@@ -34,6 +34,24 @@ jobs:
             npm ci --ignore-scripts
             npm run build
             cd ..
+            echo "=== [DIAG] Env keys in /var/www/cajasegura/.env ==="
+            if [ -f .env ]; then grep -E '^[A-Za-z_][A-Za-z0-9_]*=' .env | cut -d= -f1; else echo "NO .env FILE"; fi
+            echo "=== [DIAG] Listening 5432 / Postgres status ==="
+            ss -ltnp | grep 5432 || true
+            docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}' 2>/dev/null || true
+            echo "=== [DIAG] Postgres databases & accounts (no secrets) ==="
+            if command -v psql >/dev/null 2>&1; then
+              sudo -n -u postgres psql -tAc "SELECT datname FROM pg_database WHERE NOT datistemplate" 2>/dev/null || true
+              for db in validador_saas cajasegura_db postgres; do
+                echo "--- DB: $db ---"
+                sudo -n -u postgres psql -d "$db" -tAc "SELECT id, email, full_name, is_super_admin FROM users;" 2>/dev/null || true
+                sudo -n -u postgres psql -d "$db" -tAc "SELECT id, name, slug, status FROM merchants;" 2>/dev/null || true
+                sudo -n -u postgres psql -d "$db" -tAc "SELECT user_id, merchant_id, role, is_active FROM merchant_memberships;" 2>/dev/null || true
+              done
+            fi
             pm2 restart cajasegura-backend --update-env
+            sleep 3
             pm2 status
+            echo "=== [DIAG] PM2 logs (last 40 lines) ==="
+            pm2 logs cajasegura-backend --lines 40 --nostream || true
             echo "✅ [CD] Despliegue completado exitosamente."
