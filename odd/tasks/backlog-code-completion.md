@@ -1,6 +1,6 @@
 # ODD Feature — Backlog Code Completion (Issues #1–#11 minus #20)
 
-Spec: `implementation_plan.md` (repo Phase 1 artifact, this session).
+Spec: `docs/plans/2026-10-14-backlog-code-completion.md` (repo Phase 1 artifact, this session; moved when `implementation_plan.md` was reused for the next change).
 Delivery strategy: ask-on-risk. Work-unit commit required per task. Chain PRs smallest-first.
 Line counts are advisory only, never a reason to cancel/block a PR or force a split.
 

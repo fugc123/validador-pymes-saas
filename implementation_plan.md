@@ -1,81 +1,84 @@
-# Implementation Plan — Backlog Code Completion (Issues #1–#11 minus #20)
+# Implementation Plan — Gmail ingestor crash: `msg.getLabels is not a function`
 
 Status: **DRAFT — Phase 1 complete, awaiting Phase 2 human approval**
-Date: 2026-10-14
-Scope: every open backlog issue's code gaps. Issue #20 (production log/DB verification) is explicitly OUT of scope — owned by the operator.
+Date: 2026-10-16
+Scope: the production Google Apps Script ingestor (both checked-in copies), its shared Gmail sandbox, and the two specs that pin it.
+Previous plan (units A–D merged): `docs/plans/2026-10-14-backlog-code-completion.md`.
 
 ## 1. Context & root-cause analysis
 
-Issues #1–#11 were filed 2026-09-16, before most of the current implementation existed. A read-only gap analysis (ADR-009 + code evidence) shows most are already built; the backlog is stale, not the code.
+Production report: `TypeError: msg.getLabels is not a function at procesarTransferenciasBancarias (Código:80:29)`.
 
-| Issue | Verdict | Genuinely open |
-|---|---|---|
-| #1 backend core | Implemented (deliberate deviations: raw `pg`, no RLS — ADR-009) | none |
-| #2 memberships/RBAC/switcher | Implemented | none |
-| #3 webhook ingestion + parsers | Implemented | none |
-| #4 onboarding queue | Partial | reject action (S); DB transaction (M, judgment); two-stage flow vestigial |
-| #5 Stripe/local gateways | Missing **by design** | none — superseded by #9 + ADR-009 (manual billing) |
-| #6 Fast-POS UI | Implemented | CSV ledger export (S/M) |
-| #7 E2E suite | Partial | decision: Supertest contract tests (M) vs re-scope/close |
-| #8 landing + trial | Implemented | URL routing/deep links (M) |
-| #9 dogfooding billing | Partial | auto `past_due` (M), RUC/phone match (M), promo amount (S), QR (S), backend gating (documented as not) |
-| #10 metrics | Partial **+ correctness bug** | "today" is unfiltered (bug), JS instead of SQL aggregation, no peak hours |
-| #11 branding/copy | Implemented | none |
+Root cause is an API contract error, not a logic bug:
 
-Root cause of remaining gaps: (a) backlog never triaged after implementation landed, (b) `#10` shipped aggregation without date scoping, (c) `#8` intentionally deferred routing, (d) `#4`'s approval stage was superseded by self-service onboarding but never reconciled.
+- `GmailMessage` has **no** `getLabels()` and **no** `addLabel()`. Verified against the official `GmailMessage` reference: the class exposes `getThread()`, `getId()`, `markRead()`, `isUnread()`, `star()`/`isStarred()`, but zero label methods.
+- Labels are message-scoped in Gmail and are only reachable through `GmailThread.getLabels()/addLabel()/removeLabel()`. Google's own label guide states it plainly: *"Labels only exist on messages… When you add a label on a thread, you add the specified label on all **existing** messages in the thread. New messages don't inherit the existing label."*
+- Both broken call sites are in the shipped script: `msg.getLabels()` (`code.gs:79`, generated copy `personalized-gas-script.ts:99`) runs **outside** the `try` block, so the first message aborts the whole run — nothing is forwarded, nothing is labeled, nothing is marked read.
+- `msg.addLabel(label)` (`code.gs:124`, `personalized-gas-script.ts:144`) is the second latent crash: it would throw on the first 2xx response even after the first error is fixed.
+
+Why the test suite stayed green: `test/unit/helpers/gas-gmail-sandbox.ts` emulates a Gmail that does not exist — `makeMessage` fabricates `getLabels()`/`addLabel()` (lines 76–81) and the specs pin that fantasy API (`expect(script).toContain('msg.getLabels()')`). The mocks encode the bug instead of catching it.
+
+Blast radius: the ingestor has been dead since TASK-02 shipped, so every bank notification in that window is unprocessed. Because the crash happens before `markRead()`, the backlog is still unread/unlabeled and will be picked up by the first run after the fix. No backend, webhook, or claim path is affected.
 
 ## 2. Multi-tenant isolation impact
 
-- Work units A–D touch merchant-scoped queries, onboarding (unauthenticated public path), client routing, and client-side export.
-- Unit A must keep `tenant_id` scoping on every new SQL aggregation; no cross-tenant aggregation for SUPER_ADMIN totals without an explicit admin query.
-- Unit B must require SUPER_ADMIN role on the new reject endpoint (role guard already global).
-- No schema migrations required for units A–D. No changes to auth, webhook, or claim paths.
+- None. No server, schema, auth, webhook, or anti-replay code changes; the fix is confined to the merchant-side Apps Script that POSTs to the existing tenant webhook.
+- The new state lives in the merchant's own Script Properties (same store already holding `WEBHOOK_SECRET`) and contains only opaque Gmail message IDs — no PII, no secrets, no cross-tenant data.
+- The webhook stays idempotent (`already_exists` → 200, proven in `webhook-ingest.spec.ts`), so any duplicate POST after a property reset or cap eviction is absorbed.
 
-## 3. Work units (file-by-file)
+## 3. Design options (Phase 2 choice)
 
-### Unit A — Issue #10 metrics correctness + SQL aggregation (M, highest value)
-- [MODIFY] `src/infrastructure/repositories/in-memory.repositories.ts` — `buildMetrics`: add `created_at >= CURRENT_DATE` scoping for `totalCollectedToday`/`countValidatedToday`; add `peak_hours_distribution` (24h buckets, claimed transfers, tenant-scoped).
-- [MODIFY] `src/infrastructure/repositories/in-memory.repositories.ts` — `getMetricsByTenant` (DB mode): aggregate in SQL (`SUM`/`COUNT` + date filter + hour bucketing) instead of `SELECT *`; keep in-memory path behaviorally identical.
-- [MODIFY] `src/core/domain/ports/transfer.ports.ts` — `MerchantMetrics`: add `peakHoursDistribution` (+ today fields documented as calendar-day, tenant TZ = America/Asuncion constant).
-- [MODIFY] `client/src/portals/owner/OwnerDashboard.tsx` — render peak-hours distribution; "Hoy" labels now truthful.
-- [MODIFY] `test/unit/*.spec.ts` — new cases: today-scoped totals, all-time totals unchanged, peak-hour buckets, SQL-mode aggregation parity (DB-mode contract style like `repository-db-fail-closed.spec.ts`).
+The requirement the previous change was chasing (TASK-02) is per-message dedup: a successful message must never be reposted, a failed sibling must stay eligible, and a later message in an already-processed conversation must still be processed. Gmail cannot express that with labels alone from `GmailApp`.
 
-### Unit B — Issue #4 reject action (S)
-- [NEW] `src/core/application/use-cases/onboarding/reject-merchant-request.use-case.ts` — flips status to `rejected` (domain method exists: `merchant-request.entity.ts:70`); SUPER_ADMIN only; idempotent on terminal states.
-- [MODIFY] `src/presentation/controllers/onboarding.controller.ts` — `POST /onboarding/superadmin/merchant-requests/:id/reject` (DTO with optional reason, `class-validator`).
-- [MODIFY] `client/src/portals/superadmin/SuperAdminPanel.tsx` — Rechazar button + confirm on pending rows.
-- [MODIFY] `test/unit/onboarding-*.spec.ts` — reject transitions, role guard, idempotency, public path unaffected.
+| | Option | Marker | Exact? | Merchant friction | Risk |
+|---|---|---|---|---|---|
+| **C (recommended)** | Per-message processed-ID set in Script Properties + keep `-label:` thread prune | Script Property `PROCESSED_MSG_IDS` | Yes | None (property is created automatically) | State reset → duplicate POSTs, absorbed by idempotent webhook |
+| A | Star each processed message, prune with `-is:starred` | `msg.star()` / `msg.isStarred()` | Yes, unless the merchant already stars/filters bank mail | None | A merchant's existing star or Gmail filter silently suppresses a notification |
+| B | Advanced Gmail service (`Gmail.Users.messages.modify`) | Real per-message label | Yes | Merchants must enable the advanced service and re-authorize | Setup step for non-technical kiosk owners; biggest diff |
 
-### Unit C — Issue #8 URL routing (M)
-- [MODIFY] `client/src/App.tsx` — replace `useState<'landing'|'auth'|'register'>` with a ~30-line native history router (`pathname → view`, `popstate` listener, `pushState` navigation). No new dependency (Ponytail ladder step 3).
-- [MODIFY] `client/src/portals/landing/LandingPage.tsx` — CTA/links navigate via router instead of view state.
-- [MODIFY] `client/src/portals/pos/FastPosScreen.tsx` or auth guard (as needed) — `/pos` and `/login` deep links resolve to the correct portal; unauthenticated `/pos` falls back to auth.
-- Verification: `npm --prefix client run build` (client has no test runner).
+**Recommendation: C.** It is the only option with no user-collision and no setup step, and its failure mode is duplicates (safe), never a lost transfer. Option A is the shortest diff; Option B is the "truest" Gmail model but pushes an editor step onto every merchant.
 
-### Unit D — Issue #6 CSV ledger export (S/M)
-- [NEW] `client/src/utils/csv-export.ts` — minimal builder (escaping, `Blob` download), stdlib only.
-- [MODIFY] `client/src/portals/owner/OwnerDashboard.tsx` — "Exportar CSV" action over the already-loaded audit rows; no backend change.
-- [MODIFY] `test/unit/` — unit-test the builder via root Jest (ts-jest) if resolvable from `test/`; otherwise verification = client build.
+## 4. File-by-file changes (Option C)
 
-### Unit E — Triage-only closures (no code)
-- Close with evidence comments: **#1, #2, #3, #11** (implemented; cite ADR-009 + files), **#5** (superseded by #9 + ADR-009 manual-billing decision).
+- [MODIFY] `google-apps-script/code.gs`
+  - Read `PROCESSED_MSG_IDS` from Script Properties (JSON array; corrupt/missing → empty array → re-send, safe).
+  - Replace the `msg.getLabels()` block (lines 76–89) with `if (processed.indexOf(msg.getId()) !== -1) continue;`.
+  - On 2xx: replace `msg.addLabel(label)` (line 124) with `processed.push(msg.getId())`; keep `msg.markRead()`.
+  - Track per-thread `allSent`; after the message loop call `thread.addLabel(label)` only when every message in the thread is processed — that restores the `-label:` scan prune (and self-heals threads whose label step previously failed).
+  - Persist once per run, only when changed: `JSON.stringify(processed.slice(-CAP))` (FIFO cap ~200 with a `ponytail:` comment naming the ceiling and the idempotent upgrade path).
+  - Query text unchanged (`-label:SIPAP_Validador`), fail-closed secret handling unchanged.
+- [MODIFY] `client/src/portals/owner/personalized-gas-script.ts` — identical body change in the generated copy (header already mandates keeping the two in sync).
+- [MODIFY] `test/unit/helpers/gas-gmail-sandbox.ts` — add `setProperty` to the `getScriptProperties()` mock, persisting into the same `scriptProperties` object so a second `run()` observes it; expose `processedIds` for assertions. Keep the message-level label emulation: it is correct for `thread.addLabel` + `-label:` search.
+- [MODIFY] `test/unit/personalized-gas-script.spec.ts`
+  - Rewrite the "stays in sync… on message-level labeling" pin (lines 145–155): assert `msg.getLabels`/`msg.addLabel` are **absent** (the API does not exist), `thread.addLabel(` and `PROCESSED_MSG_IDS` are present.
+  - Flip the partial-failure assertions (lines 162–199): `message-1` is recorded in the processed set and the thread stays unlabeled (previously: `isLabeled('message-1') === true`).
+  - Keep the 401/500 "no label, no markRead" cases, the query pins, and the fail-closed/secret cases unchanged.
+- [MODIFY] `test/unit/google-apps-script-ingestor.spec.ts` — header comment (sandbox contract) + add one regression case: a message that is already **read** but not in the processed set is still sent (guards the post-outage backlog and the "merchant read the mail first" path).
+- [MODIFY] `google-apps-script/README.md` — one line documenting that the script owns a second Script Property (`PROCESSED_MSG_IDS`, auto-created; deleting it only causes safe re-sends).
 
-## 4. Decisions required in Phase 2 (not assumed)
+### Explicitly rejected (Ponytail ladder)
 
-1. **Unit E closures** — close 5 issues now, or leave open pending your review?
-2. **#7** — add Supertest HTTP contract tests for tenant isolation (M, unit-test-only contract stays intact), or re-scope/close as ADR-009's documented unit-only decision?
-3. **#9** — which automations do you actually want: auto `past_due` job (M), RUC/phone matching (M), promo amount Gs. 120.000 (S), QR in instructions (S)? Backend subscription gating stays out (documented as-built) unless you say otherwise.
-4. **#4 transactions** — add port-level transaction support for approve/submit provisioning (M), or accept current sequential-await behavior (fail-closed partial rows) per YAGNI?
+- No advanced Gmail service, no new dependency, no extra trigger, no change to the search keywords or the 15-thread bound.
+- No read-state marker (`isUnread()`): it silently drops any notification the merchant opened before the trigger fired — unacceptable on a payment-validation path.
+- No backend change: idempotency already exists.
 
-## 5. Automated verification plan (per unit and at the end)
+## 5. Decisions required in Phase 2 (not assumed)
 
-- `npm test -- --runInBand` — 27 existing suites must stay green; new cases per unit.
-- `npx tsc --noEmit` — 0 errors, no `any` bypasses.
-- `npm run build` and `npm --prefix client run build` — exit 0.
+1. **Option C vs A vs B** — C as recommended, A if you want the shortest diff and accept the star-collision ceiling?
+2. **Archive of the previous plan** — already moved to `docs/plans/2026-10-14-backlog-code-completion.md` with its ODD reference updated. Restore it to `implementation_plan.md` if you prefer that file untouched?
+3. **Backlog re-scan** — messages labeled by the pre-TASK-02 version are unstarred and out of the processed set, so the first run will re-POST them (server answers `already_exists` → 200). Accept the one-time burst, or filter it?
+
+## 6. Automated verification plan (Phase 4)
+
+- Focused: `npm test -- --runInBand --runTestsByPath test/unit/google-apps-script-ingestor.spec.ts test/unit/personalized-gas-script.spec.ts`
+- Full: `npm test -- --runInBand` (all suites green, no regressions).
+- `npx tsc --noEmit` — 0 errors, no `any`.
+- `npm run build` — exit 0.
 - No E2E claims (this repo has no E2E harness — ADR-009).
-- Delivery: one PR per unit, chained smallest-first (A → B → C → D), evidence on each issue.
+- Operator step after merge: re-paste `google-apps-script/code.gs` into the Apps Script editor; the fix does not reach Gmail until that happens. Merchants pick it up from the owner dashboard's "Copiar Mi Script Personalizado".
 
-## 6. Out of scope
+## 7. Out of scope
 
-- Issue #20 and any server/log/DB access.
-- Deploy/CD changes, schema migrations, auth paths, webhook ingestion, claim/anti-replay logic.
+- Backend, webhook ingestion, claim/anti-replay, auth, schema, deploy/CD.
+- The stale `.atl/skill-registry.md` claim that `implementation_plan.md` does not exist.
+- Any change to trigger cadence, search keywords, or the 15-thread bound.

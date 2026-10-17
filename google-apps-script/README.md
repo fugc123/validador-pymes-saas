@@ -26,6 +26,7 @@ Script de automatización para Gmail que conecta las notificaciones de transfere
      ```
    - Si la propiedad falta o está vacía, el script falla sin enviar nada: no llama al servidor, no etiqueta ni marca correos como leídos, y la ejecución aparece con error hasta que configures la propiedad.
    - Si el servidor responde con un estado distinto de 2xx (por ejemplo `401`), el script tampoco etiqueta ni marca el correo como leído: el mensaje queda pendiente para el próximo intento.
+   - El script crea una segunda Propiedad del Script, `PROCESSED_MSG_IDS`, con los IDs de los avisos ya registrados (sin contenido del correo y sin secretos). No la borres: si la eliminás, el script vuelve a enviar los avisos pendientes y el servidor los descarta como duplicados (`already_exists`).
 
 4. **Autorizar Permisos**:
    - Hacé clic en **Guardar** (Ctrl + S / Cmd + S).

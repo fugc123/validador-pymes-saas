@@ -1,15 +1,19 @@
 /**
  * Shared Gmail/Apps Script sandbox for the GAS ingestor specs.
  *
- * One emulation of the Gmail label model serves both checked-in copies
+ * One emulation of the Gmail model serves both checked-in copies
  * (`google-apps-script/code.gs`) and the generated copy
  * (`client/src/portals/owner/personalized-gas-script.ts`), so the two specs
  * cannot drift apart on mock semantics:
  *
- * - Labels live on individual messages; `thread.addLabel` labels every
- *   message of the conversation (Gmail threads.modify semantics).
+ * - `GmailMessage` carries NO label API (the real class has none): labels
+ *   live on threads, `thread.addLabel` labels every existing message of the
+ *   conversation, and new messages do not inherit the label.
  * - The `-label:SIPAP_Validador` search returns conversations that still
  *   contain at least one unlabeled message.
+ * - Per-message dedup is the script's own `PROCESSED_MSG_IDS` Script
+ *   Property, persisted through the mocked `PropertiesService` so a second
+ *   `run()` observes what the first one recorded.
  * - Every `GmailApp.search(query, start, max)` call is recorded verbatim so
  *   specs can pin the discovery query text and the bounded paging.
  * - Fetch status codes can be scripted per call (number or queue, the last
@@ -32,6 +36,10 @@ export interface GasSandbox {
   markedRead: number;
   isLabeled: (messageId: string) => boolean;
   addMessage: (threadIndex: number, messageId: string) => void;
+  /** Marks a message read before the run, to pin that read state is never a marker. */
+  markRead: (messageId: string) => void;
+  /** Message IDs the script persisted in the `PROCESSED_MSG_IDS` Script Property. */
+  processedIds: () => string[];
   /** Raw argument lists from every `GmailApp.search(...)` call the script made. */
   searchCalls: unknown[][];
   run: () => void;
@@ -67,29 +75,38 @@ export function evaluateGasScript(
       ? String((label as { getName: () => string }).getName())
       : String(label);
 
+  // The real GmailMessage exposes no label methods; a script calling
+  // msg.getLabels()/msg.addLabel() throws here exactly as it does in Gmail.
   const makeMessage = (m: MessageState) => ({
     getId: () => m.id,
     getPlainBody: () => 'body ' + m.id,
     getBody: () => '<p>' + m.id + '</p>',
     getSubject: () => 'Aviso de transferencia',
     getDate: () => new Date('2026-01-01T00:00:00.000Z'),
-    getLabels: () => m.labels.map((name) => ({ getName: () => name })),
-    addLabel: (label: unknown) => {
-      const name = labelName(label);
-      if (!m.labels.includes(name)) m.labels.push(name);
-      counters.labeled += 1;
-    },
     markRead: () => {
       m.read = true;
       counters.read += 1;
     },
   });
 
-  // Gmail threads.modify applies the label to every message of the thread.
+  // Gmail threads.modify applies the label to every existing message of the
+  // thread; messages arriving later do not inherit it.
   const makeThread = (messages: MessageState[]) => ({
     getMessages: () => messages.map(makeMessage),
-    addLabel: (label: unknown) => messages.forEach((m) => makeMessage(m).addLabel(label)),
-    markRead: () => messages.forEach((m) => makeMessage(m).markRead()),
+    addLabel: (label: unknown) => {
+      const name = labelName(label);
+      messages.forEach((m) => {
+        if (!m.labels.includes(name)) {
+          m.labels.push(name);
+          counters.labeled += 1;
+        }
+      });
+    },
+    markRead: () =>
+      messages.forEach((m) => {
+        m.read = true;
+        counters.read += 1;
+      }),
   });
 
   const sandbox: Record<string, unknown> = {
@@ -99,6 +116,12 @@ export function evaluateGasScript(
           Object.prototype.hasOwnProperty.call(scriptProperties, key)
             ? scriptProperties[key]
             : null,
+        // Persists into the caller-owned object, so repeated `run()` calls on
+        // one sandbox see the registry written by the previous run.
+        setProperty: (key: string, value: string) => {
+          scriptProperties[key] = value;
+          return value;
+        },
       }),
     },
     UrlFetchApp: {
@@ -149,6 +172,19 @@ export function evaluateGasScript(
       ),
     addMessage: (threadIndex, messageId) =>
       state[threadIndex].push({ id: messageId, labels: [], read: false }),
+    markRead: (messageId) =>
+      state.forEach((messages) =>
+        messages.forEach((m) => {
+          if (m.id === messageId) m.read = true;
+        }),
+      ),
+    processedIds: () => {
+      try {
+        return JSON.parse(scriptProperties.PROCESSED_MSG_IDS || '[]') as string[];
+      } catch (err) {
+        return [];
+      }
+    },
     searchCalls,
     run: sandbox.procesarTransferenciasBancarias as () => void,
   };

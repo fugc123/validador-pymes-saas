@@ -6,10 +6,14 @@
  * closed (no request, no label) when the property is missing or blank, so a
  * stale or leaked constant can never be replayed against the tenant webhook.
  *
- * TASK-02: the shared sandbox (`helpers/gas-gmail-sandbox.ts`) emulates
- * Gmail's label model — labels live on individual messages, `thread.addLabel`
- * labels every message in the conversation, and the `-label:` search returns
- * conversations that still contain at least one unlabeled message. A message
+ * TASK-02 + Gmail API fix: the shared sandbox
+ * (`test/unit/helpers/gas-gmail-sandbox.ts`) emulates the contract the script
+ * really runs against — `GmailMessage` exposes **no** label API (a call to
+ * `msg.getLabels()` throws in production, which is the bug this suite now
+ * guards), `thread.addLabel` labels every existing message of the
+ * conversation, and the `-label:` search returns conversations that still
+ * contain at least one unlabeled message. Per-message dedup is the script's
+ * own `PROCESSED_MSG_IDS` Script Property, persisted across runs; a message
  * that succeeded must not hide a failed or later message in the same
  * conversation. The sandbox also records every `GmailApp.search` argument
  * list, so specs pin the discovery query text and the bounded paging.
@@ -114,7 +118,7 @@ describe('google-apps-script/code.gs webhook secret', () => {
 });
 
 describe('google-apps-script/code.gs conversation retry safety (TASK-02)', () => {
-  it('labels only the message that succeeded so a failed sibling stays eligible', () => {
+  it('records only the message that succeeded so a failed sibling stays eligible', () => {
     const script = evaluateScript(
       { WEBHOOK_SECRET: 'stored-secret-value' },
       [201, 500],
@@ -124,9 +128,23 @@ describe('google-apps-script/code.gs conversation retry safety (TASK-02)', () =>
     script.run();
 
     expect(script.fetchCalls).toHaveLength(2);
-    expect(script.isLabeled('message-1')).toBe(true);
-    expect(script.isLabeled('message-2')).toBe(false);
+    expect(script.processedIds()).toContain('message-1');
+    expect(script.processedIds()).not.toContain('message-2');
+    // The thread keeps no label, so `-label:` returns it on the next run.
+    expect(script.labeledMessages).toBe(0);
     expect(script.markedRead).toBe(1);
+  });
+
+  it('sends a message the merchant already read, because read state is not the marker', () => {
+    const script = evaluateScript({ WEBHOOK_SECRET: 'stored-secret-value' }, 201, [
+      ['message-1'],
+    ]);
+    script.markRead('message-1'); // opened in Gmail before the trigger fired
+
+    script.run();
+
+    expect(script.fetchCalls).toHaveLength(1);
+    expect(script.processedIds()).toContain('message-1');
   });
 
   it('retries only the failed message on the next run and never reposts the successful one', () => {

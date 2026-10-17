@@ -41,8 +41,17 @@ export function buildPersonalizedGasScript(
 const BASE_API_URL = ${JSON.stringify(baseApiUrl)};
 const MERCHANT_SLUG = ${JSON.stringify(merchantSlug)};
 
-// ETIQUETA EN GMAIL PARA CORREOS YA REGISTRADOS
+// ETIQUETA EN GMAIL PARA CORREOS YA REGISTRADOS (solo poda la búsqueda)
 const LABEL_NAME = 'SIPAP_Validador';
+
+// REGISTRO POR MENSAJE DE LOS AVISOS YA ENVIADOS.
+// GmailMessage no expone getLabels() ni addLabel(): las etiquetas se alcanzan
+// solo desde GmailThread y son por hilo, así que el dedupe exacto por mensaje
+// vive en las Propiedades del Script.
+const PROCESSED_KEY = 'PROCESSED_MSG_IDS';
+// ponytail: FIFO de 200 IDs por el límite de 9 KB de cada Propiedad del Script;
+// un ID expulsado solo provoca un reenvío y el webhook lo absorbe (200 already_exists).
+const PROCESSED_CAP = 200;
 
 /**
  * Lee el secreto del webhook desde las Propiedades del Script del proyecto.
@@ -86,25 +95,28 @@ function procesarTransferenciasBancarias() {
 
   const webhookEndpoint = BASE_API_URL + '/api/v1/webhook/' + MERCHANT_SLUG;
 
+  const scriptProperties = PropertiesService.getScriptProperties();
+  let processedIds;
+  try {
+    processedIds = JSON.parse(scriptProperties.getProperty(PROCESSED_KEY) || '[]');
+  } catch (errParse) {
+    // Store ilegible: se reenvía todo lo que devuelva la búsqueda; el
+    // webhook responde already_exists (200) y no duplica registros.
+    processedIds = [];
+  }
+  let registryChanged = false;
+
   for (let i = 0; i < threads.length; i++) {
     const thread = threads[i];
     const messages = thread.getMessages();
+    let threadComplete = true;
 
     for (let j = 0; j < messages.length; j++) {
       const msg = messages[j];
 
-      // La etiqueta vive en el mensaje, no en el hilo: uno ya registrado no se
-      // reenvía, pero un hermano fallido o un mensaje posterior en el mismo
-      // hilo sigue elegible para el próximo intento.
-      const msgLabels = msg.getLabels();
-      let alreadyLabeled = false;
-      for (let k = 0; k < msgLabels.length; k++) {
-        if (msgLabels[k].getName() === LABEL_NAME) {
-          alreadyLabeled = true;
-          break;
-        }
-      }
-      if (alreadyLabeled) {
+      // Un mensaje ya registrado no se reenvía. Uno fallido o recibido después
+      // en el mismo hilo sigue elegible: su ID no está en el registro.
+      if (processedIds.indexOf(msg.getId()) !== -1) {
         continue;
       }
 
@@ -138,19 +150,36 @@ function procesarTransferenciasBancarias() {
 
         Logger.log('Respuesta del servidor (HTTP ' + statusCode + '): ' + responseText);
 
-        // Si el servidor lo creó (201) o ya existía (200), marcamos como
-        // procesado solo este mensaje; un fallo deja el hilo elegible.
+        // Si el servidor lo creó (201) o ya existía (200), el mensaje pasa al
+        // registro; un fallo deja el hilo completo pendiente de etiquetar.
         if (statusCode >= 200 && statusCode < 300) {
-          msg.addLabel(label);
+          processedIds.push(msg.getId());
+          registryChanged = true;
           msg.markRead();
-          Logger.log('Etiqueta ' + LABEL_NAME + ' agregada al mensaje ' + msg.getId() + '.');
+          Logger.log('Mensaje ' + msg.getId() + ' registrado.');
         } else {
+          threadComplete = false;
           Logger.log('Servidor rechazó el mensaje (HTTP ' + statusCode + '). No se marcará como procesado para reintento.');
         }
       } catch (err) {
+        threadComplete = false;
         Logger.log('Error enviando correo ' + msg.getId() + ': ' + err.toString());
       }
     }
+
+    // La etiqueta declara el hilo terminado y acota la búsqueda (-label:):
+    // solo se aplica cuando ningún mensaje quedó pendiente, así un fallo
+    // parcial deja el hilo elegible para el próximo intento.
+    if (threadComplete) {
+      thread.addLabel(label);
+    }
+  }
+
+  if (registryChanged) {
+    if (processedIds.length > PROCESSED_CAP) {
+      processedIds = processedIds.slice(-PROCESSED_CAP);
+    }
+    scriptProperties.setProperty(PROCESSED_KEY, JSON.stringify(processedIds));
   }
 }
 `;

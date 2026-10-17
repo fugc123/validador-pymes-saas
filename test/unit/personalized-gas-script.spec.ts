@@ -23,12 +23,31 @@
  * arguments pin the same discovery query contract on both copies.
  */
 
+import { readFileSync } from 'fs';
+import * as path from 'path';
+
 import {
   gasPayloadText as payloadText,
   evaluateGasScript,
 } from './helpers/gas-gmail-sandbox';
 
 import { buildPersonalizedGasScript } from '../../client/src/portals/owner/personalized-gas-script';
+
+const SCRIPT_PATH = path.join(__dirname, '..', '..', 'google-apps-script', 'code.gs');
+
+/**
+ * Normalizes the `procesarTransferenciasBancarias` body of either copy so the
+ * two can be compared: the checked-in script logs with emoji, the panel copy
+ * does not, and their surrounding headers differ.
+ */
+function normalizedFunctionBody(source: string): string {
+  return source
+    .slice(source.indexOf('function procesarTransferenciasBancarias'))
+    .replace(/`;\s*$/, '') // generated copy closes a template literal
+    .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]\s?/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 function evaluatePersonalizedScript(
   source: string,
@@ -121,6 +140,7 @@ describe('personalized Google Apps Script builder', () => {
     expect(sandbox.labeledMessages).toBe(1);
     expect(sandbox.markedRead).toBe(1);
     expect(sandbox.isLabeled('message-1')).toBe(true);
+    expect(sandbox.processedIds()).toContain('message-1');
   });
 
   it.each([401, 500])(
@@ -142,16 +162,24 @@ describe('personalized Google Apps Script builder', () => {
     },
   );
 
-  it('stays in sync with google-apps-script/code.gs on message-level labeling', () => {
+  it('stays in sync with google-apps-script/code.gs on the per-message registry', () => {
     const script = buildPersonalizedGasScript(BASE_API_URL, MERCHANT_SLUG);
 
-    // Per-message labeling: the generated copy must never fall back to
-    // thread-level addLabel/markRead, which hides failed siblings.
-    expect(script).toContain('msg.addLabel(label);');
+    // GmailMessage has no label API: both copies dedupe through the
+    // Script-Property registry and label only a whole, fully processed thread.
+    expect(script).not.toContain('msg.getLabels(');
+    expect(script).not.toContain('msg.addLabel(');
+    expect(script).toContain('PROCESSED_MSG_IDS');
+    expect(script).toContain('thread.addLabel(');
     expect(script).toContain('msg.markRead();');
-    expect(script).not.toContain('thread.addLabel(');
     expect(script).not.toContain('thread.markRead();');
-    expect(script).toContain('msg.getLabels()');
+  });
+
+  it('keeps the generated body identical to google-apps-script/code.gs', () => {
+    const checkedIn = readFileSync(SCRIPT_PATH, 'utf8');
+    const generated = buildPersonalizedGasScript(BASE_API_URL, MERCHANT_SLUG);
+
+    expect(normalizedFunctionBody(generated)).toBe(normalizedFunctionBody(checkedIn));
   });
 });
 
@@ -159,7 +187,7 @@ describe('personalized Google Apps Script conversation retry safety (TASK-02)', 
   const BASE_API_URL = 'https://api.example.com';
   const MERCHANT_SLUG = 'kiosko-san-roque';
 
-  it('labels only the message that succeeded so a failed sibling stays eligible', () => {
+  it('records only the message that succeeded so a failed sibling stays eligible', () => {
     const script = buildPersonalizedGasScript(BASE_API_URL, MERCHANT_SLUG);
     const sandbox = evaluatePersonalizedScript(
       script,
@@ -171,8 +199,10 @@ describe('personalized Google Apps Script conversation retry safety (TASK-02)', 
     sandbox.run();
 
     expect(sandbox.fetchCalls).toHaveLength(2);
-    expect(sandbox.isLabeled('message-1')).toBe(true);
-    expect(sandbox.isLabeled('message-2')).toBe(false);
+    expect(sandbox.processedIds()).toContain('message-1');
+    expect(sandbox.processedIds()).not.toContain('message-2');
+    // The thread keeps no label, so `-label:` returns it on the next run.
+    expect(sandbox.labeledMessages).toBe(0);
     expect(sandbox.markedRead).toBe(1);
   });
 
