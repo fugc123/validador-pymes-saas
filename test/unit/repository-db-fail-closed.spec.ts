@@ -165,6 +165,22 @@ describe('Repository adapters fail closed in database mode', () => {
       expect(await repo.findBySlug('copy-shop-impresiones')).toBeNull();
     });
 
+    it('MerchantRepository.findById safely normalizes legacy rows with webhook_secret < 16 characters', async () => {
+      const legacyRow = {
+        id: MERCHANT_UUID,
+        name: 'Legacy Store',
+        slug: 'legacy-store',
+        webhook_secret: 'sec_short',
+        status: 'active',
+      };
+      const repo = new InMemoryMerchantRepository(
+        dbMode(jest.fn().mockResolvedValue({ rows: [legacyRow], rowCount: 1 })),
+      );
+      const merchant = await repo.findById(MERCHANT_UUID);
+      expect(merchant).not.toBeNull();
+      expect(merchant!.webhookSecret.length).toBeGreaterThanOrEqual(16);
+    });
+
     it('MembershipRepository.findByUserAndMerchant propagates a read failure instead of seeded membership', async () => {
       const repo = new InMemoryMembershipRepository(dbMode(failingQuery(READ_FAILURE)));
 
