@@ -4,6 +4,7 @@ export interface MerchantRow {
   slug: string;
   webhook_secret: string;
   status: 'active' | 'suspended' | 'pending';
+  catalog_theme?: string;
   created_at: Date;
   updated_at: Date;
 }
@@ -68,6 +69,53 @@ export interface MerchantRequestRow {
   created_at: Date;
 }
 
+export interface CatalogItemRow {
+  id: string;
+  tenant_id: string;
+  item_type: 'product' | 'service';
+  name: string;
+  description: string | null;
+  price: number;
+  stock: number | null;
+  image_url: string | null;
+  discount_percent: number;
+  discount_type: 'none' | 'hours' | 'days';
+  discount_ends_at: Date | null;
+  discount_days: string | null;
+  is_active: boolean;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface SaleRow {
+  id: string;
+  tenant_id: string;
+  cashier_user_id: string;
+  cashier_name: string;
+  customer_name: string | null;
+  concept: string | null;
+  sale_mode: 'catalog' | 'quick_amount';
+  payment_method: 'TRANSFER' | 'CASH' | 'CARD';
+  transfer_id: string | null;
+  subtotal_amount: number;
+  discount_amount: number;
+  total_amount: number;
+  created_at: Date;
+}
+
+export interface SaleItemRow {
+  id: string;
+  sale_id: string;
+  item_id: string | null;
+  item_name: string;
+  item_type: 'product' | 'service' | 'custom';
+  unit_price: number;
+  applied_discount_percent: number;
+  final_unit_price: number;
+  quantity: number;
+  line_total: number;
+}
+
 export const DDL_SCHEMA_SQL = `
 -- Merchants Table (Tenants)
 CREATE TABLE IF NOT EXISTS merchants (
@@ -76,9 +124,11 @@ CREATE TABLE IF NOT EXISTS merchants (
     slug VARCHAR(100) UNIQUE NOT NULL,
     webhook_secret VARCHAR(128) NOT NULL,
     status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'suspended', 'pending')),
+    catalog_theme VARCHAR(50) DEFAULT 'emerald',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+ALTER TABLE merchants ADD COLUMN IF NOT EXISTS catalog_theme VARCHAR(50) DEFAULT 'emerald';
 CREATE INDEX IF NOT EXISTS idx_merchants_slug ON merchants(slug);
 
 -- Global Users Table
@@ -163,4 +213,57 @@ CREATE TABLE IF NOT EXISTS payment_reports (
     matched_transfer_id VARCHAR(100),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Catalog Items Table (Products & Services with Time Discounts)
+CREATE TABLE IF NOT EXISTS catalog_items (
+    id VARCHAR(100) PRIMARY KEY,
+    tenant_id VARCHAR(100) NOT NULL,
+    item_type VARCHAR(20) NOT NULL CHECK (item_type IN ('product', 'service')),
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    price INTEGER NOT NULL CHECK (price >= 0),
+    stock INTEGER,
+    image_url TEXT,
+    discount_percent INTEGER NOT NULL DEFAULT 0 CHECK (discount_percent >= 0 AND discount_percent <= 99),
+    discount_type VARCHAR(20) NOT NULL DEFAULT 'none' CHECK (discount_type IN ('none', 'hours', 'days')),
+    discount_ends_at TIMESTAMP WITH TIME ZONE,
+    discount_days VARCHAR(50),
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_catalog_items_tenant ON catalog_items(tenant_id, is_active);
+
+-- Sales Table (POS Movements & Checkout History)
+CREATE TABLE IF NOT EXISTS sales (
+    id VARCHAR(100) PRIMARY KEY,
+    tenant_id VARCHAR(100) NOT NULL,
+    cashier_user_id VARCHAR(100) NOT NULL,
+    cashier_name VARCHAR(255) NOT NULL,
+    customer_name VARCHAR(255),
+    concept TEXT,
+    sale_mode VARCHAR(30) NOT NULL DEFAULT 'catalog' CHECK (sale_mode IN ('catalog', 'quick_amount')),
+    payment_method VARCHAR(30) NOT NULL CHECK (payment_method IN ('TRANSFER', 'CASH', 'CARD')),
+    transfer_id VARCHAR(100),
+    subtotal_amount INTEGER NOT NULL,
+    discount_amount INTEGER NOT NULL DEFAULT 0,
+    total_amount INTEGER NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_sales_tenant_created ON sales(tenant_id, created_at DESC);
+
+-- Sale Items Table (Line items per Sale)
+CREATE TABLE IF NOT EXISTS sale_items (
+    id VARCHAR(100) PRIMARY KEY,
+    sale_id VARCHAR(100) NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+    item_id VARCHAR(100),
+    item_name VARCHAR(255) NOT NULL,
+    item_type VARCHAR(30) NOT NULL CHECK (item_type IN ('product', 'service', 'custom')),
+    unit_price INTEGER NOT NULL,
+    applied_discount_percent INTEGER NOT NULL DEFAULT 0,
+    final_unit_price INTEGER NOT NULL,
+    quantity INTEGER NOT NULL CHECK (quantity > 0),
+    line_total INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id);
 `;
