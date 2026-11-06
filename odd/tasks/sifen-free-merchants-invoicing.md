@@ -14,25 +14,27 @@ Companies that want to issue electronic invoices in Paraguay (SIFEN / DNIT) must
 
 ## Actionable Checklist
 
-- [ ] **T1: PostgreSQL Schema, Domain & Repository for SIFEN Configs, CDC/XML Builder (`consultame-sdk` adapter) & Lifetime-Only Guard**
-  - Extend `DDL_SCHEMA_SQL` in `src/infrastructure/database/schema.ts` with `sifen_configs` and `sifen_invoices` tables.
-  - Create ports and SIFEN / `consultame-sdk` service adapter (`src/core/application/ports/sifen.ports.ts` and `src/infrastructure/repositories/sifen.repository.ts`) that enforces the Free/Lifetime merchant eligibility rule, stores emitter parameters, builds the official 44-digit Paraguayan CDC & SOAP/XML structure, and runs test probes.
-  - Add unit tests in `test/unit/sifen-invoicing.spec.ts`.
+- [x] **T1: PostgreSQL Schema, Domain & Repository for SIFEN Configs, CDC/XML Builder (`consultame-sdk` adapter) & Lifetime-Only Guard** (Commit: `1f28c61`)
+  - Extended `DDL_SCHEMA_SQL` in `src/infrastructure/database/schema.ts` with `sifen_configs` and `sifen_invoices` tables.
+  - Created ports and SIFEN / `consultame-sdk` service adapter (`src/core/application/ports/sifen.ports.ts` and `src/infrastructure/repositories/sifen.repository.ts`) enforcing the Free/Lifetime merchant eligibility rule, storing emitter parameters, building the official 44-digit Paraguayan CDC & SOAP/XML structure, and running test probes.
+  - Added unit tests in `test/unit/sifen-invoicing.spec.ts`.
 
-- [ ] **T2: Backend Controllers for SuperAdmin SIFEN Management & Cashier Invoice Emission**
-  - Create `SifenController` (`src/presentation/controllers/sifen.controller.ts`) with:
+- [x] **T2: Backend Controllers for SuperAdmin SIFEN Management & Cashier Invoice Emission** (Commit: `f7c6c2a`)
+  - Created `SifenController` (`src/presentation/controllers/sifen.controller.ts`) with:
     - `GET /api/v1/sifen/superadmin/configs` (`SUPER_ADMIN`)
     - `GET /api/v1/sifen/superadmin/config/:tenantId` (`SUPER_ADMIN`)
     - `PUT /api/v1/sifen/superadmin/config/:tenantId` (`SUPER_ADMIN` — enforces `isLifetime` check)
     - `POST /api/v1/sifen/superadmin/test-emission/:tenantId` (`SUPER_ADMIN` — tests SIFEN XML/SOAP generation & credentials for the company)
     - `GET /api/v1/sifen/cashier/status` & `POST /api/v1/sifen/cashier/emit` (`CASHIER`, `MERCHANT_OWNER`, `SUPER_ADMIN` — only if tenant is a free merchant with SIFEN active)
-  - Register in `src/app.module.ts` and verify with unit tests.
+  - Registered in `src/app.module.ts` and verified with unit tests.
 
-- [ ] **T3: SuperAdmin SIFEN Autocomplete Form UI & Cashier POS Invoice Emission UI**
-  - Update `client/src/portals/superadmin/SuperAdminPanel.tsx` so Free/Lifetime merchants have a **"⚙️ Configurar Facturación SIFEN"** button opening the complete SIFEN form with **"✨ Autocompletar Datos Base Paraguay"**, `.p12` certificate uploader, and **"🧪 Ejecutar Prueba SIFEN"** button.
-  - Update `client/src/portals/pos/FastPosScreen.tsx` so when the active merchant has SIFEN enabled, the cashier can enter Customer RUC / Razón Social and emit the SIFEN invoice (showing the 44-digit CDC).
-  - Verify full backend + frontend builds and unit tests.
+- [x] **T3: SuperAdmin SIFEN Autocomplete Form UI & Cashier POS Invoice Emission UI** (Commit: `fb27024`)
+  - Created `client/src/portals/superadmin/SifenFreeMerchantModal.tsx` and updated `client/src/portals/superadmin/SuperAdminPanel.tsx` so Free/Lifetime merchants have a **"Configurar SIFEN / Autocompletar"** button opening the complete SIFEN form with **"✨ Autocompletar Plantilla Asunción"** & **"✨ Plantilla CDE / Alto Paraná"**, Modulo-11 RUC DV auto-calculator, `.p12` certificate uploader, and **"🧪 Probar Homologación SIFEN"** button.
+  - Updated `client/src/portals/pos/FastPosScreen.tsx` so when the active merchant has SIFEN enabled, the cashier can enter Customer RUC / Razón Social and emit the SIFEN invoice (showing the 44-digit CDC).
+  - Verified full backend + frontend builds and unit tests.
 
 ## Progress & Evidence
-- Status: Initialized before first source write.
-- Next Step: Execute T1.
+- T1 committed: `1f28c61`
+- T2 committed: `f7c6c2a`
+- T3 verified: `npm run build` and `npm --prefix client run build` succeeded (`✓ built in 2.01s`).
+- RDD Mode: `disabled/unmanaged`.

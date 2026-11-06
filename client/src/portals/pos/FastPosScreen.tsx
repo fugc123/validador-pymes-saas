@@ -104,7 +104,14 @@ export const FastPosScreen: React.FC = () => {
     total: number;
     method: string;
     summary: string;
+    sifenCdc?: string;
+    sifenNumero?: string;
   } | null>(null);
+
+  // SIFEN Electronic Invoicing state (only enabled for Free/Lifetime own merchants)
+  const [sifenEnabled, setSifenEnabled] = useState(false);
+  const [sifenEmitInvoice, setSifenEmitInvoice] = useState(true);
+  const [sifenReceptorRuc, setSifenReceptorRuc] = useState('');
 
   // Recent sales history
   const [recentSales, setRecentSales] = useState<CashierSaleRecord[]>([]);
@@ -172,6 +179,15 @@ export const FastPosScreen: React.FC = () => {
       if (subRes.ok) {
         const subData = await subRes.json();
         setSubscription(subData);
+      }
+      const sifenRes = await fetch('/api/v1/sifen/cashier/status', {
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => null);
+      if (sifenRes && sifenRes.ok) {
+        const sifenJson = await sifenRes.json();
+        setSifenEnabled(Boolean(sifenJson?.data?.isFreeMerchant && sifenJson?.data?.enabled));
+      } else {
+        setSifenEnabled(false);
       }
     } catch {
       // ignore network error on initial load
@@ -299,6 +315,33 @@ export const FastPosScreen: React.FC = () => {
         ? payload.concept || 'Cobro rápido'
         : `${cart.reduce((s, c) => s + c.quantity, 0)} ítem(s) vendidos`;
 
+      let emittedCdc: string | undefined;
+      let emittedNum: string | undefined;
+      if (sifenEnabled && sifenEmitInvoice) {
+        try {
+          const sifenEmitRes = await fetch('/api/v1/sifen/cashier/emit', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              saleId: data.sale?.id || data.id || null,
+              receptorRuc: sifenReceptorRuc.trim() || '44444401',
+              receptorNombre: customerName.trim() || match?.payerName || 'CONSUMIDOR FINAL',
+              totalAmount: data.sale?.totalAmount || data.totalAmount || effectiveCheckoutTotal,
+            }),
+          });
+          if (sifenEmitRes.ok) {
+            const sifenEmitJson = await sifenEmitRes.json();
+            emittedCdc = sifenEmitJson?.data?.cdc;
+            emittedNum = sifenEmitJson?.data?.numeroDocumento;
+          }
+        } catch {
+          // Non-blocking if SIFEN emit fails
+        }
+      }
+
       setCompletedSaleBanner({
         total: data.totalAmount || effectiveCheckoutTotal,
         method:
@@ -308,6 +351,8 @@ export const FastPosScreen: React.FC = () => {
               ? 'Efectivo'
               : 'Tarjeta / POS',
         summary: summaryText,
+        sifenCdc: emittedCdc,
+        sifenNumero: emittedNum,
       });
 
       resetCheckoutForm();
@@ -547,6 +592,11 @@ export const FastPosScreen: React.FC = () => {
                 <div className="text-sm text-white font-bold">
                   Gs. {completedSaleBanner.total.toLocaleString('es-PY')} • {completedSaleBanner.method} ({completedSaleBanner.summary})
                 </div>
+                {completedSaleBanner.sifenCdc && (
+                  <div className="text-[11px] font-mono text-purple-300 mt-1">
+                    🧾 Factura SIFEN N° {completedSaleBanner.sifenNumero} • CDC: {completedSaleBanner.sifenCdc}
+                  </div>
+                )}
               </div>
             </div>
             <button
@@ -887,16 +937,41 @@ export const FastPosScreen: React.FC = () => {
                   {/* Customer Name */}
                   <div>
                     <label className="block text-xs font-bold uppercase text-gray-400 mb-1.5">
-                      Cliente / Pagador (Opcional)
+                      Cliente / Razón Social (Opcional)
                     </label>
                     <input
                       type="text"
                       value={customerName}
                       onChange={(e) => setCustomerName(e.target.value)}
-                      placeholder="Nombre o apellido del cliente..."
+                      placeholder="Nombre o Razón Social del cliente..."
                       className="w-full bg-[#0B0F19] border border-[#24324D] focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none"
                     />
                   </div>
+
+                  {sifenEnabled && (
+                    <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-xl space-y-2">
+                      <label className="flex items-center justify-between cursor-pointer">
+                        <span className="text-xs font-bold text-purple-300">
+                          🧾 Emitir Factura Electrónica SIFEN
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={sifenEmitInvoice}
+                          onChange={(e) => setSifenEmitInvoice(e.target.checked)}
+                          className="rounded border-purple-500 text-purple-600 focus:ring-purple-500"
+                        />
+                      </label>
+                      {sifenEmitInvoice && (
+                        <input
+                          type="text"
+                          value={sifenReceptorRuc}
+                          onChange={(e) => setSifenReceptorRuc(e.target.value)}
+                          placeholder="RUC o Cédula p/ Factura (Vacío = 44444401 Sin Nombre)"
+                          className="w-full bg-[#0B0F19] border border-purple-500/40 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none"
+                        />
+                      )}
+                    </div>
+                  )}
 
                   {/* Payment Method Selector */}
                   <div>

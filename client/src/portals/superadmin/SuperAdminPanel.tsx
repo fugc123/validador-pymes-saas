@@ -14,7 +14,9 @@ import {
   Sparkles,
   X,
   Key,
+  FileCode,
 } from 'lucide-react';
+import { SifenFreeMerchantModal } from './SifenFreeMerchantModal';
 
 interface MerchantRequest {
   id: string;
@@ -54,6 +56,7 @@ export const SuperAdminPanel: React.FC = () => {
   const [simulationPayer, setSimulationPayer] = useState('');
 
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [sifenTargetMerchant, setSifenTargetMerchant] = useState<{ tenantId: string; merchantName: string } | null>(null);
   const [createForm, setCreateForm] = useState({
     businessName: '',
     ownerName: '',
@@ -469,6 +472,65 @@ export const SuperAdminPanel: React.FC = () => {
           </div>
         </div>
 
+        {/* SIFEN Electronic Invoicing Section (Exclusivo Comercios Gratuitos / Propios) */}
+        <div className="bg-gradient-to-r from-[#171531] via-[#151D2F] to-[#151D2F] border border-purple-500/30 rounded-2xl p-6 shadow-xl space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center space-x-3">
+              <div className="p-2.5 bg-purple-500/15 text-purple-300 rounded-xl border border-purple-500/30">
+                <FileCode className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-bold text-white">Facturación Electrónica SIFEN (Paraguay)</h2>
+                  <span className="px-2.5 py-0.5 rounded-full font-mono text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                    Solo Empresas Gratuitas / Propias
+                  </span>
+                </div>
+                <p className="text-xs text-gray-400">
+                  Autocompletá por tus empresas los datos del contribuyente SET/DNIT (<code className="text-purple-300">consultame-sdk</code>), Timbrado, CSC y Certificado <code className="text-purple-300">.p12</code> para homologación y emisión.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {subscriptions.filter((s) => s.isLifetime || s.status === 'lifetime').length === 0 ? (
+              <div className="col-span-full p-4 bg-[#0B0F19] border border-[#24324D] rounded-xl text-xs text-gray-400 flex items-center justify-between">
+                <span>Aún no hay comercios gratuitos creados. Creá tu empresa con "Crear Comercio Gratuito" para habilitarle SIFEN.</span>
+                <button
+                  type="button"
+                  onClick={() => { setShowCreateModal(true); setCreatedResult(null); setCreateError(null); }}
+                  className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-lg text-xs"
+                >
+                  + Crear Empresa Propia
+                </button>
+              </div>
+            ) : (
+              subscriptions
+                .filter((s) => s.isLifetime || s.status === 'lifetime')
+                .map((s) => (
+                  <div
+                    key={s.tenantId}
+                    className="p-4 bg-[#0B0F19] border border-purple-500/25 rounded-xl flex items-center justify-between gap-3"
+                  >
+                    <div>
+                      <div className="font-bold text-white text-sm">{s.merchantName || s.tenantId}</div>
+                      <div className="text-[11px] font-mono text-purple-300">{s.tenantId} • Plan Gratuito Propio</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSifenTargetMerchant({ tenantId: s.tenantId, merchantName: s.merchantName || s.tenantId })}
+                      className="px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl flex items-center space-x-1.5 shadow-md shadow-purple-600/20 transition-all shrink-0"
+                    >
+                      <FileCode className="w-3.5 h-3.5" />
+                      <span>Autocompletar / SIFEN</span>
+                    </button>
+                  </div>
+                ))
+            )}
+          </div>
+        </div>
+
         {/* Subscriptions Table */}
         <div className="bg-[#151D2F] border border-[#24324D] rounded-2xl p-6 shadow-xl space-y-4">
           <div className="flex items-center space-x-2">
@@ -510,10 +572,20 @@ export const SuperAdminPanel: React.FC = () => {
                       </td>
                       <td className="p-3 text-right flex items-center justify-end space-x-2">
                         {s.isLifetime || s.status === 'lifetime' ? (
-                          <span className="text-xs text-purple-400 font-bold flex items-center space-x-1">
-                            <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-                            <span>Bonificado VIP</span>
-                          </span>
+                          <div className="flex items-center justify-end space-x-2">
+                            <span className="text-xs text-purple-400 font-bold flex items-center space-x-1">
+                              <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                              <span>Bonificado VIP</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setSifenTargetMerchant({ tenantId: s.tenantId, merchantName: s.merchantName || s.tenantId })}
+                              className="px-2.5 py-1 bg-purple-600/20 hover:bg-purple-600/35 text-purple-200 border border-purple-500/40 rounded-lg text-xs font-bold flex items-center space-x-1 transition-all"
+                            >
+                              <FileCode className="w-3.5 h-3.5 text-purple-300" />
+                              <span>Configurar SIFEN</span>
+                            </button>
+                          </div>
                         ) : (
                           <>
                             <button
@@ -545,6 +617,16 @@ export const SuperAdminPanel: React.FC = () => {
       </main>
 
       {/* Modal: Crear Comercio Bonificado / Dueño Gratuito */}
+      {sifenTargetMerchant && token && (
+        <SifenFreeMerchantModal
+          tenantId={sifenTargetMerchant.tenantId}
+          merchantName={sifenTargetMerchant.merchantName}
+          token={token}
+          onClose={() => setSifenTargetMerchant(null)}
+          onSaved={() => fetchSubscriptions()}
+        />
+      )}
+
       {showCreateModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-[#151D2F] border border-[#24324D] rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl relative">
