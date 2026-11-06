@@ -32,13 +32,15 @@ Merchants and cashiers need full visibility and control over every sale in the s
     - Cashier endpoints (`/api/v1/cashier/catalog`, `/api/v1/cashier/sales`) integrating with SIPAP transfer claiming when `paymentMethod === 'TRANSFER'`
     - Public unauthenticated endpoint (`GET /api/v1/public/catalog/:slug`)
   - Register in `src/app.module.ts` and verify with unit/integration tests (`5 passed` in `test/unit/catalog-and-sales.spec.ts`).
+  - Evidence: Commit `26389cc`.
 
-- [ ] **T3: Frontend Cashier Pre-Screen POS, Owner Inventory/Movements Panels & Public Storefront**
+- [x] **T3: Frontend Cashier Pre-Screen POS, Owner Inventory/Movements Panels & Public Storefront**
   - Create `client/src/portals/catalog/PublicCatalogView.tsx` and route `/catalogo/:slug` (and `?catalogo=:slug`) in `client/src/App.tsx` with customizable color palettes (`emerald`, `indigo`, `rose`, `amber`, `cyan`, `violet`) and conditional photo vs. text-only cards.
   - Upgrade `client/src/portals/pos/FastPosScreen.tsx` with the Cashier Pre-Screen: Catalog Cart mode + Quick Amount ("Monto Libre + Qué pasó") mode, payment method selector (`Transferencia SIPAP`, `Efectivo`, `Tarjeta`), seamless transition to the SIPAP transfer radar when `Transferencia` is chosen, and shift sales history.
-  - Upgrade `client/src/portals/owner/OwnerDashboard.tsx` with tabs for **Inventario y Servicios** (create/edit products & services, time discounts by hours/days, photo optional, public link & color palette picker) and **Movimientos / Ventas** (full audit table of sales by cashier).
-  - Verify full backend + frontend production builds and tests.
+  - Upgrade `client/src/portals/owner/OwnerDashboard.tsx` and `client/src/portals/owner/OwnerCatalogAndSalesPanel.tsx` with tabs for **Inventario y Servicios** (create/edit products & services, time discounts by hours/days, photo optional, public link & color palette picker) and **Movimientos / Ventas** (full audit table of sales by cashier).
+  - Verify full backend + frontend production builds (`nest build` + `tsc && vite build`) and full Jest suite (`27 passed, 289 tests passed`).
 
 ## Progress & Evidence
-- Status: T1 & T2 completed and verified.
-- Next Step: Execute T3.
+- Status: All tasks (T1, T2, T3) completed and verified.
+- RDD Status: `disabled/unmanaged`.
+- Next Step: Ready for user review / merge & push to `main` for automated CD deployment.
