@@ -116,6 +116,66 @@ export interface SaleItemRow {
   line_total: number;
 }
 
+export interface SifenConfigRow {
+  tenant_id: string;
+  enabled: boolean;
+  environment: 'test' | 'prod';
+  ruc: string;
+  dv: string;
+  razon_social: string;
+  nombre_fantasia: string;
+  tipo_contribuyente: number;
+  tipo_regimen: number;
+  timbrado: string;
+  fecha_inicio_timbrado: string;
+  establecimiento: string;
+  punto_expedicion: string;
+  direccion: string;
+  numero_casa: string;
+  departamento: number;
+  departamento_desc: string;
+  distrito: number;
+  distrito_desc: string;
+  ciudad: number;
+  ciudad_desc: string;
+  telefono: string;
+  email: string;
+  actividad_economica_codigo: string;
+  actividad_economica_desc: string;
+  csc_id: string;
+  csc: string;
+  certificado_base64: string | null;
+  certificado_password: string | null;
+  last_test_status: string | null;
+  last_test_message: string | null;
+  last_test_cdc: string | null;
+  last_tested_at: Date | null;
+  updated_by_user_id: string | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface SifenInvoiceRow {
+  id: string;
+  tenant_id: string;
+  sale_id: string | null;
+  cdc: string;
+  numero_documento: string;
+  timbrado: string;
+  environment: 'test' | 'prod';
+  receptor_ruc: string;
+  receptor_dv: string | null;
+  receptor_nombre: string;
+  condicion_venta: 'CONTADO' | 'CREDITO';
+  total_amount: number;
+  iva_10_amount: number;
+  xml_payload: string;
+  qr_url: string;
+  status: 'GENERATED' | 'TEST_OK' | 'APPROVED' | 'REJECTED';
+  response_message: string;
+  created_at: Date;
+}
+
 export const DDL_SCHEMA_SQL = `
 -- Merchants Table (Tenants)
 CREATE TABLE IF NOT EXISTS merchants (
@@ -266,4 +326,67 @@ CREATE TABLE IF NOT EXISTS sale_items (
     line_total INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id);
+
+-- SIFEN Electronic Invoicing Configurations (Restricted to Free/Lifetime Merchants)
+CREATE TABLE IF NOT EXISTS sifen_configs (
+    tenant_id VARCHAR(100) PRIMARY KEY,
+    enabled BOOLEAN DEFAULT TRUE,
+    environment VARCHAR(20) NOT NULL DEFAULT 'test' CHECK (environment IN ('test', 'prod')),
+    ruc VARCHAR(30) NOT NULL,
+    dv VARCHAR(5) NOT NULL,
+    razon_social VARCHAR(255) NOT NULL,
+    nombre_fantasia VARCHAR(255) NOT NULL,
+    tipo_contribuyente INTEGER NOT NULL DEFAULT 2,
+    tipo_regimen INTEGER NOT NULL DEFAULT 8,
+    timbrado VARCHAR(20) NOT NULL,
+    fecha_inicio_timbrado VARCHAR(20) NOT NULL,
+    establecimiento VARCHAR(10) NOT NULL DEFAULT '001',
+    punto_expedicion VARCHAR(10) NOT NULL DEFAULT '001',
+    direccion VARCHAR(255) NOT NULL DEFAULT 'Av. España casi Brasil',
+    numero_casa VARCHAR(20) NOT NULL DEFAULT '123',
+    departamento INTEGER NOT NULL DEFAULT 1,
+    departamento_desc VARCHAR(100) NOT NULL DEFAULT 'CAPITAL',
+    distrito INTEGER NOT NULL DEFAULT 1,
+    distrito_desc VARCHAR(100) NOT NULL DEFAULT 'ASUNCION (DISTRITO)',
+    ciudad INTEGER NOT NULL DEFAULT 1,
+    ciudad_desc VARCHAR(100) NOT NULL DEFAULT 'ASUNCION (DISTRITO)',
+    telefono VARCHAR(50) NOT NULL DEFAULT '021000000',
+    email VARCHAR(255) NOT NULL DEFAULT 'facturacion@cajasegura.com.py',
+    actividad_economica_codigo VARCHAR(30) NOT NULL DEFAULT '47190',
+    actividad_economica_desc VARCHAR(255) NOT NULL DEFAULT 'COMERCIO AL POR MENOR EN COMERCIOS NO ESPECIALIZADOS',
+    csc_id VARCHAR(10) NOT NULL DEFAULT '0001',
+    csc VARCHAR(128) NOT NULL DEFAULT 'ABCD0000000000000000000000000000',
+    certificado_base64 TEXT,
+    certificado_password VARCHAR(255),
+    last_test_status VARCHAR(50),
+    last_test_message TEXT,
+    last_test_cdc VARCHAR(64),
+    last_tested_at TIMESTAMP WITH TIME ZONE,
+    updated_by_user_id VARCHAR(100),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- SIFEN Emitted Electronic Invoices (DE / KuDE / CDC)
+CREATE TABLE IF NOT EXISTS sifen_invoices (
+    id VARCHAR(100) PRIMARY KEY,
+    tenant_id VARCHAR(100) NOT NULL,
+    sale_id VARCHAR(100),
+    cdc VARCHAR(44) NOT NULL,
+    numero_documento VARCHAR(30) NOT NULL,
+    timbrado VARCHAR(20) NOT NULL,
+    environment VARCHAR(20) NOT NULL DEFAULT 'test',
+    receptor_ruc VARCHAR(40) NOT NULL,
+    receptor_dv VARCHAR(10),
+    receptor_nombre VARCHAR(255) NOT NULL,
+    condicion_venta VARCHAR(20) NOT NULL DEFAULT 'CONTADO',
+    total_amount INTEGER NOT NULL,
+    iva_10_amount INTEGER NOT NULL,
+    xml_payload TEXT NOT NULL,
+    qr_url TEXT NOT NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'GENERATED',
+    response_message TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_sifen_invoices_tenant ON sifen_invoices(tenant_id, created_at DESC);
 `;
