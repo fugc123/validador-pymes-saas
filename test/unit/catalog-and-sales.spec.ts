@@ -1,14 +1,40 @@
 import { DDL_SCHEMA_SQL } from '../../src/infrastructure/database/schema';
 import { CatalogRepository } from '../../src/infrastructure/repositories/catalog.repository';
-import { InMemoryMerchantRepository } from '../../src/infrastructure/repositories/in-memory.repositories';
+import {
+  InMemoryMerchantRepository,
+  InMemoryTransferRepository,
+  InMemoryUserRepository,
+} from '../../src/infrastructure/repositories/in-memory.repositories';
+import {
+  CatalogController,
+  PublicCatalogController,
+} from '../../src/presentation/controllers/catalog.controller';
+import { ClaimTransferUseCase } from '../../src/core/application/use-cases/transfers/claim-transfer.use-case';
+import { TenantContext } from '../../src/presentation/interceptors/tenant-context.service';
+import { Transfer } from '../../src/core/domain/entities/transfer.entity';
 
-describe('Catalog, Inventory, Time Discounts & POS Sales (T1)', () => {
+describe('Catalog, Inventory, Time Discounts & POS Sales (T1 & T2)', () => {
   let merchantRepo: InMemoryMerchantRepository;
+  let userRepo: InMemoryUserRepository;
+  let transferRepo: InMemoryTransferRepository;
   let catalogRepo: CatalogRepository;
+  let claimUseCase: ClaimTransferUseCase;
+  let catalogController: CatalogController;
+  let publicController: PublicCatalogController;
 
   beforeEach(() => {
     merchantRepo = new InMemoryMerchantRepository();
+    userRepo = new InMemoryUserRepository();
+    transferRepo = new InMemoryTransferRepository();
     catalogRepo = new CatalogRepository(undefined, merchantRepo);
+    claimUseCase = new ClaimTransferUseCase(transferRepo);
+    catalogController = new CatalogController(
+      catalogRepo,
+      userRepo,
+      transferRepo,
+      claimUseCase,
+    );
+    publicController = new PublicCatalogController(catalogRepo);
   });
 
   it('defines PostgreSQL tables for catalog_items, sales, sale_items and catalog_theme', () => {
@@ -160,28 +186,57 @@ describe('Catalog, Inventory, Time Discounts & POS Sales (T1)', () => {
     expect(movements[0].cashierName).toBe('Carlos Turno Tarde');
   });
 
-  it('serves public catalog by merchant slug with custom color palette and photo/no-photo items', async () => {
-    await catalogRepo.setCatalogTheme('copy-shop-impresiones', 'indigo');
-    await catalogRepo.createItem({
-      tenantId: 'copy-shop-impresiones',
-      itemType: 'product',
-      name: 'Cuaderno Universitario',
-      price: 25000,
-      stock: 12,
-      imageUrl: 'https://example.com/cuaderno.jpg',
-    });
-    await catalogRepo.createItem({
-      tenantId: 'copy-shop-impresiones',
-      itemType: 'service',
-      name: 'Diseño de Flyer',
-      price: 60000,
-      imageUrl: null,
-    });
+  it('executes CatalogController and PublicCatalogController flows including TRANSFER claiming', async () => {
+    await TenantContext.run(
+      { tenantId: 'copy-shop-impresiones', userId: 'usr-alcarazviole', role: 'MERCHANT_OWNER' },
+      async () => {
+        await catalogController.updateCatalogTheme({ theme: 'rose' });
+        const created = await catalogController.createCatalogItem({
+          itemType: 'product',
+          name: 'Carpeta Archivadora',
+          price: 30000,
+          stock: 10,
+        });
 
-    const publicCatalog = await catalogRepo.getPublicCatalogBySlug('copy-shop-impresiones');
-    expect(publicCatalog).not.toBeNull();
-    expect(publicCatalog?.merchantName).toBe('Copy Shop Impresiones');
-    expect(publicCatalog?.theme).toBe('indigo');
-    expect(publicCatalog?.items).toHaveLength(2);
+        // Ingest a pending transfer of 60,000 Gs
+        const savedTx = await transferRepo.save(
+          new Transfer({
+            id: 'tx-pos-sale-1',
+            tenantId: 'copy-shop-impresiones',
+            operationId: 'OP-999111',
+            operationDate: new Date().toISOString(),
+            payerName: 'Lucia Benitez',
+            payerBank: 'UENO',
+            amount: 60000,
+            status: 'pending',
+          }),
+        );
+
+        const sale = await catalogController.recordCashierSale({
+          customerName: 'Lucia Benitez',
+          saleMode: 'catalog',
+          paymentMethod: 'TRANSFER',
+          transferId: savedTx.id,
+          items: [{ itemId: created.id, quantity: 2 }],
+        });
+
+        expect(sale.totalAmount).toBe(60000);
+        expect(sale.transferId).toBe(savedTx.id);
+
+        // Verify transfer was claimed atomically
+        const updatedTx = await transferRepo.findById('copy-shop-impresiones', savedTx.id!);
+        expect(updatedTx?.status).toBe('claimed');
+
+        // Verify merchant sales summary
+        const merchantSales = await catalogController.getMerchantSales();
+        expect(merchantSales.summary.totalSalesCount).toBe(1);
+        expect(merchantSales.summary.totalRevenue).toBe(60000);
+        expect(merchantSales.summary.transferSalesCount).toBe(1);
+      },
+    );
+
+    const storefront = await publicController.getPublicStorefront('copy-shop-impresiones');
+    expect(storefront.theme).toBe('rose');
+    expect(storefront.items[0].stock).toBe(8);
   });
 });

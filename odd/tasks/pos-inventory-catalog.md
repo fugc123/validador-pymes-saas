@@ -19,25 +19,26 @@ Merchants and cashiers need full visibility and control over every sale in the s
 
 ## Actionable Checklist
 
-- [ ] **T1: PostgreSQL Schema, Domain Entities, Ports & Repository for Catalog, Time Discounts & Sales**
+- [x] **T1: PostgreSQL Schema, Domain Entities, Ports & Repository for Catalog, Time Discounts & Sales**
   - Extend `DDL_SCHEMA_SQL` in `src/infrastructure/database/schema.ts` with `catalog_theme` on `merchants`, `catalog_items` table, `sales` table, and `sale_items` table.
   - Create domain/application models and ports (`src/core/application/ports/catalog.ports.ts`) with active time-discount calculation (`hours` expiration window and `days` of week / duration).
   - Implement PostgreSQL + fallback persistence (`src/infrastructure/repositories/catalog.repository.ts`) with atomic stock deduction and sale recording.
   - Add unit tests in `test/unit/catalog-and-sales.spec.ts`.
+  - Evidence: Commit `39f481b` (`10 passed` across `database-schema.spec.ts` and `catalog-and-sales.spec.ts`).
 
-- [ ] **T2: Backend Controllers & Endpoints (Merchant Inventory/Movements, Cashier Sales & Public Catalog)**
-  - Create `CatalogController` (`src/presentation/controllers/catalog.controller.ts`) for:
+- [x] **T2: Backend Controllers & Endpoints (Merchant Inventory/Movements, Cashier Sales & Public Catalog)**
+  - Create `CatalogController` and `PublicCatalogController` (`src/presentation/controllers/catalog.controller.ts`) for:
     - Owner endpoints (`/api/v1/merchant/catalog`, `/api/v1/merchant/catalog/:id`, `/api/v1/merchant/catalog-theme`, `/api/v1/merchant/sales`)
     - Cashier endpoints (`/api/v1/cashier/catalog`, `/api/v1/cashier/sales`) integrating with SIPAP transfer claiming when `paymentMethod === 'TRANSFER'`
     - Public unauthenticated endpoint (`GET /api/v1/public/catalog/:slug`)
-  - Register in `src/app.module.ts` and verify with unit/integration tests.
+  - Register in `src/app.module.ts` and verify with unit/integration tests (`5 passed` in `test/unit/catalog-and-sales.spec.ts`).
 
 - [ ] **T3: Frontend Cashier Pre-Screen POS, Owner Inventory/Movements Panels & Public Storefront**
-  - Create `client/src/portals/catalog/PublicCatalogView.tsx` and route `/catalogo/:slug` (and `?catalogo=:slug`) in `client/src/App.tsx` with customizable color palettes (`emerald`, `indigo`, `rose`, `amber`, `cyan`) and conditional photo vs. text-only cards.
+  - Create `client/src/portals/catalog/PublicCatalogView.tsx` and route `/catalogo/:slug` (and `?catalogo=:slug`) in `client/src/App.tsx` with customizable color palettes (`emerald`, `indigo`, `rose`, `amber`, `cyan`, `violet`) and conditional photo vs. text-only cards.
   - Upgrade `client/src/portals/pos/FastPosScreen.tsx` with the Cashier Pre-Screen: Catalog Cart mode + Quick Amount ("Monto Libre + Qué pasó") mode, payment method selector (`Transferencia SIPAP`, `Efectivo`, `Tarjeta`), seamless transition to the SIPAP transfer radar when `Transferencia` is chosen, and shift sales history.
   - Upgrade `client/src/portals/owner/OwnerDashboard.tsx` with tabs for **Inventario y Servicios** (create/edit products & services, time discounts by hours/days, photo optional, public link & color palette picker) and **Movimientos / Ventas** (full audit table of sales by cashier).
   - Verify full backend + frontend production builds and tests.
 
 ## Progress & Evidence
-- Status: Initialized before first source write.
-- Next Step: Execute T1.
+- Status: T1 & T2 completed and verified.
+- Next Step: Execute T3.
