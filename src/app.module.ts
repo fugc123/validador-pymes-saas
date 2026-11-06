@@ -9,6 +9,7 @@ import { OnboardingController } from './presentation/controllers/onboarding.cont
 import { MerchantController } from './presentation/controllers/merchant.controller';
 import { SubscriptionController } from './presentation/controllers/subscription.controller';
 import { CatalogController, PublicCatalogController } from './presentation/controllers/catalog.controller';
+import { SifenController } from './presentation/controllers/sifen.controller';
 
 // Use Cases
 import { LoginUseCase } from './core/application/use-cases/auth/login.use-case';
@@ -38,6 +39,7 @@ import {
   InMemoryPaymentReportRepository,
 } from './infrastructure/repositories/in-memory.repositories';
 import { CatalogRepository } from './infrastructure/repositories/catalog.repository';
+import { SifenRepository } from './infrastructure/repositories/sifen.repository';
 
 import { AuthMiddleware } from './presentation/middlewares/auth.middleware';
 
@@ -57,6 +59,7 @@ import { AuthMiddleware } from './presentation/middlewares/auth.middleware';
     SubscriptionController,
     CatalogController,
     PublicCatalogController,
+    SifenController,
   ],
   providers: [
     BankParserFactory,
@@ -83,6 +86,7 @@ import { AuthMiddleware } from './presentation/middlewares/auth.middleware';
     { provide: 'ISubscriptionRepository', useClass: InMemorySubscriptionRepository },
     { provide: 'IPaymentReportRepository', useClass: InMemoryPaymentReportRepository },
     { provide: 'ICatalogRepository', useClass: CatalogRepository },
+    { provide: 'ISifenRepository', useClass: SifenRepository },
     // Concrete classes bindings
     InMemoryUserRepository,
     InMemoryMerchantRepository,
@@ -94,6 +98,7 @@ import { AuthMiddleware } from './presentation/middlewares/auth.middleware';
     InMemorySubscriptionRepository,
     InMemoryPaymentReportRepository,
     CatalogRepository,
+    SifenRepository,
   ],
 })
 export class AppModule implements NestModule {

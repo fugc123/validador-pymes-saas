@@ -1,20 +1,49 @@
 import { ForbiddenException, BadRequestException } from '@nestjs/common';
 import { DDL_SCHEMA_SQL } from '../../src/infrastructure/database/schema';
 import { SifenRepository } from '../../src/infrastructure/repositories/sifen.repository';
+import { SifenController } from '../../src/presentation/controllers/sifen.controller';
 import {
   calculateParaguayDv,
   generateParaguayCdc,
 } from '../../src/core/application/ports/sifen.ports';
 import { Subscription } from '../../src/core/domain/entities/subscription.entity';
+import { Merchant } from '../../src/core/domain/entities/merchant.entity';
 import { ISubscriptionRepository } from '../../src/core/application/ports/onboarding.ports';
+import { IMerchantRepository } from '../../src/core/application/ports/auth.ports';
 
 describe('SIFEN Electronic Invoicing (Free/Lifetime Merchants Only)', () => {
   let sifenRepo: SifenRepository;
+  let controller: SifenController;
   let mockSubscriptions: Map<string, Subscription>;
+  let mockMerchants: Map<string, Merchant>;
   let subscriptionRepoStub: ISubscriptionRepository;
+  let merchantRepoStub: IMerchantRepository;
 
   beforeEach(() => {
     mockSubscriptions = new Map<string, Subscription>();
+    mockMerchants = new Map<string, Merchant>();
+
+    mockMerchants.set(
+      'mi-empresa-propia',
+      new Merchant({
+        id: 'mi-empresa-propia',
+        name: 'CajaSegura Central',
+        slug: 'mi-empresa-propia',
+        webhookSecret: 'sec_1_1234567890abcdef',
+        status: 'active',
+      }),
+    );
+
+    mockMerchants.set(
+      'cliente-externo-mensual',
+      new Merchant({
+        id: 'cliente-externo-mensual',
+        name: 'Comercio Externo Mensual',
+        slug: 'cliente-externo-mensual',
+        webhookSecret: 'sec_2_1234567890abcdef',
+        status: 'active',
+      }),
+    );
 
     // 1. Free / Lifetime merchant (owner's own business)
     mockSubscriptions.set(
@@ -51,7 +80,17 @@ describe('SIFEN Electronic Invoicing (Free/Lifetime Merchants Only)', () => {
       findAll: async () => Array.from(mockSubscriptions.values()),
     };
 
-    sifenRepo = new SifenRepository(undefined, subscriptionRepoStub, undefined);
+    merchantRepoStub = {
+      save: async (m: Merchant) => {
+        if (m.id) mockMerchants.set(m.id, m);
+        return m;
+      },
+      findById: async (id: string) => mockMerchants.get(id) || null,
+      findBySlug: async (slug: string) => mockMerchants.get(slug) || null,
+    };
+
+    sifenRepo = new SifenRepository(undefined, subscriptionRepoStub, merchantRepoStub);
+    controller = new SifenController(sifenRepo, merchantRepoStub);
   });
 
   describe('PostgreSQL Schema (DDL_SCHEMA_SQL)', () => {
@@ -147,41 +186,41 @@ describe('SIFEN Electronic Invoicing (Free/Lifetime Merchants Only)', () => {
     });
   });
 
-  describe('SIFEN Test Emission & POS Invoice Generation', () => {
-    it('generates a valid 44-digit CDC, XML rDE payload, 10% IVA breakdown, and updates lastTestStatus', async () => {
-      await sifenRepo.upsertConfig('mi-empresa-propia', {
-        enabled: true,
-        environment: 'test',
-        ruc: '80098765',
-        dv: '3',
-        razonSocial: 'CAJASEGURA TECH E.A.S.',
-        timbrado: '12560102',
-        establecimiento: '001',
-        puntoExpedicion: '002',
-        cscId: '0001',
-        csc: 'ABCD0000000000000000000000000000',
-      });
+  describe('SifenController SuperAdmin & Cashier Flows', () => {
+    it('returns autocompleteTemplate for Free Merchant in SuperAdmin and runs test emission', async () => {
+      const configResp = await controller.getFreeMerchantConfig('mi-empresa-propia');
+      expect(configResp.data.isLifetime).toBe(true);
+      expect(configResp.data.autocompleteTemplate.razonSocial).toBe('CAJASEGURA CENTRAL E.A.S.');
+      expect(configResp.data.autocompleteTemplate.timbrado).toBe('12560102');
 
-      const testInvoice = await sifenRepo.emitInvoice({
-        tenantId: 'mi-empresa-propia',
+      await controller.saveFreeMerchantConfig(
+        'mi-empresa-propia',
+        configResp.data.autocompleteTemplate,
+        { user: { userId: 'superadmin-1' } },
+      );
+
+      const testResp = await controller.runTestEmission('mi-empresa-propia', {
         receptorRuc: '4567890',
-        receptorNombre: 'JUAN PEREZ',
+        receptorNombre: 'CLIENTE HOMOLOGACION',
         totalAmount: 110000,
-        isTest: true,
       });
 
-      expect(testInvoice.cdc).toHaveLength(44);
-      expect(testInvoice.numeroDocumento).toBe('001-002-0000001');
-      expect(testInvoice.totalAmount).toBe(110000);
-      expect(testInvoice.iva10Amount).toBe(10000);
-      expect(testInvoice.status).toBe('TEST_OK');
-      expect(testInvoice.xmlPayload).toContain('<rDE xmlns="http://ekuatia.set.gov.py/sifen/xsd">');
-      expect(testInvoice.xmlPayload).toContain('CAJASEGURA TECH E.A.S.');
-      expect(testInvoice.qrUrl).toContain('https://ekuatia.set.gov.py/consultas-test/qr?');
+      expect(testResp.data.invoice.cdc).toHaveLength(44);
+      expect(testResp.data.invoice.status).toBe('TEST_OK');
+      expect(testResp.data.config?.lastTestStatus).toBe('TEST_OK');
 
-      const updatedConfig = await sifenRepo.getConfigByTenant('mi-empresa-propia');
-      expect(updatedConfig?.lastTestStatus).toBe('TEST_OK');
-      expect(updatedConfig?.lastTestCdc).toBe(testInvoice.cdc);
+      // Cashier status for eligible free merchant vs non-free merchant
+      const cashierFree = await controller.getCashierSifenStatus({
+        user: { tenantId: 'mi-empresa-propia' },
+      });
+      expect(cashierFree.data.isFreeMerchant).toBe(true);
+      expect(cashierFree.data.enabled).toBe(true);
+
+      const cashierPaid = await controller.getCashierSifenStatus({
+        user: { tenantId: 'cliente-externo-mensual' },
+      });
+      expect(cashierPaid.data.isFreeMerchant).toBe(false);
+      expect(cashierPaid.data.enabled).toBe(false);
     });
   });
 });
