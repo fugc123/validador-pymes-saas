@@ -126,7 +126,11 @@ export class SifenRepository implements ISifenRepository {
 
     if (this.isDbActive()) {
       const res = await this.dbService!.query<SubscriptionRow>(
-        `SELECT * FROM subscriptions WHERE tenant_id = $1 LIMIT 1`,
+        `SELECT s.*
+         FROM subscriptions s
+         LEFT JOIN merchants m ON m.id = s.tenant_id
+         WHERE s.tenant_id::text = $1 OR m.slug = $1
+         LIMIT 1`,
         [tenantId],
       );
       const row = res.rows?.[0];
@@ -413,8 +417,22 @@ export class SifenRepository implements ISifenRepository {
       );
     }
 
-    const existingInvoices = await this.listInvoicesByTenant(input.tenantId, 1000);
-    const nextSequential = existingInvoices.length + 1;
+    if (!input.isTest && (!input.totalAmount || Number(input.totalAmount) <= 0) && (!input.items || input.items.length === 0)) {
+      throw new BadRequestException('El monto total de la factura SIFEN debe ser mayor a Gs. 0.');
+    }
+
+    let existingCount = 0;
+    if (this.isDbActive()) {
+      const countRes = await this.dbService!.query<{ cnt: number }>(
+        `SELECT COUNT(*)::int AS cnt FROM sifen_invoices WHERE tenant_id = $1`,
+        [input.tenantId],
+      );
+      existingCount = Number(countRes.rows?.[0]?.cnt || 0);
+    } else {
+      existingCount = this.invoices.filter((inv) => inv.tenantId === input.tenantId).length;
+    }
+
+    const nextSequential = existingCount + 1;
     const docSeqStr = String(nextSequential).padStart(7, '0');
     const numeroDocumento = `${config.establecimiento}-${config.puntoExpedicion}-${docSeqStr}`;
 

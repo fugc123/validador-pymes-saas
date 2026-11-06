@@ -358,7 +358,7 @@ export const SifenFreeMerchantModal: React.FC<Props> = ({
       if (!savePayload.certificadoBase64) delete savePayload.certificadoBase64;
       if (!savePayload.certificadoPassword) delete savePayload.certificadoPassword;
 
-      await fetch(`/api/v1/sifen/superadmin/config/${tenantId}`, {
+      const saveRes = await fetch(`/api/v1/sifen/superadmin/config/${tenantId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -366,6 +366,14 @@ export const SifenFreeMerchantModal: React.FC<Props> = ({
         },
         body: JSON.stringify(savePayload),
       });
+      if (!saveRes.ok) {
+        const saveErr = await saveRes.json().catch(() => ({}));
+        setFeedback({
+          type: 'error',
+          text: saveErr.message || 'Corregí los datos del formulario antes de ejecutar la prueba SIFEN.',
+        });
+        return;
+      }
 
       const res = await fetch(`/api/v1/sifen/superadmin/test-emission/${tenantId}`, {
         method: 'POST',

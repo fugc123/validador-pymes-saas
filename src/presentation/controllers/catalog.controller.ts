@@ -1,8 +1,10 @@
 import {
   BadRequestException,
   Body,
+  ConflictException,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
@@ -14,6 +16,7 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import { Allow, IsOptional } from 'class-validator';
 import { Roles } from '../decorators/roles.decorator';
 import { RolesGuard } from '../guards/roles.guard';
 import { TenantGuard } from '../guards/tenant.guard';
@@ -31,46 +34,134 @@ import { IUserRepository } from '../../core/application/ports/auth.ports';
 import { ITransferRepository } from '../../core/application/ports/transfer.ports';
 import { ClaimTransferUseCase } from '../../core/application/use-cases/transfers/claim-transfer.use-case';
 
-export interface CreateCatalogItemDto {
-  itemType: CatalogItemType;
-  name: string;
+export class CreateCatalogItemDto {
+  @Allow()
+  itemType!: CatalogItemType;
+
+  @Allow()
+  name!: string;
+
+  @IsOptional()
+  @Allow()
   description?: string | null;
-  price: number;
+
+  @Allow()
+  price!: number;
+
+  @IsOptional()
+  @Allow()
   stock?: number | null;
+
+  @IsOptional()
+  @Allow()
   imageUrl?: string | null;
+
+  @IsOptional()
+  @Allow()
   discountPercent?: number;
+
+  @IsOptional()
+  @Allow()
   discountType?: DiscountTimeType;
+
+  @IsOptional()
+  @Allow()
   discountDurationHours?: number | null;
+
+  @IsOptional()
+  @Allow()
   discountDurationDays?: number | null;
+
+  @IsOptional()
+  @Allow()
   discountDays?: string | null;
 }
 
-export interface UpdateCatalogItemDto {
+export class UpdateCatalogItemDto {
+  @IsOptional()
+  @Allow()
   name?: string;
+
+  @IsOptional()
+  @Allow()
   description?: string | null;
+
+  @IsOptional()
+  @Allow()
   price?: number;
+
+  @IsOptional()
+  @Allow()
   stock?: number | null;
+
+  @IsOptional()
+  @Allow()
   imageUrl?: string | null;
+
+  @IsOptional()
+  @Allow()
   discountPercent?: number;
+
+  @IsOptional()
+  @Allow()
   discountType?: DiscountTimeType;
+
+  @IsOptional()
+  @Allow()
   discountDurationHours?: number | null;
+
+  @IsOptional()
+  @Allow()
   discountDurationDays?: number | null;
+
+  @IsOptional()
+  @Allow()
   discountDays?: string | null;
+
+  @IsOptional()
+  @Allow()
   isActive?: boolean;
 }
 
-export interface CreateSaleDto {
+export class CreateSaleDto {
+  @IsOptional()
+  @Allow()
   customerName?: string | null;
+
+  @IsOptional()
+  @Allow()
   concept?: string | null;
+
+  @IsOptional()
+  @Allow()
   cashierName?: string | null;
+
+  @IsOptional()
+  @Allow()
   saleMode?: SaleMode;
-  paymentMethod: SalePaymentMethod;
+
+  @Allow()
+  paymentMethod!: SalePaymentMethod;
+
+  @IsOptional()
+  @Allow()
   transferId?: string | null;
+
+  @IsOptional()
+  @Allow()
   quickAmount?: number;
+
+  @IsOptional()
+  @Allow()
   items?: Array<{
     itemId: string;
     quantity: number;
   }>;
+}
+
+export class UpdateCatalogThemeDto {
+  @Allow()
+  theme!: CatalogThemePalette;
 }
 
 @Controller()
@@ -87,11 +178,19 @@ export class CatalogController {
     private readonly claimTransferUseCase: ClaimTransferUseCase,
   ) {}
 
+  private requireTenantId(): string {
+    try {
+      return TenantContext.getTenantId();
+    } catch {
+      throw new ForbiddenException('Se requiere un comercio activo seleccionado para operar el catálogo.');
+    }
+  }
+
   @Get('merchant/catalog')
   @Roles('MERCHANT_OWNER', 'SUPER_ADMIN')
   @HttpCode(HttpStatus.OK)
   async getMerchantCatalog() {
-    const tenantId = TenantContext.getTenantId();
+    const tenantId = this.requireTenantId();
     const [theme, items] = await Promise.all([
       this.catalogRepo.getCatalogTheme(tenantId),
       this.catalogRepo.listItemsByTenant(tenantId, false),
@@ -103,7 +202,7 @@ export class CatalogController {
   @Roles('MERCHANT_OWNER', 'SUPER_ADMIN')
   @HttpCode(HttpStatus.CREATED)
   async createCatalogItem(@Body() dto: CreateCatalogItemDto) {
-    const tenantId = TenantContext.getTenantId();
+    const tenantId = this.requireTenantId();
     return this.catalogRepo.createItem({
       tenantId,
       itemType: dto.itemType,
@@ -124,7 +223,7 @@ export class CatalogController {
   @Roles('MERCHANT_OWNER', 'SUPER_ADMIN')
   @HttpCode(HttpStatus.OK)
   async updateCatalogItem(@Param('id') itemId: string, @Body() dto: UpdateCatalogItemDto) {
-    const tenantId = TenantContext.getTenantId();
+    const tenantId = this.requireTenantId();
     const updated = await this.catalogRepo.updateItem(tenantId, itemId, dto);
     if (!updated) {
       throw new NotFoundException('Catalog item not found');
@@ -136,7 +235,7 @@ export class CatalogController {
   @Roles('MERCHANT_OWNER', 'SUPER_ADMIN')
   @HttpCode(HttpStatus.OK)
   async deleteCatalogItem(@Param('id') itemId: string) {
-    const tenantId = TenantContext.getTenantId();
+    const tenantId = this.requireTenantId();
     const deleted = await this.catalogRepo.deleteItem(tenantId, itemId);
     if (!deleted) {
       throw new NotFoundException('Catalog item not found');
@@ -147,8 +246,8 @@ export class CatalogController {
   @Patch('merchant/catalog-theme')
   @Roles('MERCHANT_OWNER', 'SUPER_ADMIN')
   @HttpCode(HttpStatus.OK)
-  async updateCatalogTheme(@Body() body: { theme: CatalogThemePalette }) {
-    const tenantId = TenantContext.getTenantId();
+  async updateCatalogTheme(@Body() body: UpdateCatalogThemeDto) {
+    const tenantId = this.requireTenantId();
     const theme = await this.catalogRepo.setCatalogTheme(tenantId, body.theme);
     return { theme };
   }
@@ -157,7 +256,7 @@ export class CatalogController {
   @Roles('MERCHANT_OWNER', 'SUPER_ADMIN')
   @HttpCode(HttpStatus.OK)
   async getMerchantSales() {
-    const tenantId = TenantContext.getTenantId();
+    const tenantId = this.requireTenantId();
     const sales = await this.catalogRepo.listSalesByTenant(tenantId, 200);
     const totalRevenue = sales.reduce((acc, s) => acc + s.totalAmount, 0);
     const transferSalesCount = sales.filter((s) => s.paymentMethod === 'TRANSFER').length;
@@ -178,7 +277,7 @@ export class CatalogController {
   @Roles('CASHIER', 'MERCHANT_OWNER', 'SUPER_ADMIN')
   @HttpCode(HttpStatus.OK)
   async getCashierCatalog() {
-    const tenantId = TenantContext.getTenantId();
+    const tenantId = this.requireTenantId();
     const items = await this.catalogRepo.listItemsByTenant(tenantId, true);
     return { items };
   }
@@ -187,7 +286,7 @@ export class CatalogController {
   @Roles('CASHIER', 'MERCHANT_OWNER', 'SUPER_ADMIN')
   @HttpCode(HttpStatus.OK)
   async getCashierSales() {
-    const tenantId = TenantContext.getTenantId();
+    const tenantId = this.requireTenantId();
     const sales = await this.catalogRepo.listSalesByTenant(tenantId, 30);
     return { sales };
   }
@@ -196,11 +295,13 @@ export class CatalogController {
   @Roles('CASHIER', 'MERCHANT_OWNER', 'SUPER_ADMIN')
   @HttpCode(HttpStatus.CREATED)
   async recordCashierSale(@Body() dto: CreateSaleDto) {
-    const tenantId = TenantContext.getTenantId();
+    const tenantId = this.requireTenantId();
     const cashierUserId = TenantContext.getUserId();
 
     const user = await this.userRepo.findById(cashierUserId);
     const cashierName = user?.fullName || (dto.cashierName || '').trim() || 'Cajero';
+
+    let expectedTotalAmount: number | undefined;
 
     if (dto.paymentMethod === 'TRANSFER') {
       if (!dto.transferId) {
@@ -212,16 +313,15 @@ export class CatalogController {
       if (!transfer) {
         throw new NotFoundException('Transferencia vinculada no encontrada para este comercio.');
       }
-      if (transfer.status === 'pending') {
-        await this.claimTransferUseCase.execute({
-          tenantId,
-          transferId: dto.transferId,
-          cashierUserId,
-        });
+      if (transfer.status !== 'pending') {
+        throw new ConflictException(
+          '⛔ Anti-Replay: Esta transferencia ya fue reclamada o se encuentra expirada y no puede reutilizarse.',
+        );
       }
+      expectedTotalAmount = transfer.amount;
     }
 
-    return this.catalogRepo.createSale({
+    const sale = await this.catalogRepo.createSale({
       tenantId,
       cashierUserId,
       cashierName,
@@ -231,8 +331,19 @@ export class CatalogController {
       paymentMethod: dto.paymentMethod,
       transferId: dto.transferId || null,
       quickAmount: dto.quickAmount,
+      expectedTotalAmount,
       items: dto.items,
     });
+
+    if (dto.paymentMethod === 'TRANSFER' && dto.transferId) {
+      await this.claimTransferUseCase.execute({
+        tenantId,
+        transferId: dto.transferId,
+        cashierUserId,
+      });
+    }
+
+    return sale;
   }
 }
 

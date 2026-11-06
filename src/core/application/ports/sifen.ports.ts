@@ -210,7 +210,7 @@ export function generateParaguayCdc(params: {
   const codSeg =
     params.codigoSeguridad && /^\d{9}$/.test(params.codigoSeguridad)
       ? params.codigoSeguridad
-      : String(Math.floor(100000000 + Math.random() * 900000000));
+      : String(crypto.randomInt(100000000, 1000000000));
 
   const base43 = `${tipoDoc}${rucPadded}${dvDigit}${est}${pun}${numDoc}${tipoCont}${fechaStr}${tipoEmision}${codSeg}`;
   const dvCdc = calculateParaguayDv(base43);

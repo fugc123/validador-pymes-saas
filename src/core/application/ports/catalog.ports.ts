@@ -108,6 +108,7 @@ export interface CreateSaleInput {
   paymentMethod: SalePaymentMethod;
   transferId?: string | null;
   quickAmount?: number;
+  expectedTotalAmount?: number;
   items?: Array<{
     itemId: string;
     quantity: number;

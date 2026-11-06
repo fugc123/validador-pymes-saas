@@ -330,6 +330,23 @@ export const FastPosScreen: React.FC = () => {
               receptorRuc: sifenReceptorRuc.trim() || '44444401',
               receptorNombre: customerName.trim() || match?.payerName || 'CONSUMIDOR FINAL',
               totalAmount: data.sale?.totalAmount || data.totalAmount || effectiveCheckoutTotal,
+              items: isQuick
+                ? [
+                    {
+                      codigo: 'POS-QUICK',
+                      descripcion: payload.concept || 'Cobro rápido en caja',
+                      cantidad: 1,
+                      precioUnitario: parsedQuickAmount,
+                      ivaTasa: 10,
+                    },
+                  ]
+                : cart.map((l) => ({
+                    codigo: l.item.id,
+                    descripcion: l.item.name,
+                    cantidad: l.quantity,
+                    precioUnitario: l.item.effectivePrice,
+                    ivaTasa: 10,
+                  })),
             }),
           });
           if (sifenEmitRes.ok) {
@@ -1091,8 +1108,11 @@ export const FastPosScreen: React.FC = () => {
                       ref={amountInputRef}
                       type="text"
                       required
+                      readOnly={effectiveCheckoutTotal > 0}
                       value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
+                      onChange={(e) => {
+                        if (effectiveCheckoutTotal <= 0) setAmount(e.target.value);
+                      }}
                       className="w-full bg-[#0B0F19] border-2 border-[#24324D] focus:border-emerald-500 rounded-2xl pl-16 pr-6 py-3.5 text-2xl sm:text-4xl font-mono font-extrabold text-white tracking-wide focus:outline-none transition-colors"
                       placeholder="26.000"
                     />

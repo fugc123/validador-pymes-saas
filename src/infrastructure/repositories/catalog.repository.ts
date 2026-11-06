@@ -355,8 +355,12 @@ export class CatalogRepository implements ICatalogRepository {
         id: string;
         name: string;
         slug: string;
+        status?: string;
         catalog_theme?: string;
-      }>(`SELECT id, name, slug, catalog_theme FROM merchants WHERE LOWER(slug) = $1 LIMIT 1`, [cleanSlug]);
+      }>(
+        `SELECT id, name, slug, status, catalog_theme FROM merchants WHERE LOWER(slug) = $1 AND status = 'active' LIMIT 1`,
+        [cleanSlug],
+      );
 
       if (!mRes.rows || mRes.rows.length === 0) return null;
       const m = mRes.rows[0];
@@ -379,11 +383,15 @@ export class CatalogRepository implements ICatalogRepository {
     }
 
     const merchant = this.merchantRepo ? await this.merchantRepo.findBySlug(cleanSlug) : null;
-    if (!merchant) return null;
+    if (!merchant || merchant.status !== 'active') return null;
 
-    const tenantKey = merchant.id || merchant.slug;
+    const tenantKey = merchant.slug || merchant.id || cleanSlug;
     const theme = await this.getCatalogTheme(tenantKey);
-    const items = await this.listItemsByTenant(tenantKey, true, now);
+    const itemsBySlug = await this.listItemsByTenant(merchant.slug, true, now);
+    const items =
+      itemsBySlug.length > 0 || !merchant.id || merchant.id === merchant.slug
+        ? itemsBySlug
+        : await this.listItemsByTenant(merchant.id, true, now);
 
     return {
       merchantId: tenantKey,
@@ -412,6 +420,11 @@ export class CatalogRepository implements ICatalogRepository {
       if (amount <= 0) {
         throw new BadRequestException('Quick sale amount must be greater than zero');
       }
+      if (input.expectedTotalAmount !== undefined && amount !== input.expectedTotalAmount) {
+        throw new BadRequestException(
+          `El monto de la transferencia (Gs. ${input.expectedTotalAmount}) no coincide con el total de la venta (Gs. ${amount}).`,
+        );
+      }
       const conceptText = (input.concept || '').trim() || 'Cobro rápido en caja';
       subtotalAmount = amount;
       discountAmount = 0;
@@ -433,20 +446,29 @@ export class CatalogRepository implements ICatalogRepository {
         throw new BadRequestException('At least one item is required for a catalog sale');
       }
 
-      // First pass: validate all items and stock
-      const resolvedLines: Array<{
-        view: CatalogItemView;
-        quantity: number;
-      }> = [];
-
+      // Aggregate duplicate itemIds so stock validation cannot be bypassed via split lines
+      const aggregatedMap = new Map<string, number>();
       for (const reqItem of input.items) {
         const qty = Math.floor(Number(reqItem.quantity || 0));
         if (qty <= 0) {
           throw new BadRequestException('Item quantity must be at least 1');
         }
-        const itemView = await this.findItemById(input.tenantId, reqItem.itemId, now);
+        aggregatedMap.set(reqItem.itemId, (aggregatedMap.get(reqItem.itemId) || 0) + qty);
+      }
+
+      // First pass: validate all items, stock, and totals BEFORE mutating any stock
+      const resolvedLines: Array<{
+        view: CatalogItemView;
+        quantity: number;
+      }> = [];
+
+      let previewSubtotal = 0;
+      let previewTotal = 0;
+
+      for (const [itemId, qty] of aggregatedMap.entries()) {
+        const itemView = await this.findItemById(input.tenantId, itemId, now);
         if (!itemView || !itemView.isActive) {
-          throw new NotFoundException(`Catalog item '${reqItem.itemId}' not found`);
+          throw new NotFoundException(`Catalog item '${itemId}' not found`);
         }
         if (itemView.itemType === 'product') {
           const currentStock = itemView.stock ?? 0;
@@ -456,7 +478,15 @@ export class CatalogRepository implements ICatalogRepository {
             );
           }
         }
+        previewSubtotal += itemView.price * qty;
+        previewTotal += itemView.effectivePrice * qty;
         resolvedLines.push({ view: itemView, quantity: qty });
+      }
+
+      if (input.expectedTotalAmount !== undefined && previewTotal !== input.expectedTotalAmount) {
+        throw new BadRequestException(
+          `El monto de la transferencia (Gs. ${input.expectedTotalAmount}) no coincide con el total de la venta (Gs. ${previewTotal}).`,
+        );
       }
 
       // Second pass: deduct stock & build sale items

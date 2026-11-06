@@ -227,6 +227,30 @@ describe('Catalog, Inventory, Time Discounts & POS Sales (T1 & T2)', () => {
         const updatedTx = await transferRepo.findById('copy-shop-impresiones', savedTx.id!);
         expect(updatedTx?.status).toBe('claimed');
 
+        // Anti-Replay: attempting to reuse the already-claimed transfer must throw ConflictException without deducting stock
+        await expect(
+          catalogController.recordCashierSale({
+            customerName: 'Replay Attacker',
+            saleMode: 'catalog',
+            paymentMethod: 'TRANSFER',
+            transferId: savedTx.id,
+            items: [{ itemId: created.id, quantity: 1 }],
+          }),
+        ).rejects.toThrow(/Anti-Replay/);
+
+        // Duplicate itemId lines exceeding stock must be rejected
+        await expect(
+          catalogController.recordCashierSale({
+            customerName: 'Split Line Buyer',
+            saleMode: 'catalog',
+            paymentMethod: 'CASH',
+            items: [
+              { itemId: created.id, quantity: 5 },
+              { itemId: created.id, quantity: 5 },
+            ],
+          }),
+        ).rejects.toThrow(/Stock insuficiente/);
+
         // Verify merchant sales summary
         const merchantSales = await catalogController.getMerchantSales();
         expect(merchantSales.summary.totalSalesCount).toBe(1);
