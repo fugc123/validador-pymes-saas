@@ -66,7 +66,7 @@ describe('Merchant Onboarding & Subscription Billing Lifecycle (T11, T12)', () =
   });
 
   describe('SubmitMerchantRequestUseCase (US-ONB-01)', () => {
-    it('Scenario 1: Creates new merchant, user, owner membership and 7-day trial immediately', async () => {
+    it('Scenario 1: Creates new merchant, user, owner membership and 30-day (1-month) trial immediately', async () => {
       mockMerchantRepo.findBySlug.mockResolvedValue(null);
       mockUserRepo.findByEmail.mockResolvedValue(null);
       mockMembershipRepo.findByUserAndMerchant.mockResolvedValue(null);
@@ -91,6 +91,7 @@ describe('Merchant Onboarding & Subscription Billing Lifecycle (T11, T12)', () =
       expect(result.status).toBe('approved');
       expect(result.businessName).toBe('Farmacia San Cayetano');
       expect(result.subscriptionStatus).toBe('trial');
+      expect(result.trialExpiresAt.getTime() - Date.now()).toBeGreaterThan(29 * 24 * 60 * 60 * 1000);
       expect(mockPasswordHasher.hash).toHaveBeenCalledWith('securePassword123');
       expect(mockMerchantRepo.save).toHaveBeenCalled();
       expect(mockUserRepo.save).toHaveBeenCalled();
@@ -233,7 +234,7 @@ describe('Merchant Onboarding & Subscription Billing Lifecycle (T11, T12)', () =
   });
 
   describe('ApproveMerchantRequestUseCase & Automated Provisioning', () => {
-    it('Scenario 2: Provisions merchant, user, owner membership and 7-day trial in 1 action', async () => {
+    it('Scenario 2: Provisions merchant, user, owner membership and 30-day (1-month) trial in 1 action', async () => {
       const pendingReq = new MerchantRequest({
         id: 'req-001',
         businessName: 'Farmacia San Cayetano',
@@ -259,6 +260,7 @@ describe('Merchant Onboarding & Subscription Billing Lifecycle (T11, T12)', () =
       expect(result.merchantSlug).toBe('farmacia-san-cayetano');
       expect(result.webhookSecret).toHaveLength(64); // 32 bytes hex
       expect(result.subscriptionStatus).toBe('trial');
+      expect(result.trialExpiresAt.getTime() - Date.now()).toBeGreaterThan(29 * 24 * 60 * 60 * 1000);
       expect(pendingReq.status).toBe('approved');
       expect(mockMerchantRepo.save).toHaveBeenCalled();
       expect(mockUserRepo.save).toHaveBeenCalled();

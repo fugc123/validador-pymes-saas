@@ -113,8 +113,8 @@ export class SubmitMerchantRequestUseCase {
       await this.membershipRepo.save(membership);
     }
 
-    // 4. Activate 7-Day Free Trial Subscription
-    const trialExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    // 4. Activate 30-Day (1-Month) Free Trial Subscription
+    const trialExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     const subscription = new Subscription({
       id: `sub-${Date.now()}`,
       tenantId: merchantId,
@@ -147,7 +147,7 @@ export class SubmitMerchantRequestUseCase {
       ownerEmail: user.email,
       subscriptionStatus: 'trial',
       trialExpiresAt,
-      message: 'Comercio registrado y prueba gratuita de 7 días activada exitosamente.',
+      message: 'Comercio registrado y prueba gratuita de 1 mes (30 días) activada exitosamente.',
     };
   }
 }

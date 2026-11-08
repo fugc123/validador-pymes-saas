@@ -53,7 +53,7 @@ export const PublicRegisterScreen: React.FC<{ onBackToLogin: () => void }> = ({ 
             <CheckCircle className="w-12 h-12 text-emerald-400 mx-auto mb-4" />
             <h2 className="text-xl font-bold text-white">¡Comercio Activado con Éxito!</h2>
             <p className="text-xs text-gray-400 mt-2">
-              Tu período de prueba gratis por 7 días ya está disponible. Ya podés ingresar inmediatamente con tu correo y contraseña.
+              Tu período de prueba gratis por 1 mes (30 días) ya está disponible. Ya podés ingresar inmediatamente con tu correo y contraseña.
             </p>
             <button
               onClick={onBackToLogin}
@@ -75,7 +75,7 @@ export const PublicRegisterScreen: React.FC<{ onBackToLogin: () => void }> = ({ 
                 <ShieldCheck className="w-8 h-8" />
               </div>
               <h1 className="text-xl font-extrabold text-white">Solicitar Validador PYME</h1>
-              <p className="text-xs text-gray-400 mt-1">7 días de prueba gratis • Luego Gs. 150.000/mes</p>
+              <p className="text-xs text-gray-400 mt-1">1 mes de prueba gratis • Luego Gs. 150.000/mes</p>
             </div>
 
             <div>
@@ -156,7 +156,7 @@ export const PublicRegisterScreen: React.FC<{ onBackToLogin: () => void }> = ({ 
               className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold rounded-xl text-sm shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center space-x-2"
             >
               <Send className="w-4 h-4" />
-              <span>{loading ? 'Activando tu Prueba Gratis...' : 'Comenzar Prueba Gratis (7 Días)'}</span>
+              <span>{loading ? 'Activando tu Prueba Gratis...' : 'Comenzar Prueba Gratis (1 Mes)'}</span>
             </button>
           </form>
         )}

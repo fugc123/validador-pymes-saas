@@ -161,7 +161,7 @@ export const LoginView: React.FC<{
               className="mt-2 text-xs font-bold text-emerald-400 hover:text-emerald-300 inline-flex items-center space-x-1"
             >
               <Sparkles className="w-3.5 h-3.5 mr-1" />
-              <span>Solicitar prueba gratuita de 7 días (Gs. 150.000/mes)</span>
+              <span>Solicitar prueba gratuita de 1 mes (Gs. 150.000/mes)</span>
             </button>
           </div>
         </div>

@@ -120,7 +120,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToLogin, onGoToReg
               href="#registro"
               className="px-3 sm:px-5 py-2 sm:py-2.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 text-xs font-extrabold rounded-xl shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all flex items-center gap-1 sm:gap-1.5 shrink-0"
             >
-              <span><span className="hidden sm:inline">Probar 7 Días </span>Gratis</span>
+              <span><span className="hidden sm:inline">Probar 1 Mes </span>Gratis</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </a>
           </div>
@@ -153,7 +153,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToLogin, onGoToReg
               href="#registro"
               className="w-full sm:w-auto px-8 py-4 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-extrabold text-base rounded-2xl shadow-xl shadow-emerald-500/30 hover:shadow-emerald-500/50 hover:scale-[1.02] transition-all flex items-center justify-center space-x-2"
             >
-              <span>Activar Mi Prueba Gratis de 7 Días</span>
+              <span>Activar Mi Prueba Gratis de 1 Mes</span>
               <ArrowRight className="w-5 h-5" />
             </a>
 
@@ -415,7 +415,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToLogin, onGoToReg
               <span>Planes Claros Sin Letra Chica</span>
             </div>
             <h2 className="text-3xl font-black text-white">Un precio simple, todo incluido</h2>
-            <p className="text-sm text-gray-400">Probá 7 días sin costo ni compromiso. Si te gusta, pagás por mes.</p>
+            <p className="text-sm text-gray-400">Probá 1 mes gratis sin costo ni compromiso. Si te gusta, pagás por mes.</p>
           </div>
 
           <div className="max-w-md mx-auto bg-[#151D2F] border-2 border-emerald-500 rounded-3xl p-8 shadow-2xl space-y-6 relative overflow-hidden">
@@ -430,7 +430,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToLogin, onGoToReg
                 <span className="text-xs text-gray-400 font-medium">/ mes</span>
               </div>
               <div className="text-xs text-emerald-400 font-semibold">
-                7 Días Gratis al Iniciar • Cero comisiones por cobro
+                1 Mes Gratis al Iniciar • Cero comisiones por cobro
               </div>
             </div>
 
@@ -461,7 +461,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToLogin, onGoToReg
               href="#registro"
               className="block w-full py-4 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-extrabold text-sm rounded-2xl shadow-xl shadow-emerald-500/30 transition-all text-center"
             >
-              Comenzar Prueba Gratis (7 Días)
+              Comenzar Prueba Gratis (1 Mes)
             </a>
           </div>
         </div>
@@ -474,7 +474,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToLogin, onGoToReg
             <div className="inline-flex p-3 bg-emerald-500/10 text-emerald-400 rounded-2xl">
               <ShieldCheck className="w-8 h-8" />
             </div>
-            <h2 className="text-2xl font-bold text-white">Solicitá tu Prueba Gratuita de 7 Días</h2>
+            <h2 className="text-2xl font-bold text-white">Solicitá tu Prueba Gratuita de 1 Mes</h2>
             <p className="text-xs text-gray-400">
               Completá los datos de tu comercio. Te contactamos en minutos para dejar tu caja operativa.
             </p>
@@ -485,7 +485,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToLogin, onGoToReg
               <CheckCircle2 className="w-16 h-16 text-emerald-400 mx-auto" />
               <h3 className="text-xl font-bold text-white">¡Comercio Activado con Éxito!</h3>
               <p className="text-xs text-gray-400 max-w-sm mx-auto">
-                Tu período de prueba gratis por 7 días ya está activo. Ya podés ingresar inmediatamente con tu correo y contraseña para probar el validador en tu local.
+                Tu período de prueba gratis por 1 mes (30 días) ya está activo. Ya podés ingresar inmediatamente con tu correo y contraseña para probar el validador en tu local.
               </p>
               <button
                 onClick={onGoToLogin}
@@ -591,7 +591,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToLogin, onGoToReg
                 disabled={leadLoading}
                 className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-black text-xs rounded-xl shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center space-x-2 mt-4"
               >
-                <span>{leadLoading ? 'Activando tu Prueba Gratis...' : 'Comenzar Prueba Gratuita de 7 Días'}</span>
+                <span>{leadLoading ? 'Activando tu Prueba Gratis...' : 'Comenzar Prueba Gratuita de 1 Mes'}</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
 
