@@ -123,6 +123,7 @@ export const FastPosScreen: React.FC = () => {
   const [radarActive, setRadarActive] = useState(false);
   const [radarCountdown, setRadarCountdown] = useState(60);
   const [match, setMatch] = useState<TransferResult | null>(null);
+  const [matchCandidates, setMatchCandidates] = useState<TransferResult[]>([]);
   const [replayAlert, setReplayAlert] = useState<{ claimedAt: string; message: string } | null>(null);
   const [claimedSuccess, setClaimedSuccess] = useState(false);
   const [notFound, setNotFound] = useState(false);
@@ -1121,14 +1122,14 @@ export const FastPosScreen: React.FC = () => {
 
                 <div>
                   <label className="block text-xs font-extrabold uppercase tracking-wider text-gray-400 mb-2">
-                    2. Apellido del Pagador (Opcional)
+                    2. Nombre del Pagador o Referencia (Opcional)
                   </label>
                   <input
                     type="text"
                     value={payerName}
                     onChange={(e) => setPayerName(e.target.value)}
                     className="w-full bg-[#0B0F19] border border-[#24324D] focus:border-emerald-500 rounded-xl px-5 py-3 text-base text-white focus:outline-none transition-colors"
-                    placeholder="Ej. Chena, Duarte, Giménez..."
+                    placeholder="Ej. Chena, Duarte, Giménez o Nro. de comprobante..."
                   />
                 </div>
 
@@ -1222,6 +1223,46 @@ export const FastPosScreen: React.FC = () => {
                   >
                     Cancelar
                   </button>
+                </div>
+              </div>
+            )}
+
+            {/* State Display: Selectable Match List (amount-only searches) */}
+            {matchCandidates.length > 0 && (
+              <div className="bg-[#151D2F] border-2 border-emerald-500/50 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-2xl animate-fade-in space-y-4">
+                <div>
+                  <div className="text-xs uppercase font-extrabold tracking-wider text-emerald-400">
+                    Múltiples transferencias con el mismo monto
+                  </div>
+                  <p className="text-sm text-gray-300 mt-1">
+                    Seleccioná la transferencia correcta antes de cobrar:
+                  </p>
+                </div>
+                <div className="space-y-3">
+                  {matchCandidates.map((candidate) => (
+                    <button
+                      key={candidate.id}
+                      type="button"
+                      onClick={() => selectCandidate(candidate)}
+                      className="w-full text-left bg-[#0B0F19] border border-[#24324D] hover:border-emerald-500 rounded-xl p-4 transition-colors"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="font-bold text-white truncate">{candidate.payerName}</span>
+                        <span className="font-mono font-bold text-emerald-400 shrink-0">
+                          Gs. {candidate.amount.toLocaleString('es-PY')}
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-400 mt-1 font-mono">
+                        {candidate.payerBank} · Op. {candidate.operationId}
+                        {candidate.receiptNumber ? ` · Nro. Comprobante ${candidate.receiptNumber}` : ''} · {candidate.operationDate}
+                      </div>
+                      {candidate.concept && (
+                        <div className="text-xs text-gray-400 mt-1 truncate">
+                          Concepto: {candidate.concept}
+                        </div>
+                      )}
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
