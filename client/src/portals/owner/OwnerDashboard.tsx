@@ -3,6 +3,8 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useAuth } from '../../context/AuthContext';
 import { requestWebhookSecret, sendTestWebhook } from '../../context/webhook-requests';
 import { buildPersonalizedGasScript } from './personalized-gas-script';
+import { OwnerCatalogAndSalesPanel } from './OwnerCatalogAndSalesPanel';
+import { Package, Receipt } from 'lucide-react';
 import {
   TrendingUp,
   Users,
@@ -72,6 +74,7 @@ interface SubscriptionStatus {
 
 export const OwnerDashboard: React.FC = () => {
   const { user, activeTenant, logout, token, switchTenant, availableMemberships, openTenantSelector } = useAuth();
+  const [ownerSection, setOwnerSection] = useState<'overview' | 'inventory' | 'movements'>('overview');
   const [copiedScript, setCopiedScript] = useState(false);
   const [copiedSecret, setCopiedSecret] = useState(false);
   const [showWebhookSecret, setShowWebhookSecret] = useState(false);
@@ -634,8 +637,56 @@ Estado: Transferencia acreditada en cuenta`;
         </div>
       </header>
 
-      {/* Main Content */}
+            {/* Main Content */}
       <main className="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+        {/* Owner Navigation Tabs */}
+        <div className="flex flex-wrap items-center gap-2 bg-[#151D2F] border border-[#24324D] p-2 rounded-2xl">
+          <button
+            type="button"
+            onClick={() => setOwnerSection('overview')}
+            className={`flex-1 sm:flex-none px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center justify-center gap-2 ${
+              ownerSection === 'overview'
+                ? 'bg-emerald-500 text-gray-950 shadow-lg shadow-emerald-500/20'
+                : 'text-gray-300 hover:text-white bg-[#0B0F19]/60'
+            }`}
+          >
+            <TrendingUp className="w-4 h-4" />
+            <span>Resumen y Caja SIPAP</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setOwnerSection('inventory')}
+            className={`flex-1 sm:flex-none px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center justify-center gap-2 ${
+              ownerSection === 'inventory'
+                ? 'bg-emerald-500 text-gray-950 shadow-lg shadow-emerald-500/20'
+                : 'text-gray-300 hover:text-white bg-[#0B0F19]/60'
+            }`}
+          >
+            <Package className="w-4 h-4" />
+            <span>Inventario, Servicios y Catálogo Web</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setOwnerSection('movements')}
+            className={`flex-1 sm:flex-none px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center justify-center gap-2 ${
+              ownerSection === 'movements'
+                ? 'bg-emerald-500 text-gray-950 shadow-lg shadow-emerald-500/20'
+                : 'text-gray-300 hover:text-white bg-[#0B0F19]/60'
+            }`}
+          >
+            <Receipt className="w-4 h-4" />
+            <span>Movimientos y Ventas</span>
+          </button>
+        </div>
+
+        {ownerSection !== 'overview' ? (
+          <OwnerCatalogAndSalesPanel
+            token={token}
+            tenantSlug={activeTenant?.tenantId || 'mi-comercio'}
+            activeSubTab={ownerSection === 'inventory' ? 'inventory' : 'movements'}
+          />
+        ) : (
+        <>
         {/* Metric Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <div className="bg-[#151D2F] border border-[#24324D] rounded-2xl p-6 shadow-xl">
@@ -1376,6 +1427,8 @@ Estado: Transferencia acreditada en cuenta`;
             </table>
           </div>
         </div>
+        </>
+        )}
       </main>
 
       {/* Modal: Agregar Cajero */}

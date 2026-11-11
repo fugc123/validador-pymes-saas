@@ -4,6 +4,7 @@ export interface MerchantRow {
   slug: string;
   webhook_secret: string;
   status: 'active' | 'suspended' | 'pending';
+  catalog_theme?: string;
   created_at: Date;
   updated_at: Date;
 }
@@ -68,6 +69,113 @@ export interface MerchantRequestRow {
   created_at: Date;
 }
 
+export interface CatalogItemRow {
+  id: string;
+  tenant_id: string;
+  item_type: 'product' | 'service';
+  name: string;
+  description: string | null;
+  price: number;
+  stock: number | null;
+  image_url: string | null;
+  discount_percent: number;
+  discount_type: 'none' | 'hours' | 'days';
+  discount_ends_at: Date | null;
+  discount_days: string | null;
+  is_active: boolean;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface SaleRow {
+  id: string;
+  tenant_id: string;
+  cashier_user_id: string;
+  cashier_name: string;
+  customer_name: string | null;
+  concept: string | null;
+  sale_mode: 'catalog' | 'quick_amount';
+  payment_method: 'TRANSFER' | 'CASH' | 'CARD';
+  transfer_id: string | null;
+  subtotal_amount: number;
+  discount_amount: number;
+  total_amount: number;
+  created_at: Date;
+}
+
+export interface SaleItemRow {
+  id: string;
+  sale_id: string;
+  item_id: string | null;
+  item_name: string;
+  item_type: 'product' | 'service' | 'custom';
+  unit_price: number;
+  applied_discount_percent: number;
+  final_unit_price: number;
+  quantity: number;
+  line_total: number;
+}
+
+export interface SifenConfigRow {
+  tenant_id: string;
+  enabled: boolean;
+  environment: 'test' | 'prod';
+  ruc: string;
+  dv: string;
+  razon_social: string;
+  nombre_fantasia: string;
+  tipo_contribuyente: number;
+  tipo_regimen: number;
+  timbrado: string;
+  fecha_inicio_timbrado: string;
+  establecimiento: string;
+  punto_expedicion: string;
+  direccion: string;
+  numero_casa: string;
+  departamento: number;
+  departamento_desc: string;
+  distrito: number;
+  distrito_desc: string;
+  ciudad: number;
+  ciudad_desc: string;
+  telefono: string;
+  email: string;
+  actividad_economica_codigo: string;
+  actividad_economica_desc: string;
+  csc_id: string;
+  csc: string;
+  certificado_base64: string | null;
+  certificado_password: string | null;
+  last_test_status: string | null;
+  last_test_message: string | null;
+  last_test_cdc: string | null;
+  last_tested_at: Date | null;
+  updated_by_user_id: string | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface SifenInvoiceRow {
+  id: string;
+  tenant_id: string;
+  sale_id: string | null;
+  cdc: string;
+  numero_documento: string;
+  timbrado: string;
+  environment: 'test' | 'prod';
+  receptor_ruc: string;
+  receptor_dv: string | null;
+  receptor_nombre: string;
+  condicion_venta: 'CONTADO' | 'CREDITO';
+  total_amount: number;
+  iva_10_amount: number;
+  xml_payload: string;
+  qr_url: string;
+  status: 'GENERATED' | 'TEST_OK' | 'APPROVED' | 'REJECTED';
+  response_message: string;
+  created_at: Date;
+}
+
 export const DDL_SCHEMA_SQL = `
 -- Merchants Table (Tenants)
 CREATE TABLE IF NOT EXISTS merchants (
@@ -76,9 +184,11 @@ CREATE TABLE IF NOT EXISTS merchants (
     slug VARCHAR(100) UNIQUE NOT NULL,
     webhook_secret VARCHAR(128) NOT NULL,
     status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'suspended', 'pending')),
+    catalog_theme VARCHAR(50) DEFAULT 'emerald',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+ALTER TABLE merchants ADD COLUMN IF NOT EXISTS catalog_theme VARCHAR(50) DEFAULT 'emerald';
 CREATE INDEX IF NOT EXISTS idx_merchants_slug ON merchants(slug);
 
 -- Global Users Table
@@ -163,4 +273,120 @@ CREATE TABLE IF NOT EXISTS payment_reports (
     matched_transfer_id VARCHAR(100),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Catalog Items Table (Products & Services with Time Discounts)
+CREATE TABLE IF NOT EXISTS catalog_items (
+    id VARCHAR(100) PRIMARY KEY,
+    tenant_id VARCHAR(100) NOT NULL,
+    item_type VARCHAR(20) NOT NULL CHECK (item_type IN ('product', 'service')),
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    price INTEGER NOT NULL CHECK (price >= 0),
+    stock INTEGER,
+    image_url TEXT,
+    discount_percent INTEGER NOT NULL DEFAULT 0 CHECK (discount_percent >= 0 AND discount_percent <= 99),
+    discount_type VARCHAR(20) NOT NULL DEFAULT 'none' CHECK (discount_type IN ('none', 'hours', 'days')),
+    discount_ends_at TIMESTAMP WITH TIME ZONE,
+    discount_days VARCHAR(50),
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_catalog_items_tenant ON catalog_items(tenant_id, is_active);
+
+-- Sales Table (POS Movements & Checkout History)
+CREATE TABLE IF NOT EXISTS sales (
+    id VARCHAR(100) PRIMARY KEY,
+    tenant_id VARCHAR(100) NOT NULL,
+    cashier_user_id VARCHAR(100) NOT NULL,
+    cashier_name VARCHAR(255) NOT NULL,
+    customer_name VARCHAR(255),
+    concept TEXT,
+    sale_mode VARCHAR(30) NOT NULL DEFAULT 'catalog' CHECK (sale_mode IN ('catalog', 'quick_amount')),
+    payment_method VARCHAR(30) NOT NULL CHECK (payment_method IN ('TRANSFER', 'CASH', 'CARD')),
+    transfer_id VARCHAR(100),
+    subtotal_amount INTEGER NOT NULL,
+    discount_amount INTEGER NOT NULL DEFAULT 0,
+    total_amount INTEGER NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_sales_tenant_created ON sales(tenant_id, created_at DESC);
+
+-- Sale Items Table (Line items per Sale)
+CREATE TABLE IF NOT EXISTS sale_items (
+    id VARCHAR(100) PRIMARY KEY,
+    sale_id VARCHAR(100) NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+    item_id VARCHAR(100),
+    item_name VARCHAR(255) NOT NULL,
+    item_type VARCHAR(30) NOT NULL CHECK (item_type IN ('product', 'service', 'custom')),
+    unit_price INTEGER NOT NULL,
+    applied_discount_percent INTEGER NOT NULL DEFAULT 0,
+    final_unit_price INTEGER NOT NULL,
+    quantity INTEGER NOT NULL CHECK (quantity > 0),
+    line_total INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id);
+
+-- SIFEN Electronic Invoicing Configurations (Restricted to Free/Lifetime Merchants)
+CREATE TABLE IF NOT EXISTS sifen_configs (
+    tenant_id VARCHAR(100) PRIMARY KEY,
+    enabled BOOLEAN DEFAULT TRUE,
+    environment VARCHAR(20) NOT NULL DEFAULT 'test' CHECK (environment IN ('test', 'prod')),
+    ruc VARCHAR(30) NOT NULL,
+    dv VARCHAR(5) NOT NULL,
+    razon_social VARCHAR(255) NOT NULL,
+    nombre_fantasia VARCHAR(255) NOT NULL,
+    tipo_contribuyente INTEGER NOT NULL DEFAULT 2,
+    tipo_regimen INTEGER NOT NULL DEFAULT 8,
+    timbrado VARCHAR(20) NOT NULL,
+    fecha_inicio_timbrado VARCHAR(20) NOT NULL,
+    establecimiento VARCHAR(10) NOT NULL DEFAULT '001',
+    punto_expedicion VARCHAR(10) NOT NULL DEFAULT '001',
+    direccion VARCHAR(255) NOT NULL DEFAULT 'Av. España casi Brasil',
+    numero_casa VARCHAR(20) NOT NULL DEFAULT '123',
+    departamento INTEGER NOT NULL DEFAULT 1,
+    departamento_desc VARCHAR(100) NOT NULL DEFAULT 'CAPITAL',
+    distrito INTEGER NOT NULL DEFAULT 1,
+    distrito_desc VARCHAR(100) NOT NULL DEFAULT 'ASUNCION (DISTRITO)',
+    ciudad INTEGER NOT NULL DEFAULT 1,
+    ciudad_desc VARCHAR(100) NOT NULL DEFAULT 'ASUNCION (DISTRITO)',
+    telefono VARCHAR(50) NOT NULL DEFAULT '021000000',
+    email VARCHAR(255) NOT NULL DEFAULT 'facturacion@cajasegura.com.py',
+    actividad_economica_codigo VARCHAR(30) NOT NULL DEFAULT '47190',
+    actividad_economica_desc VARCHAR(255) NOT NULL DEFAULT 'COMERCIO AL POR MENOR EN COMERCIOS NO ESPECIALIZADOS',
+    csc_id VARCHAR(10) NOT NULL DEFAULT '0001',
+    csc VARCHAR(128) NOT NULL DEFAULT 'ABCD0000000000000000000000000000',
+    certificado_base64 TEXT,
+    certificado_password VARCHAR(255),
+    last_test_status VARCHAR(50),
+    last_test_message TEXT,
+    last_test_cdc VARCHAR(64),
+    last_tested_at TIMESTAMP WITH TIME ZONE,
+    updated_by_user_id VARCHAR(100),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- SIFEN Emitted Electronic Invoices (DE / KuDE / CDC)
+CREATE TABLE IF NOT EXISTS sifen_invoices (
+    id VARCHAR(100) PRIMARY KEY,
+    tenant_id VARCHAR(100) NOT NULL,
+    sale_id VARCHAR(100),
+    cdc VARCHAR(44) NOT NULL,
+    numero_documento VARCHAR(30) NOT NULL,
+    timbrado VARCHAR(20) NOT NULL,
+    environment VARCHAR(20) NOT NULL DEFAULT 'test',
+    receptor_ruc VARCHAR(40) NOT NULL,
+    receptor_dv VARCHAR(10),
+    receptor_nombre VARCHAR(255) NOT NULL,
+    condicion_venta VARCHAR(20) NOT NULL DEFAULT 'CONTADO',
+    total_amount INTEGER NOT NULL,
+    iva_10_amount INTEGER NOT NULL,
+    xml_payload TEXT NOT NULL,
+    qr_url TEXT NOT NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'GENERATED',
+    response_message TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_sifen_invoices_tenant ON sifen_invoices(tenant_id, created_at DESC);
 `;
