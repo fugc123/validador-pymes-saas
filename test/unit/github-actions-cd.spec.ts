@@ -46,7 +46,7 @@ describe('.github/workflows/cd.yml — CD workflow contract', () => {
   it('navigates to /var/www/cajasegura, pulls main, builds, and restarts PM2', () => {
     workflowExists();
     expect(workflow).toContain('/var/www/cajasegura');
-    expect(workflow).toContain('git pull origin main');
+    expect(workflow).toMatch(/git pull (origin main|https:\/\/x-access-token)/);
     expect(workflow).toContain('npm run build');
     expect(workflow).toContain('pm2 restart cajasegura-backend');
   });

@@ -27,7 +27,7 @@ jobs:
             set -e
             echo "🚀 [CD] Desplegando CajaSegura en producción..."
             cd /var/www/cajasegura
-            git pull origin main
+            git pull https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git main
             npm ci --ignore-scripts
             npm run build
             cd client
