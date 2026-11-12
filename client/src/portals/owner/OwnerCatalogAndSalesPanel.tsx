@@ -18,6 +18,7 @@ import {
   X,
 } from 'lucide-react';
 import { CatalogThemePalette } from '../catalog/PublicCatalogView';
+import { processImageToWebp } from '../../utils/imageProcessor';
 
 interface CatalogItemDto {
   id: string;
@@ -127,6 +128,8 @@ export const OwnerCatalogAndSalesPanel: React.FC<OwnerCatalogAndSalesPanelProps>
   const [price, setPrice] = useState('');
   const [stock, setStock] = useState('10');
   const [imageUrl, setImageUrl] = useState('');
+  const [imageProcessing, setImageProcessing] = useState(false);
+  const [imageInfo, setImageInfo] = useState<string | null>(null);
   const [discountType, setDiscountType] = useState<'none' | 'hours' | 'days'>('none');
   const [discountPercent, setDiscountPercent] = useState('15');
   const [discountDurationHours, setDiscountDurationHours] = useState('4');
@@ -203,6 +206,7 @@ export const OwnerCatalogAndSalesPanel: React.FC<OwnerCatalogAndSalesPanelProps>
     setPrice('');
     setStock('10');
     setImageUrl('');
+    setImageInfo(null);
     setDiscountType('none');
     setDiscountPercent('15');
     setDiscountDurationHours('4');
@@ -220,6 +224,7 @@ export const OwnerCatalogAndSalesPanel: React.FC<OwnerCatalogAndSalesPanelProps>
     setPrice(item.price.toString());
     setStock(item.stock !== null ? item.stock.toString() : '0');
     setImageUrl(item.imageUrl || '');
+    setImageInfo(null);
     setDiscountType(item.discountType || 'none');
     setDiscountPercent((item.discountPercent || 15).toString());
     setDiscountDurationHours('4');
@@ -229,16 +234,26 @@ export const OwnerCatalogAndSalesPanel: React.FC<OwnerCatalogAndSalesPanelProps>
     setShowItemModal(true);
   };
 
-  const handleImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setImageUrl(reader.result);
-      }
-    };
-    reader.readAsDataURL(file);
+    setFormError(null);
+    setImageInfo(null);
+    setImageProcessing(true);
+    try {
+      const result = await processImageToWebp(file);
+      setImageUrl(result.dataUrl);
+      const origKb = (result.originalBytes / 1024).toFixed(0);
+      const compKb = (result.compressedBytes / 1024).toFixed(0);
+      setImageInfo(
+        `✅ ${result.detectedFormat.toUpperCase()} verificado y comprimido a WebP: ${compKb} KB (antes ${origKb} KB)`,
+      );
+    } catch (err: unknown) {
+      setFormError(err instanceof Error ? err.message : 'Error procesando la imagen.');
+      e.target.value = '';
+    } finally {
+      setImageProcessing(false);
+    }
   };
 
   const toggleWeekday = (day: string) => {
@@ -820,7 +835,10 @@ export const OwnerCatalogAndSalesPanel: React.FC<OwnerCatalogAndSalesPanelProps>
                   {imageUrl && (
                     <button
                       type="button"
-                      onClick={() => setImageUrl('')}
+                      onClick={() => {
+                        setImageUrl('');
+                        setImageInfo(null);
+                      }}
                       className="text-[11px] text-red-400 hover:underline"
                     >
                       Quitar foto
@@ -830,16 +848,38 @@ export const OwnerCatalogAndSalesPanel: React.FC<OwnerCatalogAndSalesPanelProps>
                 <input
                   type="text"
                   value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
+                  onChange={(e) => {
+                    setImageUrl(e.target.value);
+                    setImageInfo(null);
+                  }}
                   placeholder="Pegar link de imagen (https://...) o subir archivo abajo"
                   className="w-full bg-[#151D2F] border border-[#24324D] rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
                 />
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp"
+                  disabled={imageProcessing}
                   onChange={handleImageFileUpload}
-                  className="block w-full text-xs text-gray-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-emerald-500/15 file:text-emerald-400 hover:file:bg-emerald-500/25"
+                  className="block w-full text-xs text-gray-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-emerald-500/15 file:text-emerald-400 hover:file:bg-emerald-500/25 disabled:opacity-50"
                 />
+                {imageProcessing && (
+                  <p className="text-[11px] text-amber-300 font-mono">
+                    Validando firma y comprimiendo a WebP...
+                  </p>
+                )}
+                {imageInfo && (
+                  <p className="text-[11px] text-emerald-400 font-mono">{imageInfo}</p>
+                )}
+                {imageUrl && !imageProcessing && (
+                  <div className="flex items-center gap-3 pt-1">
+                    <img
+                      src={imageUrl}
+                      alt="Vista previa"
+                      className="w-14 h-14 rounded-xl object-cover border border-[#24324D]"
+                    />
+                    <span className="text-[11px] text-gray-400">Vista previa optimizada</span>
+                  </div>
+                )}
               </div>
 
               {/* Time-based Discount Configuration */}

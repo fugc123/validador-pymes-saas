@@ -22,6 +22,7 @@ import { RolesGuard } from '../guards/roles.guard';
 import { TenantGuard } from '../guards/tenant.guard';
 import { TenantContextInterceptor } from '../interceptors/tenant-context.interceptor';
 import { TenantContext } from '../interceptors/tenant-context.service';
+import { validateSafeImageUrl } from '../../core/application/utils/image-security';
 import {
   CatalogItemType,
   CatalogThemePalette,
@@ -211,6 +212,7 @@ export class CatalogController {
   @HttpCode(HttpStatus.CREATED)
   async createCatalogItem(@Body() dto: CreateCatalogItemDto) {
     const tenantId = this.requireTenantId();
+    const safeImageUrl = validateSafeImageUrl(dto.imageUrl);
     return this.catalogRepo.createItem({
       tenantId,
       itemType: dto.itemType,
@@ -218,7 +220,7 @@ export class CatalogController {
       description: dto.description,
       price: Number(dto.price),
       stock: dto.stock !== undefined && dto.stock !== null ? Number(dto.stock) : null,
-      imageUrl: dto.imageUrl,
+      imageUrl: safeImageUrl,
       discountPercent: dto.discountPercent ? Number(dto.discountPercent) : 0,
       discountType: dto.discountType || 'none',
       discountDurationHours: dto.discountDurationHours ? Number(dto.discountDurationHours) : null,
@@ -232,7 +234,11 @@ export class CatalogController {
   @HttpCode(HttpStatus.OK)
   async updateCatalogItem(@Param('id') itemId: string, @Body() dto: UpdateCatalogItemDto) {
     const tenantId = this.requireTenantId();
-    const updated = await this.catalogRepo.updateItem(tenantId, itemId, dto);
+    const payload = { ...dto };
+    if (dto.imageUrl !== undefined) {
+      payload.imageUrl = validateSafeImageUrl(dto.imageUrl);
+    }
+    const updated = await this.catalogRepo.updateItem(tenantId, itemId, payload);
     if (!updated) {
       throw new NotFoundException('Catalog item not found');
     }
