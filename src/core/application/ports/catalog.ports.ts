@@ -87,6 +87,8 @@ export interface Sale {
   cashierUserId: string;
   cashierName: string;
   customerName: string | null;
+  customerRuc: string | null;
+  customerEmail: string | null;
   concept: string | null;
   saleMode: SaleMode;
   paymentMethod: SalePaymentMethod;
@@ -103,6 +105,8 @@ export interface CreateSaleInput {
   cashierUserId: string;
   cashierName: string;
   customerName?: string | null;
+  customerRuc?: string | null;
+  customerEmail?: string | null;
   concept?: string | null;
   saleMode: SaleMode;
   paymentMethod: SalePaymentMethod;

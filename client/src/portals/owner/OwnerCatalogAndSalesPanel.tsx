@@ -42,6 +42,8 @@ interface SaleRecordDto {
   cashierUserId: string;
   cashierName: string;
   customerName: string | null;
+  customerRuc?: string | null;
+  customerEmail?: string | null;
   concept: string | null;
   saleMode: 'catalog' | 'quick_amount';
   paymentMethod: 'TRANSFER' | 'CASH' | 'CARD';
@@ -423,7 +425,14 @@ export const OwnerCatalogAndSalesPanel: React.FC<OwnerCatalogAndSalesPanelProps>
                         {sale.cashierName}
                       </td>
                       <td className="py-3.5 px-3 text-gray-300">
-                        {sale.customerName || 'Mostrador'}
+                        <div>{sale.customerName || 'Mostrador'}</div>
+                        {(sale.customerRuc || sale.customerEmail) && (
+                          <div className="text-[11px] text-gray-400 font-mono mt-0.5">
+                            {sale.customerRuc && <span>RUC: {sale.customerRuc}</span>}
+                            {sale.customerRuc && sale.customerEmail && <span> · </span>}
+                            {sale.customerEmail && <span>{sale.customerEmail}</span>}
+                          </div>
+                        )}
                       </td>
                       <td className="py-3.5 px-3 text-gray-200 max-w-md">
                         {sale.saleMode === 'quick_amount' ? (

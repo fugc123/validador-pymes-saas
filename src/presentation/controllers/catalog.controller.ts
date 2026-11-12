@@ -130,6 +130,14 @@ export class CreateSaleDto {
 
   @IsOptional()
   @Allow()
+  customerRuc?: string | null;
+
+  @IsOptional()
+  @Allow()
+  customerEmail?: string | null;
+
+  @IsOptional()
+  @Allow()
   concept?: string | null;
 
   @IsOptional()
@@ -326,6 +334,8 @@ export class CatalogController {
       cashierUserId,
       cashierName,
       customerName: dto.customerName,
+      customerRuc: dto.customerRuc,
+      customerEmail: dto.customerEmail,
       concept: dto.concept,
       saleMode: dto.saleMode || 'catalog',
       paymentMethod: dto.paymentMethod,

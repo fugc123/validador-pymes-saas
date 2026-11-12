@@ -263,4 +263,27 @@ describe('Catalog, Inventory, Time Discounts & POS Sales (T1 & T2)', () => {
     expect(storefront.theme).toBe('rose');
     expect(storefront.items[0].stock).toBe(8);
   });
+
+  it('persists optional customerName, customerRuc, and customerEmail when provided on sale', async () => {
+    const sale = await catalogRepo.createSale({
+      tenantId: 'copy-shop-impresiones',
+      cashierUserId: 'usr-cashier-1',
+      cashierName: 'María Cajera',
+      customerName: 'Empresa Ejemplo S.A.',
+      customerRuc: '80012345-6',
+      customerEmail: 'facturacion@ejemplo.com.py',
+      concept: 'Servicio de impresión corporativa',
+      saleMode: 'quick_amount',
+      paymentMethod: 'CASH',
+      quickAmount: 150000,
+    });
+
+    expect(sale.customerName).toBe('Empresa Ejemplo S.A.');
+    expect(sale.customerRuc).toBe('80012345-6');
+    expect(sale.customerEmail).toBe('facturacion@ejemplo.com.py');
+
+    const sales = await catalogRepo.listSalesByTenant('copy-shop-impresiones');
+    expect(sales[0].customerRuc).toBe('80012345-6');
+    expect(sales[0].customerEmail).toBe('facturacion@ejemplo.com.py');
+  });
 });

@@ -35,6 +35,8 @@ interface TransferResult {
   payerBank?: string;
   operationDate: string;
   status: string;
+  receiptNumber?: string;
+  concept?: string;
 }
 
 interface SubscriptionStatus {
@@ -65,6 +67,8 @@ interface CashierSaleRecord {
   id: string;
   cashierName: string;
   customerName: string | null;
+  customerRuc?: string | null;
+  customerEmail?: string | null;
   concept: string | null;
   saleMode: 'catalog' | 'quick_amount';
   paymentMethod: 'TRANSFER' | 'CASH' | 'CARD';
@@ -97,7 +101,9 @@ export const FastPosScreen: React.FC = () => {
 
   // Shared checkout fields
   const [customerName, setCustomerName] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'TRANSFER' | 'CASH' | 'CARD'>('TRANSFER');
+  const [customerRuc, setCustomerRuc] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
+  const [paymentMethod, setPaymentMethod] =  useState<'TRANSFER' | 'CASH' | 'CARD'>('TRANSFER');
   const [submittingSale, setSubmittingSale] = useState(false);
   const [saleError, setSaleError] = useState<string | null>(null);
   const [completedSaleBanner, setCompletedSaleBanner] = useState<{
@@ -264,6 +270,8 @@ export const FastPosScreen: React.FC = () => {
     setQuickAmount('');
     setQuickConcept('');
     setCustomerName('');
+    setCustomerRuc('');
+    setCustomerEmail('');
     setMatch(null);
     setReplayAlert(null);
     setNotFound(false);
@@ -282,6 +290,8 @@ export const FastPosScreen: React.FC = () => {
     const isQuick = activeTab === 'quick_amount';
     const payload = {
       customerName: customerName.trim() || match?.payerName || null,
+      customerRuc: customerRuc.trim() || null,
+      customerEmail: customerEmail.trim() || null,
       concept: isQuick ? quickConcept.trim() || 'Cobro rápido en caja' : null,
       cashierName: user?.fullName || 'Cajero',
       saleMode: isQuick ? 'quick_amount' : 'catalog',
@@ -328,8 +338,9 @@ export const FastPosScreen: React.FC = () => {
             },
             body: JSON.stringify({
               saleId: data.sale?.id || data.id || null,
-              receptorRuc: sifenReceptorRuc.trim() || '44444401',
+              receptorRuc: customerRuc.trim() || sifenReceptorRuc.trim() || '44444401',
               receptorNombre: customerName.trim() || match?.payerName || 'CONSUMIDOR FINAL',
+              receptorEmail: customerEmail.trim() || undefined,
               totalAmount: data.sale?.totalAmount || data.totalAmount || effectiveCheckoutTotal,
               items: isQuick
                 ? [
@@ -417,6 +428,11 @@ export const FastPosScreen: React.FC = () => {
 
     // Direct completion for CASH or CARD
     await submitSaleToBackend();
+  };
+
+  const selectCandidate = (candidate: TransferResult) => {
+    setMatch(candidate);
+    setMatchCandidates([]);
   };
 
   const checkTransfer = async (cleanAmount: number, payerFilter?: string): Promise<'match' | 'claimed' | 'not_found'> => {
@@ -719,6 +735,16 @@ export const FastPosScreen: React.FC = () => {
                                 • Cliente: <strong className="text-gray-200">{s.customerName}</strong>
                               </span>
                             )}
+                            {s.customerRuc && (
+                              <span className="text-xs text-gray-400 font-mono">
+                                • RUC: <strong className="text-gray-300">{s.customerRuc}</strong>
+                              </span>
+                            )}
+                            {s.customerEmail && (
+                              <span className="text-xs text-gray-400">
+                                • Email: <span className="text-gray-300">{s.customerEmail}</span>
+                              </span>
+                            )}
                           </div>
                           <div className="text-xs text-gray-300">
                             {s.saleMode === 'quick_amount'
@@ -952,18 +978,50 @@ export const FastPosScreen: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Customer Name */}
-                  <div>
-                    <label className="block text-xs font-bold uppercase text-gray-400 mb-1.5">
-                      Cliente / Razón Social (Opcional)
-                    </label>
-                    <input
-                      type="text"
-                      value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                      placeholder="Nombre o Razón Social del cliente..."
-                      className="w-full bg-[#0B0F19] border border-[#24324D] focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none"
-                    />
+                  {/* Datos del Cliente (Opcionales) */}
+                  <div className="space-y-3 p-4 bg-[#0B0F19]/60 border border-[#24324D] rounded-2xl">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-bold uppercase tracking-wider text-gray-300">
+                        Datos del Cliente (Opcional)
+                      </label>
+                      <span className="text-[10px] font-mono text-gray-500">Consumidor Final si vacío</span>
+                    </div>
+
+                    <div className="space-y-2.5">
+                      <div>
+                        <input
+                          type="text"
+                          value={customerName}
+                          onChange={(e) => setCustomerName(e.target.value)}
+                          placeholder="Nombre o Razón Social del cliente..."
+                          className="w-full bg-[#0B0F19] border border-[#24324D] focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none transition-colors"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div>
+                          <input
+                            type="text"
+                            value={customerRuc}
+                            onChange={(e) => {
+                              setCustomerRuc(e.target.value);
+                              setSifenReceptorRuc(e.target.value);
+                            }}
+                            placeholder="RUC o Cédula (Ej: 80012345-6)..."
+                            className="w-full bg-[#0B0F19] border border-[#24324D] focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs font-mono text-white placeholder-gray-500 focus:outline-none transition-colors"
+                          />
+                        </div>
+                        <div>
+                          <input
+                            type="email"
+                            value={customerEmail}
+                            onChange={(e) => setCustomerEmail(e.target.value)}
+                            placeholder="Email (Ej: cliente@gmail.com)..."
+                            className="w-full bg-[#0B0F19] border border-[#24324D] focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none transition-colors"
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
                   {sifenEnabled && (
@@ -980,13 +1038,11 @@ export const FastPosScreen: React.FC = () => {
                         />
                       </label>
                       {sifenEmitInvoice && (
-                        <input
-                          type="text"
-                          value={sifenReceptorRuc}
-                          onChange={(e) => setSifenReceptorRuc(e.target.value)}
-                          placeholder="RUC o Cédula p/ Factura (Vacío = 44444401 Sin Nombre)"
-                          className="w-full bg-[#0B0F19] border border-purple-500/40 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none"
-                        />
+                        <div className="text-[11px] text-purple-300/80 font-mono space-y-0.5">
+                          <div>• Receptor: <strong>{customerName.trim() || match?.payerName || 'CONSUMIDOR FINAL'}</strong></div>
+                          <div>• RUC: <strong>{customerRuc.trim() || sifenReceptorRuc.trim() || '44444401 (Sin Nombre)'}</strong></div>
+                          {customerEmail.trim() && <div>• Correo: <strong>{customerEmail.trim()}</strong></div>}
+                        </div>
                       )}
                     </div>
                   )}

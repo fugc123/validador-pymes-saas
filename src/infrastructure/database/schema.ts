@@ -93,6 +93,8 @@ export interface SaleRow {
   cashier_user_id: string;
   cashier_name: string;
   customer_name: string | null;
+  customer_ruc: string | null;
+  customer_email: string | null;
   concept: string | null;
   sale_mode: 'catalog' | 'quick_amount';
   payment_method: 'TRANSFER' | 'CASH' | 'CARD';
@@ -301,6 +303,8 @@ CREATE TABLE IF NOT EXISTS sales (
     cashier_user_id VARCHAR(100) NOT NULL,
     cashier_name VARCHAR(255) NOT NULL,
     customer_name VARCHAR(255),
+    customer_ruc VARCHAR(50),
+    customer_email VARCHAR(255),
     concept TEXT,
     sale_mode VARCHAR(30) NOT NULL DEFAULT 'catalog' CHECK (sale_mode IN ('catalog', 'quick_amount')),
     payment_method VARCHAR(30) NOT NULL CHECK (payment_method IN ('TRANSFER', 'CASH', 'CARD')),
@@ -311,6 +315,8 @@ CREATE TABLE IF NOT EXISTS sales (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_sales_tenant_created ON sales(tenant_id, created_at DESC);
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS customer_ruc VARCHAR(50);
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS customer_email VARCHAR(255);
 
 -- Sale Items Table (Line items per Sale)
 CREATE TABLE IF NOT EXISTS sale_items (
