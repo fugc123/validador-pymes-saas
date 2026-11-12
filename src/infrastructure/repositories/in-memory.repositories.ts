@@ -195,6 +195,20 @@ export class InMemoryUserRepository implements IUserRepository {
       fullName: 'Nico',
       isSuperAdmin: false,
     }),
+    new User({
+      id: 'usr-cajero-franco',
+      email: 'cajero@cajasegura.com.py',
+      passwordHash: '\.Ff//az3UA3MgnWyxjC0EkNWR86',
+      fullName: 'Cajero Franco',
+      isSuperAdmin: false,
+    }),
+    new User({
+      id: 'usr-dueno-franco',
+      email: 'dueno@cajasegura.com.py',
+      passwordHash: '\.Ff//az3UA3MgnWyxjC0EkNWR86',
+      fullName: 'Dueño Franco',
+      isSuperAdmin: false,
+    }),
   ];
 
   async findByEmail(email: string): Promise<User | null> {
@@ -555,6 +569,38 @@ export class InMemoryMembershipRepository implements IMembershipRepository {
         name: 'Comercio Nico',
         slug: 'comercio-nico',
         webhookSecret: 'sec_comercio_nico_pos',
+        status: 'active',
+      }),
+    },
+    {
+      membership: new MerchantMembership({
+        id: 'mem-pure-cajero',
+        userId: 'usr-cajero-franco',
+        merchantId: 'comercio-franco',
+        role: 'CASHIER',
+        isActive: true,
+      }),
+      merchant: new Merchant({
+        id: 'comercio-franco',
+        name: 'Comercio Franco',
+        slug: 'comercio-franco',
+        webhookSecret: 'sec_comercio_franco_pos',
+        status: 'active',
+      }),
+    },
+    {
+      membership: new MerchantMembership({
+        id: 'mem-pure-dueno',
+        userId: 'usr-dueno-franco',
+        merchantId: 'comercio-franco',
+        role: 'MERCHANT_OWNER',
+        isActive: true,
+      }),
+      merchant: new Merchant({
+        id: 'comercio-franco',
+        name: 'Comercio Franco',
+        slug: 'comercio-franco',
+        webhookSecret: 'sec_comercio_franco_pos',
         status: 'active',
       }),
     },
