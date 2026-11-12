@@ -1,6 +1,8 @@
 import { RejectMerchantRequestUseCase } from "./core/application/use-cases/onboarding/reject-merchant-request.use-case";
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
 // Controllers
 import { AuthController } from './presentation/controllers/auth.controller';
@@ -49,6 +51,12 @@ import { AuthMiddleware } from './presentation/middlewares/auth.middleware';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000,
+        limit: 180,
+      },
+    ]),
     DatabaseModule,
   ],
   controllers: [
@@ -63,6 +71,10 @@ import { AuthMiddleware } from './presentation/middlewares/auth.middleware';
     SifenController,
   ],
   providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
     BankParserFactory,
     // Use Cases
     LoginUseCase,

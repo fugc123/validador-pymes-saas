@@ -1,4 +1,5 @@
 import { Body, Controller, Headers, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { LoginUseCase } from '../../core/application/use-cases/auth/login.use-case';
 import { SelectTenantUseCase } from '../../core/application/use-cases/auth/select-tenant.use-case';
@@ -59,6 +60,7 @@ export class AuthController {
   ) {}
 
   @Post('login')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   async login(@Body() dto: LoginDto) {
     return this.loginUseCase.execute(dto);

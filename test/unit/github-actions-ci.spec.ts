@@ -49,11 +49,11 @@ describe('.github/workflows/ci.yml — CI-only contract', () => {
     );
   });
 
-  it('runs on the ubuntu hosted runner with Node 20', () => {
+  it('runs on the ubuntu hosted runner with Node 24', () => {
     workflowExists();
     expect(workflow).toMatch(/runs-on:\s*ubuntu-/);
     expect(workflow).toMatch(/actions\/setup-node@/);
-    expect(workflow).toMatch(/node-version:\s*['"]?20\b/);
+    expect(workflow).toMatch(/node-version:\s*['"]?24\b/);
   });
 
   it('installs from the lockfile at the root and for the client', () => {
