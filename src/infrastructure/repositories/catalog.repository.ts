@@ -111,11 +111,9 @@ export class CatalogRepository implements ICatalogRepository {
     }
     const itemType = input.itemType === 'service' ? 'service' : 'product';
     const stock =
-      itemType === 'service'
+      itemType === 'service' || input.stock === undefined || input.stock === null
         ? null
-        : input.stock !== undefined && input.stock !== null
-          ? Math.max(0, Math.floor(Number(input.stock)))
-          : 0;
+        : Math.max(0, Math.floor(Number(input.stock)));
 
     const discountPercent = Math.min(99, Math.max(0, Math.floor(Number(input.discountPercent || 0))));
     const discountType = discountPercent > 0 ? input.discountType || 'none' : 'none';
@@ -200,7 +198,7 @@ export class CatalogRepository implements ICatalogRepository {
         ? null
         : input.stock !== undefined
           ? input.stock === null
-            ? 0
+            ? null
             : Math.max(0, Math.floor(Number(input.stock)))
           : existing.stock;
 
@@ -470,8 +468,8 @@ export class CatalogRepository implements ICatalogRepository {
         if (!itemView || !itemView.isActive) {
           throw new NotFoundException(`Catalog item '${itemId}' not found`);
         }
-        if (itemView.itemType === 'product') {
-          const currentStock = itemView.stock ?? 0;
+        if (itemView.itemType === 'product' && itemView.stock !== null) {
+          const currentStock = itemView.stock;
           if (currentStock < qty) {
             throw new BadRequestException(
               `Stock insuficiente para '${itemView.name}'. Disponible: ${currentStock}, solicitado: ${qty}`,
@@ -492,8 +490,8 @@ export class CatalogRepository implements ICatalogRepository {
       // Second pass: deduct stock & build sale items
       for (let i = 0; i < resolvedLines.length; i++) {
         const { view, quantity } = resolvedLines[i];
-        if (view.itemType === 'product') {
-          const newStock = Math.max(0, (view.stock ?? 0) - quantity);
+        if (view.itemType === 'product' && view.stock !== null) {
+          const newStock = Math.max(0, view.stock - quantity);
           if (this.isDbActive()) {
             const stockUpdate = await this.dbService!.query(
               `UPDATE catalog_items

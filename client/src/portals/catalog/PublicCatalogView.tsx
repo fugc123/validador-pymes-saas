@@ -277,7 +277,7 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ slug, onBa
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {filteredItems.map((item) => {
               const hasPhoto = Boolean(item.imageUrl && item.imageUrl.trim().length > 0);
-              const outOfStock = item.itemType === 'product' && (item.stock ?? 0) <= 0;
+              const outOfStock = item.itemType === 'product' && item.stock !== null && item.stock <= 0;
 
               return (
                 <div
@@ -360,7 +360,7 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ slug, onBa
 
                       {/* Stock or Service Availability Badge */}
                       <div className="text-right">
-                        {item.itemType === 'product' ? (
+                        {item.itemType === 'product' && item.stock !== null ? (
                           outOfStock ? (
                             <span className="px-2.5 py-1 bg-red-500/15 text-red-400 border border-red-500/30 rounded-lg text-xs font-bold">
                               Sin Stock

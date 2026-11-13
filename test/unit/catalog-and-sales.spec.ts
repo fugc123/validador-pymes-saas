@@ -286,4 +286,29 @@ describe('Catalog, Inventory, Time Discounts & POS Sales (T1 & T2)', () => {
     expect(sales[0].customerRuc).toBe('80012345-6');
     expect(sales[0].customerEmail).toBe('facturacion@ejemplo.com.py');
   });
+
+  it('allows selling a product without stock control (stock = null, e.g. restaurant or hotel)', async () => {
+    const burger = await catalogRepo.createItem({
+      tenantId: 'restaurante-demo',
+      itemType: 'product',
+      name: 'Hamburguesa Completa',
+      price: 35000,
+      stock: null,
+    });
+
+    expect(burger.stock).toBeNull();
+
+    const sale = await catalogRepo.createSale({
+      tenantId: 'restaurante-demo',
+      cashierUserId: 'usr-cashier-1',
+      cashierName: 'Caja 1',
+      saleMode: 'catalog',
+      paymentMethod: 'CASH',
+      items: [{ itemId: burger.id, quantity: 4 }],
+    });
+
+    expect(sale.totalAmount).toBe(140000);
+    const items = await catalogRepo.listItemsByTenant('restaurante-demo');
+    expect(items[0].stock).toBeNull();
+  });
 });

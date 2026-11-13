@@ -230,7 +230,8 @@ export const FastPosScreen: React.FC = () => {
     setSaleError(null);
     setCart((prev) => {
       const existing = prev.find((l) => l.item.id === item.id);
-      const maxStock = item.itemType === 'product' ? (item.stock ?? 0) : 9999;
+      const hasStockLimit = item.itemType === 'product' && item.stock !== null;
+      const maxStock = hasStockLimit ? (item.stock as number) : 9999;
       if (existing) {
         if (existing.quantity >= maxStock) {
           setSaleError(`Stock máximo alcanzado para "${item.name}" (${maxStock} disponibles).`);
@@ -238,7 +239,7 @@ export const FastPosScreen: React.FC = () => {
         }
         return prev.map((l) => (l.item.id === item.id ? { ...l, quantity: l.quantity + 1 } : l));
       }
-      if (item.itemType === 'product' && maxStock <= 0) {
+      if (hasStockLimit && maxStock <= 0) {
         setSaleError(`"${item.name}" no tiene stock disponible.`);
         return prev;
       }
@@ -254,7 +255,7 @@ export const FastPosScreen: React.FC = () => {
           if (l.item.id !== itemId) return l;
           const nextQty = l.quantity + delta;
           if (nextQty <= 0) return null;
-          if (l.item.itemType === 'product' && nextQty > (l.item.stock ?? 0)) {
+          if (l.item.itemType === 'product' && l.item.stock !== null && nextQty > l.item.stock) {
             setSaleError(`Solo quedan ${l.item.stock} unidades de "${l.item.name}".`);
             return l;
           }
@@ -813,7 +814,7 @@ export const FastPosScreen: React.FC = () => {
                       ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[460px] overflow-y-auto pr-1">
                           {filteredCatalog.map((item) => {
-                            const outOfStock = item.itemType === 'product' && (item.stock ?? 0) <= 0;
+                            const outOfStock = item.itemType === 'product' && item.stock !== null && item.stock <= 0;
                             return (
                               <button
                                 key={item.id}
@@ -836,7 +837,7 @@ export const FastPosScreen: React.FC = () => {
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center justify-between gap-1">
                                     <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-[#151D2F] text-gray-300 border border-[#24324D]">
-                                      {item.itemType === 'service' ? 'Servicio' : `Stock: ${item.stock}`}
+                                      {item.itemType === 'service' ? 'Servicio' : item.stock === null ? 'Disponible' : `Stock: ${item.stock}`}
                                     </span>
                                     {item.isDiscountActive && (
                                       <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center gap-0.5">

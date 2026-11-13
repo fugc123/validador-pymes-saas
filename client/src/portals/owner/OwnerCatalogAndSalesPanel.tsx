@@ -127,6 +127,7 @@ export const OwnerCatalogAndSalesPanel: React.FC<OwnerCatalogAndSalesPanelProps>
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
   const [stock, setStock] = useState('10');
+  const [trackStock, setTrackStock] = useState(false);
   const [imageUrl, setImageUrl] = useState('');
   const [imageProcessing, setImageProcessing] = useState(false);
   const [imageInfo, setImageInfo] = useState<string | null>(null);
@@ -205,6 +206,7 @@ export const OwnerCatalogAndSalesPanel: React.FC<OwnerCatalogAndSalesPanelProps>
     setDescription('');
     setPrice('');
     setStock('10');
+    setTrackStock(false);
     setImageUrl('');
     setImageInfo(null);
     setDiscountType('none');
@@ -222,7 +224,8 @@ export const OwnerCatalogAndSalesPanel: React.FC<OwnerCatalogAndSalesPanelProps>
     setName(item.name);
     setDescription(item.description || '');
     setPrice(item.price.toString());
-    setStock(item.stock !== null ? item.stock.toString() : '0');
+    setTrackStock(item.stock !== null);
+    setStock(item.stock !== null ? item.stock.toString() : '10');
     setImageUrl(item.imageUrl || '');
     setImageInfo(null);
     setDiscountType(item.discountType || 'none');
@@ -283,7 +286,7 @@ export const OwnerCatalogAndSalesPanel: React.FC<OwnerCatalogAndSalesPanelProps>
       name: name.trim(),
       description: description.trim() || null,
       price: numericPrice,
-      stock: itemType === 'product' ? Math.max(0, parseInt(stock || '0', 10) || 0) : null,
+      stock: itemType === 'product' && trackStock ? Math.max(0, parseInt(stock || '0', 10) || 0) : null,
       imageUrl: imageUrl.trim() || null,
       discountType,
       discountPercent: discountType === 'none' ? 0 : Math.min(99, Math.max(1, parseInt(discountPercent || '0', 10) || 0)),
@@ -689,25 +692,29 @@ export const OwnerCatalogAndSalesPanel: React.FC<OwnerCatalogAndSalesPanelProps>
                   </div>
 
                   {item.itemType === 'product' ? (
-                    <div className="flex items-center gap-1.5 bg-[#151D2F] border border-[#24324D] rounded-xl px-2.5 py-1">
-                      <button
-                        type="button"
-                        onClick={() => handleQuickStockChange(item, -1)}
-                        className="text-gray-400 hover:text-white px-1 font-bold"
-                      >
-                        -
-                      </button>
-                      <span className="text-xs font-mono font-bold text-white">
-                        Stock: {item.stock ?? 0}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleQuickStockChange(item, 1)}
-                        className="text-emerald-400 hover:text-emerald-300 px-1 font-bold"
-                      >
-                        +
-                      </button>
-                    </div>
+                    item.stock !== null ? (
+                      <div className="flex items-center gap-1.5 bg-[#151D2F] border border-[#24324D] rounded-xl px-2.5 py-1">
+                        <button
+                          type="button"
+                          onClick={() => handleQuickStockChange(item, -1)}
+                          className="text-gray-400 hover:text-white px-1 font-bold"
+                        >
+                          -
+                        </button>
+                        <span className="text-xs font-mono font-bold text-white">
+                          Stock: {item.stock}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleQuickStockChange(item, 1)}
+                          className="text-emerald-400 hover:text-emerald-300 px-1 font-bold"
+                        >
+                          +
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-xs font-mono text-emerald-400/80">Sin límite de stock</span>
+                    )
                   ) : (
                     <span className="text-xs font-mono text-gray-400">Servicio Activo</span>
                   )}
@@ -796,18 +803,30 @@ export const OwnerCatalogAndSalesPanel: React.FC<OwnerCatalogAndSalesPanelProps>
                 </div>
 
                 {itemType === 'product' && (
-                  <div>
-                    <label className="block text-xs font-bold uppercase text-gray-300 mb-1">
-                      Cantidad en Stock *
+                  <div className="space-y-1.5">
+                    <label className="flex items-center justify-between cursor-pointer text-xs font-bold uppercase text-gray-300 mb-1">
+                      <span>Controlar Stock</span>
+                      <input
+                        type="checkbox"
+                        checked={trackStock}
+                        onChange={(e) => setTrackStock(e.target.checked)}
+                        className="rounded border-[#24324D] text-emerald-500 focus:ring-emerald-500"
+                      />
                     </label>
-                    <input
-                      type="number"
-                      required
-                      min="0"
-                      value={stock}
-                      onChange={(e) => setStock(e.target.value)}
-                      className="w-full bg-[#0B0F19] border border-[#24324D] rounded-xl px-4 py-2.5 text-sm font-mono text-white focus:outline-none focus:border-emerald-500"
-                    />
+                    {trackStock ? (
+                      <input
+                        type="number"
+                        min="0"
+                        value={stock}
+                        onChange={(e) => setStock(e.target.value)}
+                        placeholder="Cantidad en stock..."
+                        className="w-full bg-[#0B0F19] border border-[#24324D] rounded-xl px-4 py-2.5 text-sm font-mono text-white focus:outline-none focus:border-emerald-500"
+                      />
+                    ) : (
+                      <div className="w-full bg-[#0B0F19]/60 border border-[#24324D] rounded-xl px-3.5 py-2.5 text-[11px] text-emerald-400/90">
+                        Sin control de stock (venta ilimitada)
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
