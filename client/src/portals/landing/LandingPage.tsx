@@ -408,61 +408,115 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToLogin, onGoToReg
 
       {/* Transparent Pricing Section */}
       <section id="precios" className="py-20 bg-[#0B0F19] border-y border-[#1E293B]">
-        <div className="max-w-4xl mx-auto px-6 text-center space-y-12">
+        <div className="max-w-5xl mx-auto px-6 text-center space-y-12">
           <div className="space-y-3">
             <div className="inline-flex items-center space-x-2 text-xs text-emerald-400 font-bold uppercase tracking-wider bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/30">
               <Sparkles className="w-3.5 h-3.5" />
               <span>Planes Claros Sin Letra Chica</span>
             </div>
-            <h2 className="text-3xl font-black text-white">Un precio simple, todo incluido</h2>
+            <h2 className="text-3xl font-black text-white">Elegí el plan para tu negocio</h2>
             <p className="text-sm text-gray-400">Probá 1 mes gratis sin costo ni compromiso. Si te gusta, pagás por mes.</p>
           </div>
 
-          <div className="max-w-md mx-auto bg-[#151D2F] border-2 border-emerald-500 rounded-3xl p-8 shadow-2xl space-y-6 relative overflow-hidden">
-            <div className="absolute top-0 right-0 bg-emerald-500 text-gray-950 font-bold text-[10px] px-4 py-1 rounded-bl-xl uppercase font-mono tracking-wider">
-              Recomendado PYME
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch text-left">
+            {/* Plan 1: Uso completo sin facturación electrónica */}
+            <div className="bg-[#151D2F] border-2 border-emerald-500 rounded-3xl p-8 shadow-2xl flex flex-col justify-between space-y-6 relative overflow-hidden">
+              <div className="absolute top-0 right-0 bg-emerald-500 text-gray-950 font-bold text-[10px] px-4 py-1 rounded-bl-xl uppercase font-mono tracking-wider">
+                Recomendado PYME
+              </div>
+
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <div className="text-sm font-bold text-gray-400">Plan Comercio Integral</div>
+                  <div className="flex items-baseline space-x-2">
+                    <span className="text-4xl font-mono font-black text-white">Gs. 150.000</span>
+                    <span className="text-xs text-gray-400 font-medium">/ mes</span>
+                  </div>
+                  <div className="text-xs text-emerald-400 font-semibold">
+                    1 Mes Gratis al Iniciar • Uso completo sin facturación electrónica
+                  </div>
+                </div>
+
+                <div className="pt-6 border-t border-[#24324D] space-y-3 text-xs text-gray-300">
+                  <div className="flex items-center space-x-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>Cajeros y terminales ilimitadas para tu local</span>
+                  </div>
+                  <div className="flex items-center space-x-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>Compatible con los 6 bancos principales (Itaú, Ueno, GNB, etc.)</span>
+                  </div>
+                  <div className="flex items-center space-x-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>Alertas sonoras y protección anti-repetición en 2 segundos</span>
+                  </div>
+                  <div className="flex items-center space-x-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>Panel de Dueño con métricas de cobros diarios en tiempo real</span>
+                  </div>
+                  <div className="flex items-center space-x-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>Auto-renovación por transferencia SIPAP (sin tarjeta)</span>
+                  </div>
+                </div>
+              </div>
+
+              <a
+                href="#registro"
+                className="block w-full py-4 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-extrabold text-sm rounded-2xl shadow-xl shadow-emerald-500/30 transition-all text-center"
+              >
+                Comenzar Prueba Gratis (1 Mes)
+              </a>
             </div>
 
-            <div className="text-left space-y-2">
-              <div className="text-sm font-bold text-gray-400">Plan Comercio Integral</div>
-              <div className="flex items-baseline space-x-2">
-                <span className="text-4xl font-mono font-black text-white">Gs. 150.000</span>
-                <span className="text-xs text-gray-400 font-medium">/ mes</span>
+            {/* Plan 2: Con facturación electrónica (Próximamente) */}
+            <div className="bg-[#151D2F]/70 border border-[#24324D] rounded-3xl p-8 shadow-xl flex flex-col justify-between space-y-6 relative overflow-hidden">
+              <div className="absolute top-0 right-0 bg-amber-500/15 text-amber-300 border-b border-l border-amber-500/30 font-bold text-[10px] px-4 py-1 rounded-bl-xl uppercase font-mono tracking-wider flex items-center space-x-1.5">
+                <Clock className="w-3 h-3" />
+                <span>Próximamente</span>
               </div>
-              <div className="text-xs text-emerald-400 font-semibold">
-                1 Mes Gratis al Iniciar • Cero comisiones por cobro
-              </div>
-            </div>
 
-            <div className="pt-6 border-t border-[#24324D] text-left space-y-3 text-xs text-gray-300">
-              <div className="flex items-center space-x-2.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>Cajeros y terminales ilimitadas para tu local</span>
-              </div>
-              <div className="flex items-center space-x-2.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>Compatible con los 6 bancos principales (Itaú, Ueno, GNB, etc.)</span>
-              </div>
-              <div className="flex items-center space-x-2.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>Alertas sonoras y protección anti-repetición en 2 segundos</span>
-              </div>
-              <div className="flex items-center space-x-2.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>Panel de Dueño con métricas de cobros diarios en tiempo real</span>
-              </div>
-              <div className="flex items-center space-x-2.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>Auto-renovación por transferencia SIPAP (sin tarjeta)</span>
-              </div>
-            </div>
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <div className="text-sm font-bold text-gray-400">Plan Comercio + Facturación Electrónica</div>
+                  <div className="flex items-baseline space-x-2">
+                    <span className="text-3xl font-mono font-black text-gray-200">Próximamente</span>
+                  </div>
+                  <div className="text-xs text-amber-400/90 font-semibold">
+                    Incluye emisión de factura electrónica (SIFEN) • Aún no disponible
+                  </div>
+                </div>
 
-            <a
-              href="#registro"
-              className="block w-full py-4 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-extrabold text-sm rounded-2xl shadow-xl shadow-emerald-500/30 transition-all text-center"
-            >
-              Comenzar Prueba Gratis (1 Mes)
-            </a>
+                <div className="pt-6 border-t border-[#24324D] space-y-3 text-xs text-gray-400">
+                  <div className="flex items-center space-x-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500/70 shrink-0" />
+                    <span>Todo lo incluido en el Plan Comercio Integral</span>
+                  </div>
+                  <div className="flex items-center space-x-2.5">
+                    <Clock className="w-4 h-4 text-amber-400/80 shrink-0" />
+                    <span>Emisión automática de factura electrónica al validar cobros</span>
+                  </div>
+                  <div className="flex items-center space-x-2.5">
+                    <Clock className="w-4 h-4 text-amber-400/80 shrink-0" />
+                    <span>Integración con SIFEN y envío de KuDE al cliente</span>
+                  </div>
+                  <div className="flex items-center space-x-2.5">
+                    <Clock className="w-4 h-4 text-amber-400/80 shrink-0" />
+                    <span>Gestión de timbrado y comprobantes desde el Panel de Dueño</span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                disabled
+                aria-disabled="true"
+                className="w-full py-4 bg-[#1E293B] text-gray-400 border border-[#2D3B52] font-bold text-sm rounded-2xl cursor-not-allowed flex items-center justify-center space-x-2"
+              >
+                <Lock className="w-4 h-4" />
+                <span>Disponible Próximamente</span>
+              </button>
+            </div>
           </div>
         </div>
       </section>
