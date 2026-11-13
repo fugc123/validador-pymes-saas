@@ -16,6 +16,8 @@ import {
   RefreshCw,
   Edit3,
   X,
+  Calendar,
+  Phone,
 } from 'lucide-react';
 import { CatalogThemePalette } from '../catalog/PublicCatalogView';
 import { processImageToWebp } from '../../utils/imageProcessor';
@@ -36,6 +38,26 @@ interface CatalogItemDto {
   isDiscountActive: boolean;
   effectiveDiscountPercent: number;
   effectivePrice: number;
+  bookingEnabled?: boolean;
+  bookingMode?: 'hours' | 'days';
+  bookingDaysOfWeek?: string;
+  bookingTimeSlots?: string | null;
+  bookingMaxConcurrent?: number;
+}
+
+interface CatalogBookingDto {
+  id: string;
+  itemId: string;
+  itemName: string;
+  bookingMode: 'hours' | 'days';
+  startDate: string;
+  endDate: string;
+  timeSlot: string | null;
+  customerName: string;
+  customerPhone: string;
+  notes: string | null;
+  status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
+  createdAt: string;
 }
 
 interface SaleRecordDto {
@@ -136,6 +158,13 @@ export const OwnerCatalogAndSalesPanel: React.FC<OwnerCatalogAndSalesPanelProps>
   const [discountDurationHours, setDiscountDurationHours] = useState('4');
   const [discountDurationDays, setDiscountDurationDays] = useState('7');
   const [selectedDays, setSelectedDays] = useState<string[]>([]);
+  const [bookingEnabled, setBookingEnabled] = useState(false);
+  const [bookingMode, setBookingMode] = useState<'hours' | 'days'>('hours');
+  const [bookingDays, setBookingDays] = useState<string[]>(['1', '2', '3', '4', '5', '6']);
+  const [bookingTimeSlots, setBookingTimeSlots] = useState('09:00,10:00,11:00,14:00,15:00,16:00,17:00');
+  const [bookingMaxConcurrent, setBookingMaxConcurrent] = useState('1');
+  const [bookings, setBookings] = useState<CatalogBookingDto[]>([]);
+  const [inventoryView, setInventoryView] = useState<'items' | 'bookings'>('items');
   const [formError, setFormError] = useState<string | null>(null);
   const [savingItem, setSavingItem] = useState(false);
 
@@ -145,11 +174,14 @@ export const OwnerCatalogAndSalesPanel: React.FC<OwnerCatalogAndSalesPanelProps>
     if (!token) return;
     setLoading(true);
     try {
-      const [catRes, salesRes] = await Promise.all([
+      const [catRes, salesRes, bookingsRes] = await Promise.all([
         fetch('/api/v1/merchant/catalog', {
           headers: { Authorization: `Bearer ${token}` },
         }),
         fetch('/api/v1/merchant/sales', {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch('/api/v1/merchant/catalog/bookings', {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ]);
@@ -163,6 +195,9 @@ export const OwnerCatalogAndSalesPanel: React.FC<OwnerCatalogAndSalesPanelProps>
         const salesData = await salesRes.json();
         setSales(salesData.sales || []);
         if (salesData.summary) setSalesSummary(salesData.summary);
+      }
+      if (bookingsRes.ok) {
+        setBookings(await bookingsRes.json());
       }
     } catch {
       // ignore error
@@ -214,6 +249,11 @@ export const OwnerCatalogAndSalesPanel: React.FC<OwnerCatalogAndSalesPanelProps>
     setDiscountDurationHours('4');
     setDiscountDurationDays('7');
     setSelectedDays([]);
+    setBookingEnabled(false);
+    setBookingMode('hours');
+    setBookingDays(['1', '2', '3', '4', '5', '6']);
+    setBookingTimeSlots('09:00,10:00,11:00,14:00,15:00,16:00,17:00');
+    setBookingMaxConcurrent('1');
     setFormError(null);
     setShowItemModal(true);
   };
@@ -233,6 +273,13 @@ export const OwnerCatalogAndSalesPanel: React.FC<OwnerCatalogAndSalesPanelProps>
     setDiscountDurationHours('4');
     setDiscountDurationDays('7');
     setSelectedDays(item.discountDays ? item.discountDays.split(',').filter(Boolean) : []);
+    setBookingEnabled(Boolean(item.bookingEnabled));
+    setBookingMode(item.bookingMode === 'days' ? 'days' : 'hours');
+    setBookingDays(
+      item.bookingDaysOfWeek ? item.bookingDaysOfWeek.split(',').filter(Boolean) : ['1', '2', '3', '4', '5', '6'],
+    );
+    setBookingTimeSlots(item.bookingTimeSlots || '09:00,10:00,11:00,14:00,15:00,16:00,17:00');
+    setBookingMaxConcurrent(String(item.bookingMaxConcurrent || 1));
     setFormError(null);
     setShowItemModal(true);
   };
@@ -265,6 +312,30 @@ export const OwnerCatalogAndSalesPanel: React.FC<OwnerCatalogAndSalesPanelProps>
     );
   };
 
+  const toggleBookingDay = (day: string) => {
+    setBookingDays((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day],
+    );
+  };
+
+  const handleUpdateBookingStatus = async (
+    bookingId: string,
+    status: 'pending' | 'confirmed' | 'cancelled' | 'completed',
+  ) => {
+    if (!token) return;
+    const res = await fetch(`/api/v1/merchant/catalog/bookings/${bookingId}/status`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ status }),
+    });
+    if (res.ok) {
+      await fetchAll();
+    }
+  };
+
   const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token) return;
@@ -295,6 +366,11 @@ export const OwnerCatalogAndSalesPanel: React.FC<OwnerCatalogAndSalesPanelProps>
       discountDurationDays:
         discountType === 'days' ? Math.max(1, parseInt(discountDurationDays || '1', 10) || 1) : null,
       discountDays: discountType === 'days' && selectedDays.length > 0 ? selectedDays.join(',') : null,
+      bookingEnabled: itemType === 'service' ? bookingEnabled : false,
+      bookingMode: itemType === 'service' ? bookingMode : 'hours',
+      bookingDaysOfWeek: bookingDays.length > 0 ? bookingDays.join(',') : '1,2,3,4,5,6',
+      bookingTimeSlots: itemType === 'service' && bookingMode === 'hours' ? bookingTimeSlots : null,
+      bookingMaxConcurrent: Math.max(1, parseInt(bookingMaxConcurrent || '1', 10) || 1),
     };
 
     try {
@@ -579,23 +655,141 @@ export const OwnerCatalogAndSalesPanel: React.FC<OwnerCatalogAndSalesPanelProps>
       {/* Inventory & Services Header + List */}
       <div className="bg-[#151D2F] border border-[#24324D] rounded-3xl p-6 space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h2 className="text-xl font-black text-white">Inventario de Productos y Servicios</h2>
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setInventoryView('items')}
+                className={`px-4 py-2 rounded-xl text-xs font-extrabold transition-all ${
+                  inventoryView === 'items'
+                    ? 'bg-emerald-500 text-gray-950'
+                    : 'bg-[#0B0F19] text-gray-400 hover:text-white border border-[#24324D]'
+                }`}
+              >
+                Catálogo ({items.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setInventoryView('bookings')}
+                className={`px-4 py-2 rounded-xl text-xs font-extrabold transition-all flex items-center gap-1.5 ${
+                  inventoryView === 'bookings'
+                    ? 'bg-emerald-500 text-gray-950'
+                    : 'bg-[#0B0F19] text-gray-400 hover:text-white border border-[#24324D]'
+                }`}
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                <span>Reservas ({bookings.length})</span>
+              </button>
+            </div>
+            <h2 className="text-xl font-black text-white">
+              {inventoryView === 'bookings' ? 'Reservas de Servicios y Estadías' : 'Inventario de Productos y Servicios'}
+            </h2>
             <p className="text-xs text-gray-400">
-              Creá productos (con descuento automático de stock al vender) o servicios, y configurá descuentos por horas o por días.
+              {inventoryView === 'bookings'
+                ? 'Gestioná las reservas que tus clientes realizan desde el catálogo web.'
+                : 'Creá productos (con descuento automático de stock al vender) o servicios (con opción de reservas por horario o por días).'}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={openCreateModal}
-            className="px-5 py-3 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-extrabold text-xs sm:text-sm rounded-2xl shadow-lg shadow-emerald-500/20 flex items-center gap-2 self-start sm:self-auto"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Crear Producto o Servicio</span>
-          </button>
+          {inventoryView === 'items' && (
+            <button
+              type="button"
+              onClick={openCreateModal}
+              className="px-5 py-3 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-extrabold text-xs sm:text-sm rounded-2xl shadow-lg shadow-emerald-500/20 flex items-center gap-2 self-start sm:self-auto"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Crear Producto o Servicio</span>
+            </button>
+          )}
         </div>
 
-        {items.length === 0 ? (
+        {inventoryView === 'bookings' ? (
+          bookings.length === 0 ? (
+            <div className="bg-[#0B0F19]/60 border border-[#24324D] rounded-2xl p-10 text-center space-y-2">
+              <Calendar className="w-10 h-10 text-gray-500 mx-auto" />
+              <p className="text-sm font-bold text-gray-300">Todavía no tenés reservas registradas.</p>
+              <p className="text-xs text-gray-500 max-w-md mx-auto">
+                Activá la opción de reservas en cualquier servicio (por horarios o por días para hoteles) y aparecerán acá.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {bookings.map((b) => (
+                <div
+                  key={b.id}
+                  className="bg-[#0B0F19] border border-[#24324D] rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                >
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-bold text-white">{b.itemName}</span>
+                      <span
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${
+                          b.status === 'confirmed'
+                            ? 'bg-emerald-500/15 text-emerald-400'
+                            : b.status === 'completed'
+                              ? 'bg-blue-500/15 text-blue-300'
+                              : b.status === 'cancelled'
+                                ? 'bg-red-500/15 text-red-400'
+                                : 'bg-amber-500/15 text-amber-300'
+                        }`}
+                      >
+                        {b.status === 'pending'
+                          ? 'Pendiente'
+                          : b.status === 'confirmed'
+                            ? 'Confirmada'
+                            : b.status === 'completed'
+                              ? 'Completada'
+                              : 'Cancelada'}
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-300 font-mono">
+                      {b.bookingMode === 'days'
+                        ? `Estadía: ${b.startDate} → ${b.endDate}`
+                        : `Fecha: ${b.startDate} • Hora: ${b.timeSlot || '-'}`}
+                    </div>
+                    <div className="text-xs text-gray-400 flex flex-wrap items-center gap-3">
+                      <span className="font-semibold text-gray-200">{b.customerName}</span>
+                      <span className="inline-flex items-center gap-1 text-emerald-400 font-mono">
+                        <Phone className="w-3 h-3" />
+                        {b.customerPhone}
+                      </span>
+                      {b.notes && <span className="italic text-gray-500">"{b.notes}"</span>}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {b.status === 'pending' && (
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateBookingStatus(b.id, 'confirmed')}
+                        className="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-bold"
+                      >
+                        Confirmar
+                      </button>
+                    )}
+                    {(b.status === 'pending' || b.status === 'confirmed') && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateBookingStatus(b.id, 'completed')}
+                          className="px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/30 rounded-xl text-xs font-bold"
+                        >
+                          Completar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateBookingStatus(b.id, 'cancelled')}
+                          className="px-3 py-1.5 bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/30 rounded-xl text-xs font-bold"
+                        >
+                          Cancelar
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        ) : items.length === 0 ? (
           <div className="bg-[#0B0F19]/60 border border-[#24324D] rounded-2xl p-10 text-center space-y-3">
             <Package className="w-10 h-10 text-gray-500 mx-auto" />
             <p className="text-sm font-bold text-gray-300">Todavía no cargaste productos ni servicios.</p>
@@ -1018,6 +1212,108 @@ export const OwnerCatalogAndSalesPanel: React.FC<OwnerCatalogAndSalesPanelProps>
                   </div>
                 )}
               </div>
+
+              {itemType === 'service' && (
+                <div className="bg-[#0B0F19] border border-[#24324D] rounded-2xl p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-xs font-bold text-emerald-400">
+                      <Calendar className="w-4 h-4" />
+                      <span>Reservas en el Catálogo Web</span>
+                    </div>
+                    <label className="flex items-center gap-2 text-xs text-gray-200 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={bookingEnabled}
+                        onChange={(e) => setBookingEnabled(e.target.checked)}
+                        className="rounded border-[#24324D]"
+                      />
+                      <span>Habilitar reservas</span>
+                    </label>
+                  </div>
+
+                  {bookingEnabled && (
+                    <div className="space-y-3 pt-2 border-t border-[#1E293B]">
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setBookingMode('hours')}
+                          className={`py-2 px-3 rounded-xl text-xs font-bold border ${
+                            bookingMode === 'hours'
+                              ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
+                              : 'bg-[#151D2F] border-[#24324D] text-gray-400'
+                          }`}
+                        >
+                          Por Horarios (Turnos)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBookingMode('days')}
+                          className={`py-2 px-3 rounded-xl text-xs font-bold border ${
+                            bookingMode === 'days'
+                              ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
+                              : 'bg-[#151D2F] border-[#24324D] text-gray-400'
+                          }`}
+                        >
+                          Por Días (Hotel / Estadía)
+                        </button>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-gray-400 mb-1.5">
+                          Días de la semana disponibles
+                        </label>
+                        <div className="flex flex-wrap gap-1.5">
+                          {WEEKDAYS.map((w) => (
+                            <button
+                              key={w.day}
+                              type="button"
+                              onClick={() => toggleBookingDay(w.day)}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${
+                                bookingDays.includes(w.day)
+                                  ? 'bg-emerald-500 text-gray-950 border-emerald-400'
+                                  : 'bg-[#151D2F] text-gray-400 border-[#24324D]'
+                              }`}
+                            >
+                              {w.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {bookingMode === 'hours' && (
+                        <div>
+                          <label className="block text-[11px] font-bold text-gray-400 mb-1">
+                            Horarios disponibles (separados por coma, formato HH:mm)
+                          </label>
+                          <input
+                            type="text"
+                            value={bookingTimeSlots}
+                            onChange={(e) => setBookingTimeSlots(e.target.value)}
+                            placeholder="09:00,10:00,11:00,14:00,15:00"
+                            className="w-full bg-[#151D2F] border border-[#24324D] rounded-xl px-3 py-2 text-xs font-mono text-white"
+                          />
+                        </div>
+                      )}
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-gray-400 mb-1">
+                          {bookingMode === 'days'
+                            ? 'Cupos / Habitaciones simultáneas por día'
+                            : 'Cupos simultáneos por horario'}
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="100"
+                          value={bookingMaxConcurrent}
+                          onChange={(e) => setBookingMaxConcurrent(e.target.value)}
+                          className="w-full bg-[#151D2F] border border-[#24324D] rounded-xl px-3 py-2 text-xs font-mono text-white"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {formError && (
                 <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-xs text-red-300">

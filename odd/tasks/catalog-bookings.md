@@ -13,4 +13,4 @@
 - [x] **T1**: Add DB schema (`catalog_items` booking columns + `catalog_bookings`), ports (`catalog.ports.ts`), repository (`catalog.repository.ts`), and controller (`catalog.controller.ts`) endpoints. (`npx tsc --noEmit` passed)
 - [x] **T2**: Add unit tests for `hours` and `days` bookings, day-of-week validation, capacity conflict rejection, and tenant isolation in `test/unit/catalog-and-sales.spec.ts`. (`9 passed`)
 - [x] **T3**: Update `PublicCatalogView.tsx` to hide empty type filters and render the conditional `Reservas` tab and booking modal (requiring customer name & phone). (`npm --prefix client run build` passed)
-- [ ] **T4**: Update `OwnerCatalogAndSalesPanel.tsx` with service booking config (`hours`/`days`, days of week, slots, max concurrent) and `Reservas` management tab; run full verification suite.
+- [x] **T4**: Update `OwnerCatalogAndSalesPanel.tsx` with service booking config (`hours`/`days`, days of week, slots, max concurrent) and `Reservas` management tab; run full verification suite. (`npx tsc --noEmit`, `npm run build`, `npm --prefix client run build`, `npm test` 30 suites / 355 tests passed)
