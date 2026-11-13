@@ -311,4 +311,106 @@ describe('Catalog, Inventory, Time Discounts & POS Sales (T1 & T2)', () => {
     const items = await catalogRepo.listItemsByTenant('restaurante-demo');
     expect(items[0].stock).toBeNull();
   });
+
+  it('supports hourly service bookings with day-of-week and slot conflict validation', async () => {
+    const haircut = await catalogRepo.createItem({
+      tenantId: 'barberia-demo',
+      itemType: 'service',
+      name: 'Corte Clásico',
+      price: 50000,
+      bookingEnabled: true,
+      bookingMode: 'hours',
+      bookingDaysOfWeek: '1,2,3,4,5', // Mon-Fri
+      bookingTimeSlots: '09:00,10:00,11:00',
+      bookingMaxConcurrent: 1,
+    });
+
+    // 2026-11-16 is a Monday (day 1)
+    const booking = await catalogRepo.createBooking({
+      tenantId: 'barberia-demo',
+      itemId: haircut.id,
+      startDate: '2026-11-16',
+      timeSlot: '09:00',
+      customerName: 'Juan Pérez',
+      customerPhone: '0981123456',
+    });
+    expect(booking.status).toBe('pending');
+    expect(booking.customerPhone).toBe('0981123456');
+
+    // Same slot on same day should reject (maxConcurrent = 1)
+    await expect(
+      catalogRepo.createBooking({
+        tenantId: 'barberia-demo',
+        itemId: haircut.id,
+        startDate: '2026-11-16',
+        timeSlot: '09:00',
+        customerName: 'Pedro',
+        customerPhone: '0982000111',
+      }),
+    ).rejects.toThrow(/already fully booked/i);
+
+    // 2026-11-15 is a Sunday (day 0, not in Mon-Fri)
+    await expect(
+      catalogRepo.createBooking({
+        tenantId: 'barberia-demo',
+        itemId: haircut.id,
+        startDate: '2026-11-15',
+        timeSlot: '09:00',
+        customerName: 'Ana',
+        customerPhone: '0983000222',
+      }),
+    ).rejects.toThrow(/not available/i);
+  });
+
+  it('supports multi-day hotel bookings and enforces capacity & tenant isolation', async () => {
+    const room = await catalogRepo.createItem({
+      tenantId: 'hotel-asuncion',
+      itemType: 'service',
+      name: 'Habitación Doble',
+      price: 280000,
+      bookingEnabled: true,
+      bookingMode: 'days',
+      bookingDaysOfWeek: '0,1,2,3,4,5,6',
+      bookingMaxConcurrent: 1,
+    });
+
+    const stay = await catalogRepo.createBooking({
+      tenantId: 'hotel-asuncion',
+      itemId: room.id,
+      startDate: '2026-11-20',
+      endDate: '2026-11-22', // nights 20 and 21
+      customerName: 'María Gómez',
+      customerPhone: '0971555666',
+    });
+    expect(stay.bookingMode).toBe('days');
+
+    // Overlapping night 21 -> rejected
+    await expect(
+      catalogRepo.createBooking({
+        tenantId: 'hotel-asuncion',
+        itemId: room.id,
+        startDate: '2026-11-21',
+        endDate: '2026-11-23',
+        customerName: 'Carlos',
+        customerPhone: '0971000999',
+      }),
+    ).rejects.toThrow(/no availability/i);
+
+    // Check-in on checkout date (2026-11-22) -> allowed
+    const nextStay = await catalogRepo.createBooking({
+      tenantId: 'hotel-asuncion',
+      itemId: room.id,
+      startDate: '2026-11-22',
+      endDate: '2026-11-23',
+      customerName: 'Lucía',
+      customerPhone: '0985111222',
+    });
+    expect(nextStay.startDate).toBe('2026-11-22');
+
+    // Tenant isolation: another tenant cannot see or update hotel-asuncion's bookings
+    expect(await catalogRepo.listBookingsByTenant('otro-comercio')).toHaveLength(0);
+    expect(await catalogRepo.updateBookingStatus('otro-comercio', stay.id, 'confirmed')).toBeNull();
+    const confirmed = await catalogRepo.updateBookingStatus('hotel-asuncion', stay.id, 'confirmed');
+    expect(confirmed?.status).toBe('confirmed');
+  });
 });
