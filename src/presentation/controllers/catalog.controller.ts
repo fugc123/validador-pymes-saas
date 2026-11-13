@@ -13,6 +13,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
@@ -24,6 +25,8 @@ import { TenantContextInterceptor } from '../interceptors/tenant-context.interce
 import { TenantContext } from '../interceptors/tenant-context.service';
 import { validateSafeImageUrl } from '../../core/application/utils/image-security';
 import {
+  BookingMode,
+  BookingStatus,
   CatalogItemType,
   CatalogThemePalette,
   DiscountTimeType,
@@ -76,6 +79,26 @@ export class CreateCatalogItemDto {
   @IsOptional()
   @Allow()
   discountDays?: string | null;
+
+  @IsOptional()
+  @Allow()
+  bookingEnabled?: boolean;
+
+  @IsOptional()
+  @Allow()
+  bookingMode?: BookingMode;
+
+  @IsOptional()
+  @Allow()
+  bookingDaysOfWeek?: string | null;
+
+  @IsOptional()
+  @Allow()
+  bookingTimeSlots?: string | null;
+
+  @IsOptional()
+  @Allow()
+  bookingMaxConcurrent?: number;
 }
 
 export class UpdateCatalogItemDto {
@@ -122,6 +145,57 @@ export class UpdateCatalogItemDto {
   @IsOptional()
   @Allow()
   isActive?: boolean;
+
+  @IsOptional()
+  @Allow()
+  bookingEnabled?: boolean;
+
+  @IsOptional()
+  @Allow()
+  bookingMode?: BookingMode;
+
+  @IsOptional()
+  @Allow()
+  bookingDaysOfWeek?: string | null;
+
+  @IsOptional()
+  @Allow()
+  bookingTimeSlots?: string | null;
+
+  @IsOptional()
+  @Allow()
+  bookingMaxConcurrent?: number;
+}
+
+export class CreatePublicBookingDto {
+  @Allow()
+  itemId!: string;
+
+  @Allow()
+  startDate!: string;
+
+  @IsOptional()
+  @Allow()
+  endDate?: string;
+
+  @IsOptional()
+  @Allow()
+  timeSlot?: string | null;
+
+  @Allow()
+  customerName!: string;
+
+  @Allow()
+  customerPhone!: string;
+
+  @IsOptional()
+  @Allow()
+  notes?: string | null;
+}
+
+export class UpdateBookingStatusDto {
+  @Allow()
+  status!: BookingStatus;
 }
 
 export class CreateSaleDto {
@@ -226,6 +300,11 @@ export class CatalogController {
       discountDurationHours: dto.discountDurationHours ? Number(dto.discountDurationHours) : null,
       discountDurationDays: dto.discountDurationDays ? Number(dto.discountDurationDays) : null,
       discountDays: dto.discountDays || null,
+      bookingEnabled: Boolean(dto.bookingEnabled),
+      bookingMode: dto.bookingMode || 'hours',
+      bookingDaysOfWeek: dto.bookingDaysOfWeek || null,
+      bookingTimeSlots: dto.bookingTimeSlots || null,
+      bookingMaxConcurrent: dto.bookingMaxConcurrent ? Number(dto.bookingMaxConcurrent) : 1,
     });
   }
 
@@ -361,6 +440,30 @@ export class CatalogController {
 
     return sale;
   }
+
+  @Get('merchant/catalog/bookings')
+  @Roles('MERCHANT_OWNER', 'SUPER_ADMIN')
+  @HttpCode(HttpStatus.OK)
+  async listMerchantBookings() {
+    const tenantId = this.requireTenantId();
+    return this.catalogRepo.listBookingsByTenant(tenantId);
+  }
+
+  @Patch('merchant/catalog/bookings/:id/status')
+  @Roles('MERCHANT_OWNER', 'SUPER_ADMIN')
+  @HttpCode(HttpStatus.OK)
+  async updateBookingStatus(@Param('id') bookingId: string, @Body() dto: UpdateBookingStatusDto) {
+    const tenantId = this.requireTenantId();
+    const allowed: BookingStatus[] = ['pending', 'confirmed', 'cancelled', 'completed'];
+    if (!allowed.includes(dto.status)) {
+      throw new BadRequestException('Estado de reserva inválido.');
+    }
+    const updated = await this.catalogRepo.updateBookingStatus(tenantId, bookingId, dto.status);
+    if (!updated) {
+      throw new NotFoundException('Reserva no encontrada.');
+    }
+    return updated;
+  }
 }
 
 @Controller('public/catalog')
@@ -378,5 +481,46 @@ export class PublicCatalogController {
       throw new NotFoundException(`No se encontró el catálogo para el comercio '${slug}'`);
     }
     return catalog;
+  }
+
+  @Get(':slug/availability')
+  @HttpCode(HttpStatus.OK)
+  async getPublicBookingAvailability(
+    @Param('slug') slug: string,
+    @Query('itemId') itemId: string,
+    @Query('fromDate') fromDate: string,
+    @Query('toDate') toDate: string,
+  ) {
+    const catalog = await this.catalogRepo.getPublicCatalogBySlug(slug);
+    if (!catalog) {
+      throw new NotFoundException(`No se encontró el catálogo para el comercio '${slug}'`);
+    }
+    if (!itemId || !fromDate || !toDate) {
+      throw new BadRequestException('Se requieren itemId, fromDate y toDate.');
+    }
+    const item = catalog.items.find((i) => i.id === itemId && i.bookingEnabled);
+    if (!item) {
+      throw new NotFoundException('Servicio reservable no encontrado.');
+    }
+    return this.catalogRepo.getBookingAvailability(catalog.merchantId, itemId, fromDate, toDate);
+  }
+
+  @Post(':slug/bookings')
+  @HttpCode(HttpStatus.CREATED)
+  async createPublicBooking(@Param('slug') slug: string, @Body() dto: CreatePublicBookingDto) {
+    const catalog = await this.catalogRepo.getPublicCatalogBySlug(slug);
+    if (!catalog) {
+      throw new NotFoundException(`No se encontró el catálogo para el comercio '${slug}'`);
+    }
+    return this.catalogRepo.createBooking({
+      tenantId: catalog.merchantId,
+      itemId: dto.itemId,
+      startDate: dto.startDate,
+      endDate: dto.endDate,
+      timeSlot: dto.timeSlot,
+      customerName: dto.customerName,
+      customerPhone: dto.customerPhone,
+      notes: dto.notes,
+    });
   }
 }

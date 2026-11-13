@@ -83,6 +83,28 @@ export interface CatalogItemRow {
   discount_ends_at: Date | null;
   discount_days: string | null;
   is_active: boolean;
+  booking_enabled: boolean;
+  booking_mode: 'hours' | 'days';
+  booking_days_of_week: string;
+  booking_time_slots: string | null;
+  booking_max_concurrent: number;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface CatalogBookingRow {
+  id: string;
+  tenant_id: string;
+  item_id: string;
+  item_name: string;
+  booking_mode: 'hours' | 'days';
+  start_date: string;
+  end_date: string;
+  time_slot: string | null;
+  customer_name: string;
+  customer_phone: string;
+  notes: string | null;
+  status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
   created_at: Date;
   updated_at: Date;
 }
@@ -291,10 +313,40 @@ CREATE TABLE IF NOT EXISTS catalog_items (
     discount_ends_at TIMESTAMP WITH TIME ZONE,
     discount_days VARCHAR(50),
     is_active BOOLEAN DEFAULT TRUE,
+    booking_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    booking_mode VARCHAR(20) NOT NULL DEFAULT 'hours' CHECK (booking_mode IN ('hours', 'days')),
+    booking_days_of_week VARCHAR(50) NOT NULL DEFAULT '1,2,3,4,5,6',
+    booking_time_slots TEXT,
+    booking_max_concurrent INTEGER NOT NULL DEFAULT 1 CHECK (booking_max_concurrent >= 1),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_catalog_items_tenant ON catalog_items(tenant_id, is_active);
+
+ALTER TABLE catalog_items ADD COLUMN IF NOT EXISTS booking_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE catalog_items ADD COLUMN IF NOT EXISTS booking_mode VARCHAR(20) NOT NULL DEFAULT 'hours';
+ALTER TABLE catalog_items ADD COLUMN IF NOT EXISTS booking_days_of_week VARCHAR(50) NOT NULL DEFAULT '1,2,3,4,5,6';
+ALTER TABLE catalog_items ADD COLUMN IF NOT EXISTS booking_time_slots TEXT;
+ALTER TABLE catalog_items ADD COLUMN IF NOT EXISTS booking_max_concurrent INTEGER NOT NULL DEFAULT 1;
+
+-- Catalog Bookings Table (Service Appointments & Hotel/Stay Reservations)
+CREATE TABLE IF NOT EXISTS catalog_bookings (
+    id VARCHAR(100) PRIMARY KEY,
+    tenant_id VARCHAR(100) NOT NULL,
+    item_id VARCHAR(100) NOT NULL,
+    item_name VARCHAR(255) NOT NULL,
+    booking_mode VARCHAR(20) NOT NULL CHECK (booking_mode IN ('hours', 'days')),
+    start_date VARCHAR(10) NOT NULL,
+    end_date VARCHAR(10) NOT NULL,
+    time_slot VARCHAR(10),
+    customer_name VARCHAR(255) NOT NULL,
+    customer_phone VARCHAR(60) NOT NULL,
+    notes TEXT,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'cancelled', 'completed')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_catalog_bookings_tenant ON catalog_bookings(tenant_id, item_id, start_date);
 
 -- Sales Table (POS Movements & Checkout History)
 CREATE TABLE IF NOT EXISTS sales (

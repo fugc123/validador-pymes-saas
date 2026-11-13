@@ -3,6 +3,8 @@ export type DiscountTimeType = 'none' | 'hours' | 'days';
 export type SalePaymentMethod = 'TRANSFER' | 'CASH' | 'CARD';
 export type SaleMode = 'catalog' | 'quick_amount';
 export type CatalogThemePalette = 'emerald' | 'indigo' | 'rose' | 'amber' | 'cyan' | 'violet';
+export type BookingMode = 'hours' | 'days';
+export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
 
 export const ALLOWED_CATALOG_THEMES: CatalogThemePalette[] = [
   'emerald',
@@ -27,6 +29,11 @@ export interface CatalogItem {
   discountEndsAt: Date | null;
   discountDays: string | null;
   isActive: boolean;
+  bookingEnabled: boolean;
+  bookingMode: BookingMode;
+  bookingDaysOfWeek: string;
+  bookingTimeSlots: string | null;
+  bookingMaxConcurrent: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -51,6 +58,11 @@ export interface CreateCatalogItemInput {
   discountDurationDays?: number | null;
   discountDays?: string | null;
   discountEndsAt?: Date | null;
+  bookingEnabled?: boolean;
+  bookingMode?: BookingMode;
+  bookingDaysOfWeek?: string | null;
+  bookingTimeSlots?: string | null;
+  bookingMaxConcurrent?: number;
 }
 
 export interface UpdateCatalogItemInput {
@@ -66,6 +78,11 @@ export interface UpdateCatalogItemInput {
   discountDays?: string | null;
   discountEndsAt?: Date | null;
   isActive?: boolean;
+  bookingEnabled?: boolean;
+  bookingMode?: BookingMode;
+  bookingDaysOfWeek?: string | null;
+  bookingTimeSlots?: string | null;
+  bookingMaxConcurrent?: number;
 }
 
 export interface SaleItem {
@@ -156,6 +173,40 @@ export function evaluateCatalogItemView(item: CatalogItem, now: Date = new Date(
   };
 }
 
+export interface CatalogBooking {
+  id: string;
+  tenantId: string;
+  itemId: string;
+  itemName: string;
+  bookingMode: BookingMode;
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  timeSlot: string | null; // HH:mm for 'hours' mode
+  customerName: string;
+  customerPhone: string;
+  notes: string | null;
+  status: BookingStatus;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CreateBookingInput {
+  tenantId: string;
+  itemId: string;
+  startDate: string;
+  endDate?: string;
+  timeSlot?: string | null;
+  customerName: string;
+  customerPhone: string;
+  notes?: string | null;
+}
+
+export interface BookingSlotCount {
+  date: string;
+  timeSlot: string | null;
+  bookedCount: number;
+}
+
 export interface ICatalogRepository {
   listItemsByTenant(tenantId: string, onlyActive?: boolean): Promise<CatalogItemView[]>;
   findItemById(tenantId: string, itemId: string): Promise<CatalogItemView | null>;
@@ -173,4 +224,8 @@ export interface ICatalogRepository {
   } | null>;
   createSale(input: CreateSaleInput, now?: Date): Promise<Sale>;
   listSalesByTenant(tenantId: string, limit?: number): Promise<Sale[]>;
+  createBooking(input: CreateBookingInput): Promise<CatalogBooking>;
+  listBookingsByTenant(tenantId: string, limit?: number): Promise<CatalogBooking[]>;
+  updateBookingStatus(tenantId: string, bookingId: string, status: BookingStatus): Promise<CatalogBooking | null>;
+  getBookingAvailability(tenantId: string, itemId: string, fromDate: string, toDate: string): Promise<BookingSlotCount[]>;
 }

@@ -1,13 +1,18 @@
-import { BadRequestException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { DatabaseService } from '../database/database.service';
-import { CatalogItemRow, SaleItemRow, SaleRow } from '../database/schema';
+import { CatalogBookingRow, CatalogItemRow, SaleItemRow, SaleRow } from '../database/schema';
 import { IMerchantRepository } from '../../core/application/ports/auth.ports';
 import {
   ALLOWED_CATALOG_THEMES,
+  BookingMode,
+  BookingSlotCount,
+  BookingStatus,
+  CatalogBooking,
   CatalogItem,
   CatalogItemView,
   CatalogThemePalette,
+  CreateBookingInput,
   CreateCatalogItemInput,
   CreateSaleInput,
   evaluateCatalogItemView,
@@ -21,6 +26,7 @@ import {
 export class CatalogRepository implements ICatalogRepository {
   private items: CatalogItem[] = [];
   private sales: Sale[] = [];
+  private bookings: CatalogBooking[] = [];
   private themes = new Map<string, CatalogThemePalette>();
 
   constructor(
@@ -49,9 +55,33 @@ export class CatalogRepository implements ICatalogRepository {
       discountEndsAt: row.discount_ends_at ? new Date(row.discount_ends_at) : null,
       discountDays: row.discount_days,
       isActive: Boolean(row.is_active),
+      bookingEnabled: Boolean(row.booking_enabled),
+      bookingMode: row.booking_mode === 'days' ? 'days' : 'hours',
+      bookingDaysOfWeek: row.booking_days_of_week || '1,2,3,4,5,6',
+      bookingTimeSlots: row.booking_time_slots ?? null,
+      bookingMaxConcurrent: Math.max(1, Number(row.booking_max_concurrent || 1)),
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at),
     };
+  }
+
+  private normalizeBookingDays(days?: string | null): string {
+    const raw = (days ?? '1,2,3,4,5,6')
+      .split(',')
+      .map((d) => Number(d.trim()))
+      .filter((n) => Number.isInteger(n) && n >= 0 && n <= 6);
+    const unique = Array.from(new Set(raw)).sort((a, b) => a - b);
+    return unique.length > 0 ? unique.join(',') : '1,2,3,4,5,6';
+  }
+
+  private normalizeBookingSlots(slots?: string | null): string | null {
+    if (!slots) return null;
+    const cleaned = slots
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => /^\d{2}:\d{2}$/.test(s));
+    const unique = Array.from(new Set(cleaned)).sort();
+    return unique.length > 0 ? unique.join(',') : null;
   }
 
   private resolveDiscountExpiration(
@@ -125,6 +155,11 @@ export class CatalogRepository implements ICatalogRepository {
       now,
     );
     const discountDays = discountType === 'days' && input.discountDays ? input.discountDays.trim() : null;
+    const bookingEnabled = itemType === 'service' && Boolean(input.bookingEnabled);
+    const bookingMode: BookingMode = input.bookingMode === 'days' ? 'days' : 'hours';
+    const bookingDaysOfWeek = this.normalizeBookingDays(input.bookingDaysOfWeek);
+    const bookingTimeSlots = bookingMode === 'hours' ? this.normalizeBookingSlots(input.bookingTimeSlots) : null;
+    const bookingMaxConcurrent = Math.max(1, Math.floor(Number(input.bookingMaxConcurrent || 1)));
 
     const item: CatalogItem = {
       id: `itm-${randomUUID().slice(0, 8)}-${Date.now().toString(36)}`,
@@ -140,6 +175,11 @@ export class CatalogRepository implements ICatalogRepository {
       discountEndsAt,
       discountDays,
       isActive: true,
+      bookingEnabled,
+      bookingMode,
+      bookingDaysOfWeek,
+      bookingTimeSlots,
+      bookingMaxConcurrent,
       createdAt: now,
       updatedAt: now,
     };
@@ -148,8 +188,10 @@ export class CatalogRepository implements ICatalogRepository {
       const res = await this.dbService!.query<CatalogItemRow>(
         `INSERT INTO catalog_items (
           id, tenant_id, item_type, name, description, price, stock, image_url,
-          discount_percent, discount_type, discount_ends_at, discount_days, is_active, created_at, updated_at
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+          discount_percent, discount_type, discount_ends_at, discount_days, is_active,
+          booking_enabled, booking_mode, booking_days_of_week, booking_time_slots, booking_max_concurrent,
+          created_at, updated_at
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
         RETURNING *`,
         [
           item.id,
@@ -165,6 +207,11 @@ export class CatalogRepository implements ICatalogRepository {
           item.discountEndsAt,
           item.discountDays,
           item.isActive,
+          item.bookingEnabled,
+          item.bookingMode,
+          item.bookingDaysOfWeek,
+          item.bookingTimeSlots,
+          item.bookingMaxConcurrent,
           item.createdAt,
           item.updatedAt,
         ],
@@ -240,6 +287,29 @@ export class CatalogRepository implements ICatalogRepository {
           : existing.discountDays
         : null;
 
+    const updatedBookingEnabled =
+      existing.itemType === 'service'
+        ? input.bookingEnabled !== undefined
+          ? Boolean(input.bookingEnabled)
+          : existing.bookingEnabled
+        : false;
+    const updatedBookingMode: BookingMode =
+      input.bookingMode !== undefined ? (input.bookingMode === 'days' ? 'days' : 'hours') : existing.bookingMode;
+    const updatedBookingDaysOfWeek =
+      input.bookingDaysOfWeek !== undefined
+        ? this.normalizeBookingDays(input.bookingDaysOfWeek)
+        : existing.bookingDaysOfWeek;
+    const updatedBookingTimeSlots =
+      updatedBookingMode === 'hours'
+        ? input.bookingTimeSlots !== undefined
+          ? this.normalizeBookingSlots(input.bookingTimeSlots)
+          : existing.bookingTimeSlots
+        : null;
+    const updatedBookingMaxConcurrent =
+      input.bookingMaxConcurrent !== undefined
+        ? Math.max(1, Math.floor(Number(input.bookingMaxConcurrent)))
+        : existing.bookingMaxConcurrent;
+
     const updated: CatalogItem = {
       id: existing.id,
       tenantId: existing.tenantId,
@@ -254,6 +324,11 @@ export class CatalogRepository implements ICatalogRepository {
       discountEndsAt: updatedDiscountEndsAt,
       discountDays: updatedDiscountDays,
       isActive: input.isActive !== undefined ? Boolean(input.isActive) : existing.isActive,
+      bookingEnabled: updatedBookingEnabled,
+      bookingMode: updatedBookingMode,
+      bookingDaysOfWeek: updatedBookingDaysOfWeek,
+      bookingTimeSlots: updatedBookingTimeSlots,
+      bookingMaxConcurrent: updatedBookingMaxConcurrent,
       createdAt: existing.createdAt,
       updatedAt: now,
     };
@@ -263,8 +338,9 @@ export class CatalogRepository implements ICatalogRepository {
         `UPDATE catalog_items
          SET name = $1, description = $2, price = $3, stock = $4, image_url = $5,
              discount_percent = $6, discount_type = $7, discount_ends_at = $8, discount_days = $9,
-             is_active = $10, updated_at = $11
-         WHERE tenant_id = $12 AND id = $13
+             is_active = $10, booking_enabled = $11, booking_mode = $12, booking_days_of_week = $13,
+             booking_time_slots = $14, booking_max_concurrent = $15, updated_at = $16
+         WHERE tenant_id = $17 AND id = $18
          RETURNING *`,
         [
           updated.name,
@@ -277,6 +353,11 @@ export class CatalogRepository implements ICatalogRepository {
           updated.discountEndsAt,
           updated.discountDays,
           updated.isActive,
+          updated.bookingEnabled,
+          updated.bookingMode,
+          updated.bookingDaysOfWeek,
+          updated.bookingTimeSlots,
+          updated.bookingMaxConcurrent,
           updated.updatedAt,
           tenantId,
           itemId,
@@ -656,5 +737,290 @@ export class CatalogRepository implements ICatalogRepository {
     }
 
     return this.sales.filter((s) => s.tenantId === tenantId).slice(0, limit);
+  }
+
+  private mapRowToBooking(row: CatalogBookingRow): CatalogBooking {
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      itemId: row.item_id,
+      itemName: row.item_name,
+      bookingMode: row.booking_mode === 'days' ? 'days' : 'hours',
+      startDate: row.start_date,
+      endDate: row.end_date,
+      timeSlot: row.time_slot,
+      customerName: row.customer_name,
+      customerPhone: row.customer_phone,
+      notes: row.notes,
+      status: row.status,
+      createdAt: new Date(row.created_at),
+      updatedAt: new Date(row.updated_at),
+    };
+  }
+
+  private parseIsoDate(dateStr: string): Date {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      throw new BadRequestException(`Invalid date format '${dateStr}'. Expected YYYY-MM-DD`);
+    }
+    const parsed = new Date(`${dateStr}T12:00:00.000Z`);
+    if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== dateStr) {
+      throw new BadRequestException(`Invalid calendar date '${dateStr}'`);
+    }
+    return parsed;
+  }
+
+  private enumerateOccupiedDates(startDate: string, endDate: string): string[] {
+    const start = this.parseIsoDate(startDate);
+    const end = this.parseIsoDate(endDate);
+    if (end.getTime() < start.getTime()) {
+      throw new BadRequestException('End date cannot be earlier than start date');
+    }
+    const dates: string[] = [];
+    const cursor = new Date(start.getTime());
+    if (startDate === endDate) {
+      return [startDate];
+    }
+    // For multi-day stays (e.g. hotel check-in -> check-out), occupy nights [startDate, endDate)
+    while (cursor.getTime() < end.getTime() && dates.length < 90) {
+      dates.push(cursor.toISOString().slice(0, 10));
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+    return dates;
+  }
+
+  private isBookingOccupyingDate(b: { startDate: string; endDate: string }, targetDate: string): boolean {
+    if (b.startDate === b.endDate) {
+      return b.startDate === targetDate;
+    }
+    return b.startDate <= targetDate && targetDate < b.endDate;
+  }
+
+  async createBooking(input: CreateBookingInput): Promise<CatalogBooking> {
+    const customerName = (input.customerName || '').trim();
+    const customerPhone = (input.customerPhone || '').trim();
+    if (!customerName) {
+      throw new BadRequestException('Customer name is required');
+    }
+    if (!customerPhone) {
+      throw new BadRequestException('Customer phone is required');
+    }
+
+    const item = await this.findItemById(input.tenantId, input.itemId);
+    if (!item || !item.isActive) {
+      throw new NotFoundException('Service not found or inactive');
+    }
+    if (item.itemType !== 'service' || !item.bookingEnabled) {
+      throw new BadRequestException('This item does not accept bookings');
+    }
+
+    const startDate = (input.startDate || '').trim();
+    const endDate = item.bookingMode === 'hours' ? startDate : (input.endDate || startDate).trim();
+    const occupiedDates = this.enumerateOccupiedDates(startDate, endDate);
+
+    const allowedDays = item.bookingDaysOfWeek
+      .split(',')
+      .map((d) => Number(d.trim()))
+      .filter((n) => !Number.isNaN(n));
+
+    for (const dateStr of occupiedDates) {
+      const dayOfWeek = this.parseIsoDate(dateStr).getUTCDay();
+      if (!allowedDays.includes(dayOfWeek)) {
+        throw new BadRequestException(`Service is not available on ${dateStr}`);
+      }
+    }
+
+    let timeSlot: string | null = null;
+    if (item.bookingMode === 'hours') {
+      timeSlot = (input.timeSlot || '').trim();
+      if (!/^\d{2}:\d{2}$/.test(timeSlot)) {
+        throw new BadRequestException('A valid time slot (HH:mm) is required');
+      }
+      if (item.bookingTimeSlots) {
+        const configured = item.bookingTimeSlots.split(',').map((s) => s.trim());
+        if (!configured.includes(timeSlot)) {
+          throw new BadRequestException(`Time slot '${timeSlot}' is not enabled for this service`);
+        }
+      }
+    }
+
+    const now = new Date();
+    const booking: CatalogBooking = {
+      id: `bkg-${randomUUID().slice(0, 8)}-${Date.now().toString(36)}`,
+      tenantId: input.tenantId,
+      itemId: item.id,
+      itemName: item.name,
+      bookingMode: item.bookingMode,
+      startDate,
+      endDate,
+      timeSlot,
+      customerName,
+      customerPhone,
+      notes: input.notes ? input.notes.trim() : null,
+      status: 'pending',
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    if (this.isDbActive()) {
+      const existingRes = await this.dbService!.query<CatalogBookingRow>(
+        `SELECT * FROM catalog_bookings
+         WHERE tenant_id = $1 AND item_id = $2 AND status IN ('pending', 'confirmed')
+           AND start_date <= $3 AND end_date >= $4`,
+        [input.tenantId, item.id, endDate, startDate],
+      );
+      const active = (existingRes.rows || []).map((r) => this.mapRowToBooking(r));
+
+      if (item.bookingMode === 'hours') {
+        const count = active.filter((b) => b.startDate === startDate && b.timeSlot === timeSlot).length;
+        if (count >= item.bookingMaxConcurrent) {
+          throw new ConflictException('This time slot is already fully booked');
+        }
+      } else {
+        for (const dateStr of occupiedDates) {
+          const count = active.filter((b) => this.isBookingOccupyingDate(b, dateStr)).length;
+          if (count >= item.bookingMaxConcurrent) {
+            throw new ConflictException(`No availability remaining on ${dateStr}`);
+          }
+        }
+      }
+
+      const inserted = await this.dbService!.query<CatalogBookingRow>(
+        `INSERT INTO catalog_bookings (
+          id, tenant_id, item_id, item_name, booking_mode, start_date, end_date,
+          time_slot, customer_name, customer_phone, notes, status, created_at, updated_at
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+        RETURNING *`,
+        [
+          booking.id,
+          booking.tenantId,
+          booking.itemId,
+          booking.itemName,
+          booking.bookingMode,
+          booking.startDate,
+          booking.endDate,
+          booking.timeSlot,
+          booking.customerName,
+          booking.customerPhone,
+          booking.notes,
+          booking.status,
+          booking.createdAt,
+          booking.updatedAt,
+        ],
+      );
+      return this.mapRowToBooking(inserted.rows[0]);
+    }
+
+    const active = this.bookings.filter(
+      (b) =>
+        b.tenantId === input.tenantId &&
+        b.itemId === item.id &&
+        (b.status === 'pending' || b.status === 'confirmed'),
+    );
+    if (item.bookingMode === 'hours') {
+      const count = active.filter((b) => b.startDate === startDate && b.timeSlot === timeSlot).length;
+      if (count >= item.bookingMaxConcurrent) {
+        throw new ConflictException('This time slot is already fully booked');
+      }
+    } else {
+      for (const dateStr of occupiedDates) {
+        const count = active.filter((b) => this.isBookingOccupyingDate(b, dateStr)).length;
+        if (count >= item.bookingMaxConcurrent) {
+          throw new ConflictException(`No availability remaining on ${dateStr}`);
+        }
+      }
+    }
+
+    this.bookings.unshift(booking);
+    return booking;
+  }
+
+  async listBookingsByTenant(tenantId: string, limit = 100): Promise<CatalogBooking[]> {
+    if (this.isDbActive()) {
+      const res = await this.dbService!.query<CatalogBookingRow>(
+        `SELECT * FROM catalog_bookings WHERE tenant_id = $1 ORDER BY start_date ASC, created_at DESC LIMIT $2`,
+        [tenantId, limit],
+      );
+      return (res.rows || []).map((r) => this.mapRowToBooking(r));
+    }
+
+    return this.bookings
+      .filter((b) => b.tenantId === tenantId)
+      .sort((a, b) => a.startDate.localeCompare(b.startDate) || b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, limit);
+  }
+
+  async updateBookingStatus(
+    tenantId: string,
+    bookingId: string,
+    status: BookingStatus,
+  ): Promise<CatalogBooking | null> {
+    const now = new Date();
+    if (this.isDbActive()) {
+      const res = await this.dbService!.query<CatalogBookingRow>(
+        `UPDATE catalog_bookings
+         SET status = $1, updated_at = $2
+         WHERE tenant_id = $3 AND id = $4
+         RETURNING *`,
+        [status, now, tenantId, bookingId],
+      );
+      if (!res.rows || res.rows.length === 0) return null;
+      return this.mapRowToBooking(res.rows[0]);
+    }
+
+    const found = this.bookings.find((b) => b.tenantId === tenantId && b.id === bookingId);
+    if (!found) return null;
+    found.status = status;
+    found.updatedAt = now;
+    return found;
+  }
+
+  async getBookingAvailability(
+    tenantId: string,
+    itemId: string,
+    fromDate: string,
+    toDate: string,
+  ): Promise<BookingSlotCount[]> {
+    this.parseIsoDate(fromDate);
+    this.parseIsoDate(toDate);
+
+    let active: CatalogBooking[];
+    if (this.isDbActive()) {
+      const res = await this.dbService!.query<CatalogBookingRow>(
+        `SELECT * FROM catalog_bookings
+         WHERE tenant_id = $1 AND item_id = $2 AND status IN ('pending', 'confirmed')
+           AND start_date <= $3 AND end_date >= $4`,
+        [tenantId, itemId, toDate, fromDate],
+      );
+      active = (res.rows || []).map((r) => this.mapRowToBooking(r));
+    } else {
+      active = this.bookings.filter(
+        (b) =>
+          b.tenantId === tenantId &&
+          b.itemId === itemId &&
+          (b.status === 'pending' || b.status === 'confirmed') &&
+          b.startDate <= toDate &&
+          b.endDate >= fromDate,
+      );
+    }
+
+    const counts = new Map<string, BookingSlotCount>();
+    for (const b of active) {
+      if (b.bookingMode === 'hours') {
+        const key = `${b.startDate}|${b.timeSlot || ''}`;
+        const cur = counts.get(key);
+        if (cur) cur.bookedCount += 1;
+        else counts.set(key, { date: b.startDate, timeSlot: b.timeSlot, bookedCount: 1 });
+      } else {
+        const dates = this.enumerateOccupiedDates(b.startDate, b.endDate);
+        for (const d of dates) {
+          if (d < fromDate || d > toDate) continue;
+          const key = `${d}|`;
+          const cur = counts.get(key);
+          if (cur) cur.bookedCount += 1;
+          else counts.set(key, { date: d, timeSlot: null, bookedCount: 1 });
+        }
+      }
+    }
+    return Array.from(counts.values());
   }
 }
