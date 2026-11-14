@@ -449,7 +449,11 @@ export class CatalogController {
 
     let loyaltyUpdate = null;
     if (this.loyaltyRepo && dto.customerPhone && dto.customerPhone.replace(/\D/g, '').length >= 6) {
-      loyaltyUpdate = await this.loyaltyRepo.recordVisitByPhone(tenantId, dto.customerPhone, dto.customerName);
+      try {
+        loyaltyUpdate = await this.loyaltyRepo.recordVisitByPhone(tenantId, dto.customerPhone, dto.customerName);
+      } catch {
+        // Non-blocking: sale and transfer claim already succeeded
+      }
     }
 
     return loyaltyUpdate ? { ...sale, loyaltyUpdate } : sale;
@@ -516,7 +520,10 @@ export class PublicCatalogController {
     if (!item) {
       throw new NotFoundException('Servicio reservable no encontrado.');
     }
-    return this.catalogRepo.getBookingAvailability(catalog.merchantId, itemId, fromDate, toDate);
+    if (toDate < fromDate) {
+      throw new BadRequestException('toDate no puede ser anterior a fromDate.');
+    }
+    return this.catalogRepo.getBookingAvailability(item.tenantId, itemId, fromDate, toDate);
   }
 
   @Post(':slug/bookings')
@@ -526,8 +533,12 @@ export class PublicCatalogController {
     if (!catalog) {
       throw new NotFoundException(`No se encontró el catálogo para el comercio '${slug}'`);
     }
+    const item = catalog.items.find((i) => i.id === dto.itemId && i.bookingEnabled);
+    if (!item) {
+      throw new NotFoundException('Servicio reservable no encontrado.');
+    }
     return this.catalogRepo.createBooking({
-      tenantId: catalog.merchantId,
+      tenantId: item.tenantId,
       itemId: dto.itemId,
       startDate: dto.startDate,
       endDate: dto.endDate,

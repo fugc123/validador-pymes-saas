@@ -158,7 +158,7 @@ export const PublicLoyaltyCardView: React.FC<{ token: string }> = ({ token }) =>
 
           {data.merchantSlug && (
             <a
-              href={`/catalogo/${data.merchantSlug}`}
+              href={`/catalogo/${encodeURIComponent(data.merchantSlug)}`}
               className="w-full py-2.5 px-4 rounded-xl bg-[#0B0F19] hover:bg-[#151D2F] border border-[#24324D] text-xs font-bold text-gray-200 flex items-center justify-center gap-2 transition-colors"
             >
               <ExternalLink className="w-3.5 h-3.5" />

@@ -48,7 +48,7 @@ describe('Digital Loyalty Cards & Coupons (Rondafy-style)', () => {
     expect(v3.couponEarned).not.toBeNull();
     expect(v3.couponEarned?.status).toBe('available');
     expect(v3.couponEarned?.rewardTitle).toBe('1 Café Gratis');
-    expect(v3.couponEarned?.code).toMatch(/^CUP-[A-F0-9]{4}$/);
+    expect(v3.couponEarned?.code).toMatch(/^CUP-[A-F0-9]{6}$/);
 
     // Public view via unguessable token masks phone & shows coupon
     const publicView = await loyaltyRepo.getPublicCardByToken(v3.card!.cardToken);

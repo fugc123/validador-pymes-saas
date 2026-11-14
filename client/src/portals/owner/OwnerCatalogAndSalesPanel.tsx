@@ -18,6 +18,8 @@ import {
   X,
   Calendar,
   Phone,
+  Gift,
+  MessageCircle,
 } from 'lucide-react';
 import { CatalogThemePalette } from '../catalog/PublicCatalogView';
 import { processImageToWebp } from '../../utils/imageProcessor';
@@ -58,6 +60,28 @@ interface CatalogBookingDto {
   notes: string | null;
   status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
   createdAt: string;
+}
+
+interface LoyaltyProgramDto {
+  isEnabled: boolean;
+  stampsRequired: number;
+  rewardTitle: string;
+  rewardDescription: string | null;
+}
+
+interface LoyaltyCardDto {
+  id: string;
+  customerPhone: string;
+  customerName: string | null;
+  cardToken: string;
+  stampsCount: number;
+  totalVisits: number;
+  coupons: Array<{
+    id: string;
+    code: string;
+    rewardTitle: string;
+    status: 'available' | 'redeemed';
+  }>;
 }
 
 interface SaleRecordDto {
@@ -164,7 +188,18 @@ export const OwnerCatalogAndSalesPanel: React.FC<OwnerCatalogAndSalesPanelProps>
   const [bookingTimeSlots, setBookingTimeSlots] = useState('09:00,10:00,11:00,14:00,15:00,16:00,17:00');
   const [bookingMaxConcurrent, setBookingMaxConcurrent] = useState('1');
   const [bookings, setBookings] = useState<CatalogBookingDto[]>([]);
-  const [inventoryView, setInventoryView] = useState<'items' | 'bookings'>('items');
+  const [inventoryView, setInventoryView] = useState<'items' | 'bookings' | 'loyalty'>('items');
+  const [loyaltyProgram, setLoyaltyProgram] = useState<LoyaltyProgramDto>({
+    isEnabled: false,
+    stampsRequired: 10,
+    rewardTitle: '1 Premio Gratis',
+    rewardDescription: null,
+  });
+  const [loyaltyCards, setLoyaltyCards] = useState<LoyaltyCardDto[]>([]);
+  const [savingLoyalty, setSavingLoyalty] = useState(false);
+  const [loyaltySavedMsg, setLoyaltySavedMsg] = useState<string | null>(null);
+  const [manualVisitPhone, setManualVisitPhone] = useState('');
+  const [manualVisitName, setManualVisitName] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [savingItem, setSavingItem] = useState(false);
 
@@ -174,7 +209,7 @@ export const OwnerCatalogAndSalesPanel: React.FC<OwnerCatalogAndSalesPanelProps>
     if (!token) return;
     setLoading(true);
     try {
-      const [catRes, salesRes, bookingsRes] = await Promise.all([
+      const [catRes, salesRes, bookingsRes, loyaltyProgRes, loyaltyCardsRes] = await Promise.all([
         fetch('/api/v1/merchant/catalog', {
           headers: { Authorization: `Bearer ${token}` },
         }),
@@ -182,6 +217,12 @@ export const OwnerCatalogAndSalesPanel: React.FC<OwnerCatalogAndSalesPanelProps>
           headers: { Authorization: `Bearer ${token}` },
         }),
         fetch('/api/v1/merchant/catalog/bookings', {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch('/api/v1/merchant/loyalty/program', {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch('/api/v1/merchant/loyalty/cards', {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ]);
@@ -198,6 +239,12 @@ export const OwnerCatalogAndSalesPanel: React.FC<OwnerCatalogAndSalesPanelProps>
       }
       if (bookingsRes.ok) {
         setBookings(await bookingsRes.json());
+      }
+      if (loyaltyProgRes.ok) {
+        setLoyaltyProgram(await loyaltyProgRes.json());
+      }
+      if (loyaltyCardsRes.ok) {
+        setLoyaltyCards(await loyaltyCardsRes.json());
       }
     } catch {
       // ignore error
@@ -330,6 +377,62 @@ export const OwnerCatalogAndSalesPanel: React.FC<OwnerCatalogAndSalesPanelProps>
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ status }),
+    });
+    if (res.ok) {
+      await fetchAll();
+    }
+  };
+
+  const handleSaveLoyaltyProgram = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) return;
+    setSavingLoyalty(true);
+    setLoyaltySavedMsg(null);
+    try {
+      const res = await fetch('/api/v1/merchant/loyalty/program', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(loyaltyProgram),
+      });
+      if (res.ok) {
+        setLoyaltyProgram(await res.json());
+        setLoyaltySavedMsg('Programa guardado');
+        setTimeout(() => setLoyaltySavedMsg(null), 2500);
+      }
+    } finally {
+      setSavingLoyalty(false);
+    }
+  };
+
+  const handleManualLoyaltyVisit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !manualVisitPhone.trim()) return;
+    const res = await fetch('/api/v1/merchant/loyalty/visit', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        customerPhone: manualVisitPhone.trim(),
+        customerName: manualVisitName.trim() || null,
+      }),
+    });
+    if (res.ok) {
+      setManualVisitPhone('');
+      setManualVisitName('');
+      await fetchAll();
+    }
+  };
+
+  const handleRedeemLoyaltyCoupon = async (couponId: string) => {
+    if (!token) return;
+    const res = await fetch(`/api/v1/merchant/loyalty/coupons/${couponId}/redeem`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
     });
     if (res.ok) {
       await fetchAll();
@@ -680,14 +783,32 @@ export const OwnerCatalogAndSalesPanel: React.FC<OwnerCatalogAndSalesPanelProps>
                 <Calendar className="w-3.5 h-3.5" />
                 <span>Reservas ({bookings.length})</span>
               </button>
+              <button
+                type="button"
+                onClick={() => setInventoryView('loyalty')}
+                className={`px-4 py-2 rounded-xl text-xs font-extrabold transition-all flex items-center gap-1.5 ${
+                  inventoryView === 'loyalty'
+                    ? 'bg-emerald-500 text-gray-950'
+                    : 'bg-[#0B0F19] text-gray-400 hover:text-white border border-[#24324D]'
+                }`}
+              >
+                <Gift className="w-3.5 h-3.5" />
+                <span>Fidelidad ({loyaltyCards.length})</span>
+              </button>
             </div>
             <h2 className="text-xl font-black text-white">
-              {inventoryView === 'bookings' ? 'Reservas de Servicios y Estadías' : 'Inventario de Productos y Servicios'}
+              {inventoryView === 'bookings'
+                ? 'Reservas de Servicios y Estadías'
+                : inventoryView === 'loyalty'
+                  ? 'Tarjetas de Fidelidad y Cupones'
+                  : 'Inventario de Productos y Servicios'}
             </h2>
             <p className="text-xs text-gray-400">
               {inventoryView === 'bookings'
                 ? 'Gestioná las reservas que tus clientes realizan desde el catálogo web.'
-                : 'Creá productos (con descuento automático de stock al vender) o servicios (con opción de reservas por horario o por días).'}
+                : inventoryView === 'loyalty'
+                  ? 'Configurá tus sellos por visita. Cuando el cajero cobra con el celular del cliente, suma 1 sello automático y le podés mandar su link por WhatsApp.'
+                  : 'Creá productos (con descuento automático de stock al vender) o servicios (con opción de reservas por horario o por días).'}
             </p>
           </div>
           {inventoryView === 'items' && (
@@ -789,6 +910,180 @@ export const OwnerCatalogAndSalesPanel: React.FC<OwnerCatalogAndSalesPanelProps>
               ))}
             </div>
           )
+        ) : inventoryView === 'loyalty' ? (
+          <div className="space-y-6">
+            {/* Loyalty Program Config */}
+            <form
+              onSubmit={handleSaveLoyaltyProgram}
+              className="bg-[#0B0F19] border border-[#24324D] rounded-2xl p-5 space-y-4"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-sm font-bold text-white">
+                  <Gift className="w-4 h-4 text-emerald-400" />
+                  <span>Configuración del Programa</span>
+                </div>
+                <label className="flex items-center gap-2 text-xs text-gray-200 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={loyaltyProgram.isEnabled}
+                    onChange={(e) => setLoyaltyProgram((p) => ({ ...p, isEnabled: e.target.checked }))}
+                    className="rounded border-[#24324D]"
+                  />
+                  <span>Activar suma automática en Caja POS</span>
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-400 mb-1">Visitas para premio</label>
+                  <input
+                    type="number"
+                    min="2"
+                    max="50"
+                    value={loyaltyProgram.stampsRequired}
+                    onChange={(e) =>
+                      setLoyaltyProgram((p) => ({ ...p, stampsRequired: Number(e.target.value) || 10 }))
+                    }
+                    className="w-full bg-[#151D2F] border border-[#24324D] rounded-xl px-3 py-2 text-xs font-mono text-white"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-[11px] font-bold text-gray-400 mb-1">Premio al completar</label>
+                  <input
+                    type="text"
+                    required
+                    value={loyaltyProgram.rewardTitle}
+                    onChange={(e) => setLoyaltyProgram((p) => ({ ...p, rewardTitle: e.target.value }))}
+                    placeholder="Ej: 1 Café Gratis / 20% OFF"
+                    className="w-full bg-[#151D2F] border border-[#24324D] rounded-xl px-3 py-2 text-xs text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs text-emerald-400 font-semibold">{loyaltySavedMsg || ''}</span>
+                <button
+                  type="submit"
+                  disabled={savingLoyalty}
+                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-extrabold text-xs rounded-xl"
+                >
+                  {savingLoyalty ? 'Guardando...' : 'Guardar Programa'}
+                </button>
+              </div>
+            </form>
+
+            {/* Manual Visit Form */}
+            <form
+              onSubmit={handleManualLoyaltyVisit}
+              className="bg-[#0B0F19] border border-[#24324D] rounded-2xl p-4 flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-end"
+            >
+              <div className="flex-1">
+                <label className="block text-[11px] font-bold text-gray-400 mb-1">Celular del cliente</label>
+                <input
+                  type="tel"
+                  required
+                  value={manualVisitPhone}
+                  onChange={(e) => setManualVisitPhone(e.target.value)}
+                  placeholder="0981 123 456"
+                  className="w-full bg-[#151D2F] border border-[#24324D] rounded-xl px-3 py-2 text-xs font-mono text-white"
+                />
+              </div>
+              <div className="flex-1">
+                <label className="block text-[11px] font-bold text-gray-400 mb-1">Nombre (opcional)</label>
+                <input
+                  type="text"
+                  value={manualVisitName}
+                  onChange={(e) => setManualVisitName(e.target.value)}
+                  placeholder="Ej: Juan Pérez"
+                  className="w-full bg-[#151D2F] border border-[#24324D] rounded-xl px-3 py-2 text-xs text-white"
+                />
+              </div>
+              <button
+                type="submit"
+                className="px-4 py-2 bg-[#151D2F] hover:bg-slate-800 text-emerald-400 border border-emerald-500/30 font-bold text-xs rounded-xl"
+              >
+                + Sumar 1 Visita
+              </button>
+            </form>
+
+            {/* Customer Cards List */}
+            {loyaltyCards.length === 0 ? (
+              <div className="bg-[#0B0F19]/60 border border-[#24324D] rounded-2xl p-8 text-center text-xs text-gray-400">
+                Todavía no hay clientes con tarjeta. Cuando cargues un celular en Caja POS o sumes una visita manual, aparecerá acá con su link de WhatsApp.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {loyaltyCards.map((card) => {
+                  const cardUrl = `${window.location.origin}/fidelidad/${card.cardToken}`;
+                  const waText = `¡Hola${card.customerName ? ` ${card.customerName}` : ''}! Acá podés ver tus sellos (${card.stampsCount}/${loyaltyProgram.stampsRequired}) y cupones disponibles: ${cardUrl}`;
+                  const digits = card.customerPhone.replace(/\D/g, '');
+                  const waPhone = digits.startsWith('0') ? `595${digits.slice(1)}` : digits;
+                  const waHref = `https://wa.me/${waPhone}?text=${encodeURIComponent(waText)}`;
+                  const availableCoupons = card.coupons.filter((c) => c.status === 'available');
+
+                  return (
+                    <div
+                      key={card.id}
+                      className="bg-[#0B0F19] border border-[#24324D] rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                    >
+                      <div className="space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-bold text-white">
+                            {card.customerName || 'Cliente'}
+                          </span>
+                          <span className="text-xs font-mono text-emerald-400">{card.customerPhone}</span>
+                          <span className="px-2 py-0.5 bg-[#151D2F] border border-[#24324D] rounded-md text-[11px] font-mono text-gray-200">
+                            {card.stampsCount}/{loyaltyProgram.stampsRequired} sellos • {card.totalVisits} visitas
+                          </span>
+                        </div>
+
+                        {availableCoupons.length > 0 && (
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            {availableCoupons.map((cup) => (
+                              <div
+                                key={cup.id}
+                                className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 rounded-xl px-2.5 py-1 text-xs"
+                              >
+                                <span className="font-mono font-bold text-amber-300">{cup.code}</span>
+                                <span className="text-gray-300">{cup.rewardTitle}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRedeemLoyaltyCoupon(cup.id)}
+                                  className="px-2 py-0.5 bg-amber-500 text-gray-950 font-bold rounded-lg text-[10px]"
+                                >
+                                  Canjear
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <a
+                          href={waHref}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-3 py-2 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-extrabold text-xs rounded-xl inline-flex items-center gap-1.5"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5" />
+                          <span>Enviar por WhatsApp</span>
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => navigator.clipboard.writeText(cardUrl)}
+                          className="px-3 py-2 bg-[#151D2F] hover:bg-slate-800 text-gray-300 border border-[#24324D] font-bold text-xs rounded-xl inline-flex items-center gap-1"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Link</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         ) : items.length === 0 ? (
           <div className="bg-[#0B0F19]/60 border border-[#24324D] rounded-2xl p-10 text-center space-y-3">
             <Package className="w-10 h-10 text-gray-500 mx-auto" />

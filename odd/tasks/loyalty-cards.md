@@ -15,4 +15,4 @@ Implement Rondafy-style digital loyalty cards & coupons without requiring custom
 - [x] **T1**: Add DB schema (`loyalty_programs`, `loyalty_cards`, `loyalty_coupons`), ports (`loyalty.ports.ts`), repository (`loyalty.repository.ts`), controller (`loyalty.controller.ts`), module wiring (`app.module.ts`), and auto-stamp hook on `POST /merchant/sales`. (`npx tsc --noEmit` passed)
 - [x] **T2**: Add unit tests in `test/unit/loyalty.spec.ts` for auto-stamping, coupon generation at threshold, redemption, public token lookup, and tenant isolation. (`4 passed`)
 - [x] **T3**: Create `client/src/portals/loyalty/PublicLoyaltyCardView.tsx` and wire `/fidelidad/:token` route in `client/src/App.tsx`.
-- [ ] **T4**: Integrate loyalty phone auto-stamp & coupon redeem in `FastPosScreen.tsx` and owner **Fidelidad** tab in `OwnerCatalogAndSalesPanel.tsx`; run full verification.
+- [x] **T4**: Integrate loyalty phone auto-stamp & coupon redeem in `FastPosScreen.tsx` and owner **Fidelidad** tab in `OwnerCatalogAndSalesPanel.tsx`; run full verification. (`npx tsc --noEmit`, `npm run build`, `npm --prefix client run build`, `npm test` 31 suites / 359 tests passed)

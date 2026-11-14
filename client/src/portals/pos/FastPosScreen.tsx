@@ -101,6 +101,7 @@ export const FastPosScreen: React.FC = () => {
 
   // Shared checkout fields
   const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
   const [customerRuc, setCustomerRuc] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [paymentMethod, setPaymentMethod] =  useState<'TRANSFER' | 'CASH' | 'CARD'>('TRANSFER');
@@ -112,6 +113,8 @@ export const FastPosScreen: React.FC = () => {
     summary: string;
     sifenCdc?: string;
     sifenNumero?: string;
+    loyaltyMessage?: string;
+    loyaltyWhatsAppUrl?: string;
   } | null>(null);
 
   // SIFEN Electronic Invoicing state (only enabled for Free/Lifetime own merchants)
@@ -271,7 +274,9 @@ export const FastPosScreen: React.FC = () => {
     setQuickAmount('');
     setQuickConcept('');
     setCustomerName('');
+    setCustomerPhone('');
     setCustomerRuc('');
+    setSifenReceptorRuc('');
     setCustomerEmail('');
     setMatch(null);
     setReplayAlert(null);
@@ -291,6 +296,7 @@ export const FastPosScreen: React.FC = () => {
     const isQuick = activeTab === 'quick_amount';
     const payload = {
       customerName: customerName.trim() || match?.payerName || null,
+      customerPhone: customerPhone.trim() || null,
       customerRuc: customerRuc.trim() || null,
       customerEmail: customerEmail.trim() || null,
       concept: isQuick ? quickConcept.trim() || 'Cobro rápido en caja' : null,
@@ -372,6 +378,22 @@ export const FastPosScreen: React.FC = () => {
         }
       }
 
+      const loyalty = data?.loyaltyUpdate;
+      const loyaltyMessage =
+        loyalty?.programEnabled && loyalty?.card
+          ? loyalty.couponEarned
+            ? `🎉 ¡Completó tarjeta! Cupón generado: ${loyalty.couponEarned.code} (${loyalty.couponEarned.rewardTitle})`
+            : `⭐ Visita sumada: ${loyalty.card.stampsCount}/${loyalty.stampsRequired} sellos`
+          : undefined;
+      let loyaltyWhatsAppUrl: string | undefined;
+      if (loyalty?.programEnabled && loyalty?.card?.cardToken && loyalty?.card?.customerPhone) {
+        const rawDigits = String(loyalty.card.customerPhone).replace(/\D/g, '');
+        const waPhone = rawDigits.startsWith('0') ? `595${rawDigits.slice(1)}` : rawDigits;
+        const cardUrl = `${window.location.origin}/fidelidad/${loyalty.card.cardToken}`;
+        const msg = `¡Gracias por tu compra! Acá podés ver tus sellos (${loyalty.card.stampsCount}/${loyalty.stampsRequired}) y cupones: ${cardUrl}`;
+        loyaltyWhatsAppUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`;
+      }
+
       setCompletedSaleBanner({
         total: data.totalAmount || effectiveCheckoutTotal,
         method:
@@ -383,6 +405,8 @@ export const FastPosScreen: React.FC = () => {
         summary: summaryText,
         sifenCdc: emittedCdc,
         sifenNumero: emittedNum,
+        loyaltyMessage,
+        loyaltyWhatsAppUrl,
       });
 
       resetCheckoutForm();
@@ -630,6 +654,21 @@ export const FastPosScreen: React.FC = () => {
                 {completedSaleBanner.sifenCdc && (
                   <div className="text-[11px] font-mono text-purple-300 mt-1">
                     🧾 Factura SIFEN N° {completedSaleBanner.sifenNumero} • CDC: {completedSaleBanner.sifenCdc}
+                  </div>
+                )}
+                {completedSaleBanner.loyaltyMessage && (
+                  <div className="text-[11px] font-bold text-amber-300 mt-1 flex flex-wrap items-center gap-2">
+                    <span>{completedSaleBanner.loyaltyMessage}</span>
+                    {completedSaleBanner.loyaltyWhatsAppUrl && (
+                      <a
+                        href={completedSaleBanner.loyaltyWhatsAppUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-2 py-0.5 bg-emerald-500 text-gray-950 rounded-md text-[10px] font-extrabold hover:bg-emerald-400"
+                      >
+                        Enviar por WhatsApp
+                      </a>
+                    )}
                   </div>
                 )}
               </div>
@@ -996,6 +1035,16 @@ export const FastPosScreen: React.FC = () => {
                           onChange={(e) => setCustomerName(e.target.value)}
                           placeholder="Nombre o Razón Social del cliente..."
                           className="w-full bg-[#0B0F19] border border-[#24324D] focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none transition-colors"
+                        />
+                      </div>
+
+                      <div>
+                        <input
+                          type="tel"
+                          value={customerPhone}
+                          onChange={(e) => setCustomerPhone(e.target.value)}
+                          placeholder="Celular del cliente (ej: 0981 123 456) — suma visita de fidelidad..."
+                          className="w-full bg-[#0B0F19] border border-[#24324D] focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs font-mono text-white placeholder-gray-500 focus:outline-none transition-colors"
                         />
                       </div>
 

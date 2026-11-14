@@ -635,9 +635,9 @@ export class CatalogRepository implements ICatalogRepository {
     if (this.isDbActive()) {
       await this.dbService!.query(
         `INSERT INTO sales (
-          id, tenant_id, cashier_user_id, cashier_name, customer_name, concept,
+          id, tenant_id, cashier_user_id, cashier_name, customer_name, customer_ruc, customer_email, concept,
           sale_mode, payment_method, transfer_id, subtotal_amount, discount_amount, total_amount, created_at
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
         [
           sale.id,
           sale.tenantId,
@@ -781,7 +781,10 @@ export class CatalogRepository implements ICatalogRepository {
       return [startDate];
     }
     // For multi-day stays (e.g. hotel check-in -> check-out), occupy nights [startDate, endDate)
-    while (cursor.getTime() < end.getTime() && dates.length < 90) {
+    while (cursor.getTime() < end.getTime()) {
+      if (dates.length >= 90) {
+        throw new BadRequestException('Stay duration cannot exceed 90 days');
+      }
       dates.push(cursor.toISOString().slice(0, 10));
       cursor.setUTCDate(cursor.getUTCDate() + 1);
     }
@@ -795,14 +798,36 @@ export class CatalogRepository implements ICatalogRepository {
     return b.startDate <= targetDate && targetDate < b.endDate;
   }
 
+  private assertBookingCapacityAvailable(
+    active: CatalogBooking[],
+    item: CatalogItemView,
+    startDate: string,
+    occupiedDates: string[],
+    timeSlot: string | null,
+  ): void {
+    if (item.bookingMode === 'hours') {
+      const count = active.filter((b) => b.startDate === startDate && b.timeSlot === timeSlot).length;
+      if (count >= item.bookingMaxConcurrent) {
+        throw new ConflictException('This time slot is already fully booked');
+      }
+    } else {
+      for (const dateStr of occupiedDates) {
+        const count = active.filter((b) => this.isBookingOccupyingDate(b, dateStr)).length;
+        if (count >= item.bookingMaxConcurrent) {
+          throw new ConflictException(`No availability remaining on ${dateStr}`);
+        }
+      }
+    }
+  }
+
   async createBooking(input: CreateBookingInput): Promise<CatalogBooking> {
     const customerName = (input.customerName || '').trim();
     const customerPhone = (input.customerPhone || '').trim();
     if (!customerName) {
       throw new BadRequestException('Customer name is required');
     }
-    if (!customerPhone) {
-      throw new BadRequestException('Customer phone is required');
+    if (!customerPhone || customerPhone.replace(/\D/g, '').length < 6) {
+      throw new BadRequestException('A valid customer phone is required');
     }
 
     const item = await this.findItemById(input.tenantId, input.itemId);
@@ -816,6 +841,12 @@ export class CatalogRepository implements ICatalogRepository {
     const startDate = (input.startDate || '').trim();
     const endDate = item.bookingMode === 'hours' ? startDate : (input.endDate || startDate).trim();
     const occupiedDates = this.enumerateOccupiedDates(startDate, endDate);
+
+    // Reject bookings in the past (Paraguay UTC-3)
+    const todayParaguay = new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
+    if (startDate < todayParaguay) {
+      throw new BadRequestException('Cannot create a booking for a past date');
+    }
 
     const allowedDays = item.bookingDaysOfWeek
       .split(',')
@@ -835,18 +866,19 @@ export class CatalogRepository implements ICatalogRepository {
       if (!/^\d{2}:\d{2}$/.test(timeSlot)) {
         throw new BadRequestException('A valid time slot (HH:mm) is required');
       }
-      if (item.bookingTimeSlots) {
-        const configured = item.bookingTimeSlots.split(',').map((s) => s.trim());
-        if (!configured.includes(timeSlot)) {
-          throw new BadRequestException(`Time slot '${timeSlot}' is not enabled for this service`);
-        }
+      const effectiveSlots = (item.bookingTimeSlots || '09:00,10:00,11:00,14:00,15:00,16:00,17:00')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (!effectiveSlots.includes(timeSlot)) {
+        throw new BadRequestException(`Time slot '${timeSlot}' is not enabled for this service`);
       }
     }
 
     const now = new Date();
     const booking: CatalogBooking = {
       id: `bkg-${randomUUID().slice(0, 8)}-${Date.now().toString(36)}`,
-      tenantId: input.tenantId,
+      tenantId: item.tenantId,
       itemId: item.id,
       itemName: item.name,
       bookingMode: item.bookingMode,
@@ -866,23 +898,10 @@ export class CatalogRepository implements ICatalogRepository {
         `SELECT * FROM catalog_bookings
          WHERE tenant_id = $1 AND item_id = $2 AND status IN ('pending', 'confirmed')
            AND start_date <= $3 AND end_date >= $4`,
-        [input.tenantId, item.id, endDate, startDate],
+        [item.tenantId, item.id, endDate, startDate],
       );
       const active = (existingRes.rows || []).map((r) => this.mapRowToBooking(r));
-
-      if (item.bookingMode === 'hours') {
-        const count = active.filter((b) => b.startDate === startDate && b.timeSlot === timeSlot).length;
-        if (count >= item.bookingMaxConcurrent) {
-          throw new ConflictException('This time slot is already fully booked');
-        }
-      } else {
-        for (const dateStr of occupiedDates) {
-          const count = active.filter((b) => this.isBookingOccupyingDate(b, dateStr)).length;
-          if (count >= item.bookingMaxConcurrent) {
-            throw new ConflictException(`No availability remaining on ${dateStr}`);
-          }
-        }
-      }
+      this.assertBookingCapacityAvailable(active, item, startDate, occupiedDates, timeSlot);
 
       const inserted = await this.dbService!.query<CatalogBookingRow>(
         `INSERT INTO catalog_bookings (
@@ -912,23 +931,11 @@ export class CatalogRepository implements ICatalogRepository {
 
     const active = this.bookings.filter(
       (b) =>
-        b.tenantId === input.tenantId &&
+        b.tenantId === item.tenantId &&
         b.itemId === item.id &&
         (b.status === 'pending' || b.status === 'confirmed'),
     );
-    if (item.bookingMode === 'hours') {
-      const count = active.filter((b) => b.startDate === startDate && b.timeSlot === timeSlot).length;
-      if (count >= item.bookingMaxConcurrent) {
-        throw new ConflictException('This time slot is already fully booked');
-      }
-    } else {
-      for (const dateStr of occupiedDates) {
-        const count = active.filter((b) => this.isBookingOccupyingDate(b, dateStr)).length;
-        if (count >= item.bookingMaxConcurrent) {
-          throw new ConflictException(`No availability remaining on ${dateStr}`);
-        }
-      }
-    }
+    this.assertBookingCapacityAvailable(active, item, startDate, occupiedDates, timeSlot);
 
     this.bookings.unshift(booking);
     return booking;

@@ -3,7 +3,7 @@ import { randomBytes, randomUUID } from 'crypto';
 import { DatabaseService } from '../database/database.service';
 import { LoyaltyCardRow, LoyaltyCouponRow, LoyaltyProgramRow } from '../database/schema';
 import { IMerchantRepository } from '../../core/application/ports/auth.ports';
-import { CatalogThemePalette } from '../../core/application/ports/catalog.ports';
+import { ALLOWED_CATALOG_THEMES, CatalogThemePalette } from '../../core/application/ports/catalog.ports';
 import {
   ILoyaltyRepository,
   LoyaltyCard,
@@ -197,7 +197,7 @@ export class LoyaltyRepository implements ILoyaltyRepository {
       if (nextStamps >= program.stampsRequired) {
         nextStamps = nextStamps - program.stampsRequired;
         const couponId = `cup-${randomUUID().slice(0, 8)}-${Date.now().toString(36)}`;
-        const code = `CUP-${randomBytes(2).toString('hex').toUpperCase()}`;
+        const code = `CUP-${randomBytes(3).toString('hex').toUpperCase()}`;
         const cupRes = await this.dbService!.query<LoyaltyCouponRow>(
           `INSERT INTO loyalty_coupons (id, tenant_id, card_id, code, reward_title, status, issued_at)
            VALUES ($1, $2, $3, $4, $5, 'available', $6)
@@ -265,7 +265,7 @@ export class LoyaltyRepository implements ILoyaltyRepository {
         id: `cup-${randomUUID().slice(0, 8)}-${Date.now().toString(36)}`,
         tenantId,
         cardId: card.id,
-        code: `CUP-${randomBytes(2).toString('hex').toUpperCase()}`,
+        code: `CUP-${randomBytes(3).toString('hex').toUpperCase()}`,
         rewardTitle: program.rewardTitle,
         status: 'available',
         issuedAt: now,
@@ -359,17 +359,19 @@ export class LoyaltyRepository implements ILoyaltyRepository {
       );
 
       const mRes = await this.dbService!.query<{
-        business_name: string;
+        name: string;
         slug: string;
         catalog_theme?: string;
-      }>(`SELECT business_name, slug, catalog_theme FROM merchants WHERE slug = $1 OR id::text = $1 LIMIT 1`, [
-        row.tenant_id,
-      ]);
-      if (mRes.rows && mRes.rows.length > 0) {
-        merchantName = mRes.rows[0].business_name;
-        merchantSlug = mRes.rows[0].slug;
-        theme = (mRes.rows[0].catalog_theme as CatalogThemePalette) || 'emerald';
-      }
+      }>(
+        `SELECT name, slug, catalog_theme FROM merchants WHERE (slug = $1 OR id::text = $1) AND status = 'active' LIMIT 1`,
+        [row.tenant_id],
+      );
+      if (!mRes.rows || mRes.rows.length === 0) return null;
+      merchantName = mRes.rows[0].name;
+      merchantSlug = mRes.rows[0].slug;
+      theme = ALLOWED_CATALOG_THEMES.includes(mRes.rows[0].catalog_theme as CatalogThemePalette)
+        ? (mRes.rows[0].catalog_theme as CatalogThemePalette)
+        : 'emerald';
     } else {
       card = this.cards.find((c) => c.cardToken === cleanToken) || null;
       if (!card) return null;
@@ -404,19 +406,22 @@ export class LoyaltyRepository implements ILoyaltyRepository {
   async redeemCoupon(tenantId: string, couponId: string): Promise<LoyaltyCoupon | null> {
     const now = new Date();
     if (this.isDbActive()) {
+      const upd = await this.dbService!.query<LoyaltyCouponRow>(
+        `UPDATE loyalty_coupons
+         SET status = 'redeemed', redeemed_at = $1
+         WHERE tenant_id = $2 AND id = $3 AND status = 'available'
+         RETURNING *`,
+        [now, tenantId, couponId],
+      );
+      if (upd.rows && upd.rows.length > 0) {
+        return this.mapCouponRow(upd.rows[0]);
+      }
       const existing = await this.dbService!.query<LoyaltyCouponRow>(
         `SELECT * FROM loyalty_coupons WHERE tenant_id = $1 AND id = $2`,
         [tenantId, couponId],
       );
       if (!existing.rows || existing.rows.length === 0) return null;
-      if (existing.rows[0].status === 'redeemed') {
-        throw new ConflictException('Este cupón ya fue canjeado anteriormente.');
-      }
-      const upd = await this.dbService!.query<LoyaltyCouponRow>(
-        `UPDATE loyalty_coupons SET status = 'redeemed', redeemed_at = $1 WHERE tenant_id = $2 AND id = $3 RETURNING *`,
-        [now, tenantId, couponId],
-      );
-      return this.mapCouponRow(upd.rows[0]);
+      throw new ConflictException('Este cupón ya fue canjeado anteriormente.');
     }
 
     for (const c of this.cards) {
