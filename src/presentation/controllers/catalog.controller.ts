@@ -10,6 +10,7 @@ import {
   HttpStatus,
   Inject,
   NotFoundException,
+  Optional,
   Param,
   Patch,
   Post,
@@ -36,6 +37,7 @@ import {
 } from '../../core/application/ports/catalog.ports';
 import { IUserRepository } from '../../core/application/ports/auth.ports';
 import { ITransferRepository } from '../../core/application/ports/transfer.ports';
+import { ILoyaltyRepository } from '../../core/application/ports/loyalty.ports';
 import { ClaimTransferUseCase } from '../../core/application/use-cases/transfers/claim-transfer.use-case';
 
 export class CreateCatalogItemDto {
@@ -205,6 +207,10 @@ export class CreateSaleDto {
 
   @IsOptional()
   @Allow()
+  customerPhone?: string | null;
+
+  @IsOptional()
+  @Allow()
   customerRuc?: string | null;
 
   @IsOptional()
@@ -259,6 +265,9 @@ export class CatalogController {
     @Inject('ITransferRepository')
     private readonly transferRepo: ITransferRepository,
     private readonly claimTransferUseCase: ClaimTransferUseCase,
+    @Optional()
+    @Inject('ILoyaltyRepository')
+    private readonly loyaltyRepo?: ILoyaltyRepository,
   ) {}
 
   private requireTenantId(): string {
@@ -438,7 +447,12 @@ export class CatalogController {
       });
     }
 
-    return sale;
+    let loyaltyUpdate = null;
+    if (this.loyaltyRepo && dto.customerPhone && dto.customerPhone.replace(/\D/g, '').length >= 6) {
+      loyaltyUpdate = await this.loyaltyRepo.recordVisitByPhone(tenantId, dto.customerPhone, dto.customerName);
+    }
+
+    return loyaltyUpdate ? { ...sale, loyaltyUpdate } : sale;
   }
 
   @Get('merchant/catalog/bookings')

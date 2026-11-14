@@ -179,6 +179,40 @@ export interface SifenConfigRow {
   updated_at: Date;
 }
 
+export interface LoyaltyProgramRow {
+  tenant_id: string;
+  is_enabled: boolean;
+  stamps_required: number;
+  reward_title: string;
+  reward_description: string | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface LoyaltyCardRow {
+  id: string;
+  tenant_id: string;
+  customer_phone: string;
+  customer_name: string | null;
+  card_token: string;
+  stamps_count: number;
+  total_visits: number;
+  last_visit_at: Date | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface LoyaltyCouponRow {
+  id: string;
+  tenant_id: string;
+  card_id: string;
+  code: string;
+  reward_title: string;
+  status: 'available' | 'redeemed';
+  issued_at: Date;
+  redeemed_at: Date | null;
+}
+
 export interface SifenInvoiceRow {
   id: string;
   tenant_id: string;
@@ -447,4 +481,45 @@ CREATE TABLE IF NOT EXISTS sifen_invoices (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_sifen_invoices_tenant ON sifen_invoices(tenant_id, created_at DESC);
+
+-- Loyalty Program Configuration per Tenant (Rondafy-style digital stamp/visit cards)
+CREATE TABLE IF NOT EXISTS loyalty_programs (
+    tenant_id VARCHAR(100) PRIMARY KEY,
+    is_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    stamps_required INTEGER NOT NULL DEFAULT 10 CHECK (stamps_required >= 2 AND stamps_required <= 50),
+    reward_title VARCHAR(255) NOT NULL DEFAULT '1 Premio Gratis',
+    reward_description TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Loyalty Customer Cards (1 per tenant + normalized phone, accessed publicly via unguessable card_token)
+CREATE TABLE IF NOT EXISTS loyalty_cards (
+    id VARCHAR(100) PRIMARY KEY,
+    tenant_id VARCHAR(100) NOT NULL,
+    customer_phone VARCHAR(40) NOT NULL,
+    customer_name VARCHAR(255),
+    card_token VARCHAR(100) NOT NULL UNIQUE,
+    stamps_count INTEGER NOT NULL DEFAULT 0,
+    total_visits INTEGER NOT NULL DEFAULT 0,
+    last_visit_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE (tenant_id, customer_phone)
+);
+CREATE INDEX IF NOT EXISTS idx_loyalty_cards_tenant ON loyalty_cards(tenant_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_loyalty_cards_token ON loyalty_cards(card_token);
+
+-- Loyalty Coupons (Issued automatically when stamps_count reaches stamps_required)
+CREATE TABLE IF NOT EXISTS loyalty_coupons (
+    id VARCHAR(100) PRIMARY KEY,
+    tenant_id VARCHAR(100) NOT NULL,
+    card_id VARCHAR(100) NOT NULL REFERENCES loyalty_cards(id) ON DELETE CASCADE,
+    code VARCHAR(30) NOT NULL,
+    reward_title VARCHAR(255) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'available' CHECK (status IN ('available', 'redeemed')),
+    issued_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    redeemed_at TIMESTAMP WITH TIME ZONE
+);
+CREATE INDEX IF NOT EXISTS idx_loyalty_coupons_card ON loyalty_coupons(card_id, status);
 `;

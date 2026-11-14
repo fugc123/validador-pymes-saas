@@ -12,6 +12,7 @@ import { OnboardingController } from './presentation/controllers/onboarding.cont
 import { MerchantController } from './presentation/controllers/merchant.controller';
 import { SubscriptionController } from './presentation/controllers/subscription.controller';
 import { CatalogController, PublicCatalogController } from './presentation/controllers/catalog.controller';
+import { LoyaltyController, PublicLoyaltyController } from './presentation/controllers/loyalty.controller';
 import { SifenController } from './presentation/controllers/sifen.controller';
 
 // Use Cases
@@ -42,6 +43,7 @@ import {
   InMemoryPaymentReportRepository,
 } from './infrastructure/repositories/in-memory.repositories';
 import { CatalogRepository } from './infrastructure/repositories/catalog.repository';
+import { LoyaltyRepository } from './infrastructure/repositories/loyalty.repository';
 import { SifenRepository } from './infrastructure/repositories/sifen.repository';
 
 import { AuthMiddleware } from './presentation/middlewares/auth.middleware';
@@ -68,6 +70,8 @@ import { AuthMiddleware } from './presentation/middlewares/auth.middleware';
     SubscriptionController,
     CatalogController,
     PublicCatalogController,
+    LoyaltyController,
+    PublicLoyaltyController,
     SifenController,
   ],
   providers: [
@@ -100,6 +104,7 @@ import { AuthMiddleware } from './presentation/middlewares/auth.middleware';
     { provide: 'ISubscriptionRepository', useClass: InMemorySubscriptionRepository },
     { provide: 'IPaymentReportRepository', useClass: InMemoryPaymentReportRepository },
     { provide: 'ICatalogRepository', useClass: CatalogRepository },
+    { provide: 'ILoyaltyRepository', useClass: LoyaltyRepository },
     { provide: 'ISifenRepository', useClass: SifenRepository },
     // Concrete classes bindings
     InMemoryUserRepository,
@@ -112,6 +117,7 @@ import { AuthMiddleware } from './presentation/middlewares/auth.middleware';
     InMemorySubscriptionRepository,
     InMemoryPaymentReportRepository,
     CatalogRepository,
+    LoyaltyRepository,
     SifenRepository,
   ],
 })
