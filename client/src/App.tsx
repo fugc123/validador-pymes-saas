@@ -8,6 +8,7 @@ import { PublicRegisterScreen } from './portals/onboarding/PublicRegisterScreen'
 import { LandingPage } from './portals/landing/LandingPage';
 import { BranchSelectorModal } from './components/BranchSelectorModal';
 import { PublicCatalogView } from './portals/catalog/PublicCatalogView';
+import { PublicLoyaltyCardView } from './portals/loyalty/PublicLoyaltyCardView';
 
 function resolvePublicCatalogSlug(): string | null {
   if (typeof window === 'undefined') return null;
@@ -24,10 +25,26 @@ function resolvePublicCatalogSlug(): string | null {
   return null;
 }
 
+function resolvePublicLoyaltyToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  const path = window.location.pathname || '';
+  const match = path.match(/^\/fidelidad\/([a-zA-Z0-9-_]+)/);
+  if (match && match[1]) {
+    return match[1];
+  }
+  return null;
+}
+
 export const App: React.FC = () => {
   const { token, user, activeTenant, isSelectingTenant, closeTenantSelector } = useAuth();
   const [view, setView] = useState<'landing' | 'auth' | 'register'>('landing');
   const publicCatalogSlug = useMemo(() => resolvePublicCatalogSlug(), []);
+  const publicLoyaltyToken = useMemo(() => resolvePublicLoyaltyToken(), []);
+
+  // Public Loyalty Card (/fidelidad/:token)
+  if (publicLoyaltyToken) {
+    return <PublicLoyaltyCardView token={publicLoyaltyToken} />;
+  }
 
   // Public Storefront Catalog (/catalogo/:slug or ?catalogo=:slug)
   if (publicCatalogSlug) {
