@@ -181,6 +181,9 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ slug, onBa
         }
         const json = await res.json();
         setData(json);
+        if (json?.merchantName) {
+          document.title = `${json.merchantName} — Catálogo | CajaSegura`;
+        }
       } catch (err: any) {
         setError(err.message || 'Error al cargar el catálogo.');
       } finally {

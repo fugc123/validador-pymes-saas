@@ -43,6 +43,10 @@ export const PublicLoyaltyCardView: React.FC<{ token: string }> = ({ token }) =>
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const robotsMeta = document.querySelector('meta[name="robots"]');
+    if (robotsMeta) {
+      robotsMeta.setAttribute('content', 'noindex, nofollow');
+    }
     let cancelled = false;
     const load = async () => {
       setLoading(true);
@@ -53,7 +57,12 @@ export const PublicLoyaltyCardView: React.FC<{ token: string }> = ({ token }) =>
           throw new Error('No encontramos esta tarjeta de fidelidad.');
         }
         const json = await res.json();
-        if (!cancelled) setData(json);
+        if (!cancelled) {
+          setData(json);
+          if (json?.merchantName) {
+            document.title = `Tarjeta de Fidelidad — ${json.merchantName} | CajaSegura`;
+          }
+        }
       } catch (err: any) {
         if (!cancelled) setError(err.message || 'Error al cargar la tarjeta.');
       } finally {

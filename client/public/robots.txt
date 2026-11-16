@@ -3,6 +3,7 @@ User-agent: *
 Allow: /
 Disallow: /api/
 Disallow: /portals/
+Disallow: /fidelidad/
 
 # Crawl-delay for polite crawling
 Crawl-delay: 1
