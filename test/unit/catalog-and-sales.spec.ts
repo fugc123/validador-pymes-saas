@@ -313,6 +313,16 @@ describe('Catalog, Inventory, Time Discounts & POS Sales (T1 & T2)', () => {
   });
 
   it('supports hourly service bookings with day-of-week and slot conflict validation', async () => {
+    const nextWeekdayIso = (targetDay: number): string => {
+      const d = new Date(Date.now() + 24 * 3600 * 1000);
+      while (d.getUTCDay() !== targetDay) {
+        d.setUTCDate(d.getUTCDate() + 1);
+      }
+      return d.toISOString().slice(0, 10);
+    };
+    const nextMonday = nextWeekdayIso(1);
+    const nextSunday = nextWeekdayIso(0);
+
     const haircut = await catalogRepo.createItem({
       tenantId: 'barberia-demo',
       itemType: 'service',
@@ -325,11 +335,10 @@ describe('Catalog, Inventory, Time Discounts & POS Sales (T1 & T2)', () => {
       bookingMaxConcurrent: 1,
     });
 
-    // 2026-11-16 is a Monday (day 1)
     const booking = await catalogRepo.createBooking({
       tenantId: 'barberia-demo',
       itemId: haircut.id,
-      startDate: '2026-11-16',
+      startDate: nextMonday,
       timeSlot: '09:00',
       customerName: 'Juan Pérez',
       customerPhone: '0981123456',
@@ -342,19 +351,19 @@ describe('Catalog, Inventory, Time Discounts & POS Sales (T1 & T2)', () => {
       catalogRepo.createBooking({
         tenantId: 'barberia-demo',
         itemId: haircut.id,
-        startDate: '2026-11-16',
+        startDate: nextMonday,
         timeSlot: '09:00',
         customerName: 'Pedro',
         customerPhone: '0982000111',
       }),
     ).rejects.toThrow(/already fully booked/i);
 
-    // 2026-11-15 is a Sunday (day 0, not in Mon-Fri)
+    // Sunday (day 0, not in Mon-Fri) should reject
     await expect(
       catalogRepo.createBooking({
         tenantId: 'barberia-demo',
         itemId: haircut.id,
-        startDate: '2026-11-15',
+        startDate: nextSunday,
         timeSlot: '09:00',
         customerName: 'Ana',
         customerPhone: '0983000222',
@@ -363,6 +372,13 @@ describe('Catalog, Inventory, Time Discounts & POS Sales (T1 & T2)', () => {
   });
 
   it('supports multi-day hotel bookings and enforces capacity & tenant isolation', async () => {
+    const addDays = (days: number): string =>
+      new Date(Date.now() + days * 24 * 3600 * 1000).toISOString().slice(0, 10);
+    const d1 = addDays(4);
+    const d2 = addDays(5);
+    const d3 = addDays(6);
+    const d4 = addDays(7);
+
     const room = await catalogRepo.createItem({
       tenantId: 'hotel-asuncion',
       itemType: 'service',
@@ -377,35 +393,35 @@ describe('Catalog, Inventory, Time Discounts & POS Sales (T1 & T2)', () => {
     const stay = await catalogRepo.createBooking({
       tenantId: 'hotel-asuncion',
       itemId: room.id,
-      startDate: '2026-11-20',
-      endDate: '2026-11-22', // nights 20 and 21
+      startDate: d1,
+      endDate: d3, // nights d1 and d2
       customerName: 'María Gómez',
       customerPhone: '0971555666',
     });
     expect(stay.bookingMode).toBe('days');
 
-    // Overlapping night 21 -> rejected
+    // Overlapping night d2 -> rejected
     await expect(
       catalogRepo.createBooking({
         tenantId: 'hotel-asuncion',
         itemId: room.id,
-        startDate: '2026-11-21',
-        endDate: '2026-11-23',
+        startDate: d2,
+        endDate: d4,
         customerName: 'Carlos',
         customerPhone: '0971000999',
       }),
     ).rejects.toThrow(/no availability/i);
 
-    // Check-in on checkout date (2026-11-22) -> allowed
+    // Check-in on checkout date (d3) -> allowed
     const nextStay = await catalogRepo.createBooking({
       tenantId: 'hotel-asuncion',
       itemId: room.id,
-      startDate: '2026-11-22',
-      endDate: '2026-11-23',
+      startDate: d3,
+      endDate: d4,
       customerName: 'Lucía',
       customerPhone: '0985111222',
     });
-    expect(nextStay.startDate).toBe('2026-11-22');
+    expect(nextStay.startDate).toBe(d3);
 
     // Tenant isolation: another tenant cannot see or update hotel-asuncion's bookings
     expect(await catalogRepo.listBookingsByTenant('otro-comercio')).toHaveLength(0);
