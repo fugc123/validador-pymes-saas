@@ -20,3 +20,6 @@ cloudflared.exe
 
 # Local AI runtime state
 .atl/
+implementation_plan.md
+walkthrough.md
+pipeline.md
