@@ -703,21 +703,25 @@ export class SifenRepository implements ISifenRepository {
       config.factufyClientSecret &&
       this.factufyAdapter
     ) {
-      const res = await this.factufyAdapter.consultRuc(
-        {
-          clientId: config.factufyClientId,
-          clientSecret: config.factufyClientSecret,
-          branchCode: config.factufyBranchCode,
-          posCode: config.factufyPosCode,
-        },
-        cleanRuc,
-      );
-      return {
-        ruc: res.ruc,
-        dv: res.dv,
-        razonSocial: res.razonSocial,
-        provider: 'factufy',
-      };
+      try {
+        const res = await this.factufyAdapter.consultRuc(
+          {
+            clientId: config.factufyClientId,
+            clientSecret: config.factufyClientSecret,
+            branchCode: config.factufyBranchCode,
+            posCode: config.factufyPosCode,
+          },
+          cleanRuc,
+        );
+        return {
+          ruc: res.ruc,
+          dv: res.dv,
+          razonSocial: res.razonSocial,
+          provider: 'factufy',
+        };
+      } catch {
+        // Fallback cleanly to local Modulo-11 DV calculation on transient Factufy/DNIT upstream failure
+      }
     }
 
     return {

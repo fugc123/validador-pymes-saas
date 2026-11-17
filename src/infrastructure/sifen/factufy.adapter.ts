@@ -181,13 +181,45 @@ export class FactufyAdapter {
     }
 
     const payload = data?.data || data;
-    const cdc = payload?.cdc || payload?.CDC || null;
+    let cdc: string | null = payload?.cdc || payload?.CDC || null;
     const jobId = payload?.jobId || payload?.job_id || payload?.id || null;
+    let status: FactufyEmitResult['status'] = cdc ? 'APPROVED' : 'GENERATED';
+    let message: string = data?.message || 'Documento enviado a SIFEN vía Factufy correctamente.';
+
+    if ((!cdc || typeof cdc !== 'string' || cdc.length !== 44) && jobId) {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        await new Promise((r) => setTimeout(r, 500));
+        try {
+          const jobRes = await fetch(`${baseUrl}/invoices/job/${encodeURIComponent(String(jobId))}`, {
+            method: 'GET',
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!jobRes.ok) continue;
+          const jobData: any = await jobRes.json().catch(() => ({}));
+          const jobCdc = jobData?.cdc || jobData?.responses?.[0]?.cdc;
+          if (typeof jobCdc === 'string' && jobCdc.length === 44) {
+            cdc = jobCdc;
+            if (jobData?.responses?.[0]?.aprobado) {
+              status = 'APPROVED';
+              message = jobData.responses[0].mensajeRespuesta || message;
+            }
+            break;
+          }
+          if (jobData?.status === 'completed' || jobData?.status === 'failed') {
+            break;
+          }
+        } catch {
+          // Non-blocking: return provisional status if polling fails or times out
+          break;
+        }
+      }
+    }
+
     return {
       cdc: typeof cdc === 'string' && cdc.length === 44 ? cdc : null,
       jobId: jobId ? String(jobId) : null,
-      status: cdc ? 'APPROVED' : 'GENERATED',
-      message: data?.message || 'Documento enviado a SIFEN vía Factufy correctamente.',
+      status,
+      message,
       raw: data,
     };
   }
