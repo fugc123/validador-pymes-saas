@@ -6,19 +6,23 @@ import {
   HttpCode,
   HttpStatus,
   Inject,
+  Optional,
   Param,
   Post,
   Put,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { Roles } from '../decorators/roles.decorator';
 import { RolesGuard } from '../guards/roles.guard';
 import { IMerchantRepository } from '../../core/application/ports/auth.ports';
+import { FactufyAdapter } from '../../infrastructure/sifen/factufy.adapter';
 import {
   calculateParaguayDv,
   EmitSifenInvoiceInput,
   ISifenRepository,
+  SifenConfig,
   SifenInvoiceItemInput,
   UpsertSifenConfigInput,
 } from '../../core/application/ports/sifen.ports';
@@ -48,7 +52,19 @@ export class SifenController {
     private readonly sifenRepo: ISifenRepository,
     @Inject('IMerchantRepository')
     private readonly merchantRepo: IMerchantRepository,
+    @Optional()
+    private readonly factufyAdapter?: FactufyAdapter,
   ) {}
+
+  private sanitizeConfig(config: SifenConfig | null) {
+    if (!config) return null;
+    return {
+      ...config,
+      certificadoBase64: null,
+      certificadoPassword: null,
+      factufyClientSecret: config.factufyClientSecret ? '********' : null,
+    };
+  }
 
   @Get('superadmin/configs')
   @Roles('SUPER_ADMIN')
@@ -100,6 +116,9 @@ export class SifenController {
       actividadEconomicaDesc: 'COMERCIO AL POR MENOR EN COMERCIOS NO ESPECIALIZADOS',
       cscId: '0001',
       csc: 'ABCD0000000000000000000000000000',
+      provider: 'local_mock',
+      factufyBranchCode: '001',
+      factufyPosCode: '001',
     };
 
     return {
@@ -109,13 +128,7 @@ export class SifenController {
         merchantName: businessDisplayName,
         merchantSlug: merchant?.slug || tenantId,
         isLifetime: true,
-        config: config
-          ? {
-              ...config,
-              certificadoBase64: null,
-              certificadoPassword: null,
-            }
-          : null,
+        config: this.sanitizeConfig(config),
         autocompleteTemplate,
         invoices,
       },
@@ -137,11 +150,7 @@ export class SifenController {
     return {
       status: 'ok',
       message: 'Configuración SIFEN guardada exitosamente para el comercio gratuito.',
-      data: {
-        ...saved,
-        certificadoBase64: null,
-        certificadoPassword: null,
-      },
+      data: this.sanitizeConfig(saved),
     };
   }
 
@@ -169,13 +178,7 @@ export class SifenController {
       message: invoice.responseMessage,
       data: {
         invoice,
-        config: updatedConfig
-          ? {
-              ...updatedConfig,
-              certificadoBase64: null,
-              certificadoPassword: null,
-            }
-          : null,
+        config: this.sanitizeConfig(updatedConfig),
       },
     };
   }
@@ -253,5 +256,50 @@ export class SifenController {
       message: 'Factura Electrónica SIFEN generada correctamente.',
       data: invoice,
     };
+  }
+
+  @Get('cashier/ruc/:ruc')
+  @Roles('CASHIER', 'MERCHANT_OWNER', 'SUPER_ADMIN')
+  async consultRuc(@Req() req: any, @Param('ruc') ruc: string) {
+    const tenantId = req?.user?.tenantId;
+    if (!tenantId) {
+      throw new BadRequestException('No se encontró un comercio activo en la sesión.');
+    }
+    const result = await this.sifenRepo.consultRuc(tenantId, ruc);
+    return {
+      status: 'ok',
+      data: result,
+    };
+  }
+
+  @Get('cashier/invoices/:cdc/pdf')
+  @Roles('CASHIER', 'MERCHANT_OWNER', 'SUPER_ADMIN')
+  async downloadInvoicePdf(@Req() req: any, @Param('cdc') cdc: string, @Res() res: any) {
+    const tenantId = req?.user?.tenantId;
+    if (!tenantId) {
+      throw new BadRequestException('No se encontró un comercio activo en la sesión.');
+    }
+    const config = await this.sifenRepo.getConfigByTenant(tenantId);
+    if (
+      !config ||
+      config.provider !== 'factufy' ||
+      !config.factufyClientId ||
+      !config.factufyClientSecret ||
+      !this.factufyAdapter
+    ) {
+      throw new BadRequestException('Este comercio no tiene credenciales de Factufy configuradas para descargar PDF.');
+    }
+    const pdf = await this.factufyAdapter.downloadPdf(
+      {
+        clientId: config.factufyClientId,
+        clientSecret: config.factufyClientSecret,
+        branchCode: config.factufyBranchCode,
+        posCode: config.factufyPosCode,
+      },
+      cdc,
+    );
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="Factura-${cdc}.pdf"`);
+    return res.send(pdf);
   }
 }

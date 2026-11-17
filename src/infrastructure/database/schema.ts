@@ -170,6 +170,11 @@ export interface SifenConfigRow {
   csc: string;
   certificado_base64: string | null;
   certificado_password: string | null;
+  provider: 'local_mock' | 'factufy';
+  factufy_client_id: string | null;
+  factufy_client_secret: string | null;
+  factufy_branch_code: string;
+  factufy_pos_code: string;
   last_test_status: string | null;
   last_test_message: string | null;
   last_test_cdc: string | null;
@@ -231,6 +236,19 @@ export interface SifenInvoiceRow {
   qr_url: string;
   status: 'GENERATED' | 'TEST_OK' | 'APPROVED' | 'REJECTED';
   response_message: string;
+  external_id?: string | null;
+  factufy_job_id?: string | null;
+  created_at: Date;
+}
+
+export interface MerchantBranchRow {
+  id: string;
+  tenant_id: string;
+  name: string;
+  branch_code: string;
+  pos_code: string;
+  address: string | null;
+  is_active: boolean;
   created_at: Date;
 }
 
@@ -450,6 +468,11 @@ CREATE TABLE IF NOT EXISTS sifen_configs (
     csc VARCHAR(128) NOT NULL DEFAULT 'ABCD0000000000000000000000000000',
     certificado_base64 TEXT,
     certificado_password VARCHAR(255),
+    provider VARCHAR(20) NOT NULL DEFAULT 'local_mock',
+    factufy_client_id VARCHAR(120),
+    factufy_client_secret VARCHAR(255),
+    factufy_branch_code VARCHAR(10) NOT NULL DEFAULT '001',
+    factufy_pos_code VARCHAR(10) NOT NULL DEFAULT '001',
     last_test_status VARCHAR(50),
     last_test_message TEXT,
     last_test_cdc VARCHAR(64),
@@ -458,6 +481,12 @@ CREATE TABLE IF NOT EXISTS sifen_configs (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+ALTER TABLE sifen_configs ADD COLUMN IF NOT EXISTS provider VARCHAR(20) NOT NULL DEFAULT 'local_mock';
+ALTER TABLE sifen_configs ADD COLUMN IF NOT EXISTS factufy_client_id VARCHAR(120);
+ALTER TABLE sifen_configs ADD COLUMN IF NOT EXISTS factufy_client_secret VARCHAR(255);
+ALTER TABLE sifen_configs ADD COLUMN IF NOT EXISTS factufy_branch_code VARCHAR(10) NOT NULL DEFAULT '001';
+ALTER TABLE sifen_configs ADD COLUMN IF NOT EXISTS factufy_pos_code VARCHAR(10) NOT NULL DEFAULT '001';
 
 -- SIFEN Emitted Electronic Invoices (DE / KuDE / CDC)
 CREATE TABLE IF NOT EXISTS sifen_invoices (
@@ -478,9 +507,27 @@ CREATE TABLE IF NOT EXISTS sifen_invoices (
     qr_url TEXT NOT NULL,
     status VARCHAR(30) NOT NULL DEFAULT 'GENERATED',
     response_message TEXT NOT NULL,
+    external_id VARCHAR(100),
+    factufy_job_id VARCHAR(100),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_sifen_invoices_tenant ON sifen_invoices(tenant_id, created_at DESC);
+
+ALTER TABLE sifen_invoices ADD COLUMN IF NOT EXISTS external_id VARCHAR(100);
+ALTER TABLE sifen_invoices ADD COLUMN IF NOT EXISTS factufy_job_id VARCHAR(100);
+
+-- Merchant Branches Table (Up to 5 free per store, +Gs. 50.000/month per extra branch)
+CREATE TABLE IF NOT EXISTS merchant_branches (
+    id VARCHAR(100) PRIMARY KEY,
+    tenant_id VARCHAR(100) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    branch_code VARCHAR(10) NOT NULL DEFAULT '001',
+    pos_code VARCHAR(10) NOT NULL DEFAULT '001',
+    address TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_merchant_branches_tenant ON merchant_branches(tenant_id, is_active);
 
 -- Loyalty Program Configuration per Tenant (Rondafy-style digital stamp/visit cards)
 CREATE TABLE IF NOT EXISTS loyalty_programs (

@@ -18,12 +18,15 @@ import {
   FreeMerchantSifenSummary,
   generateParaguayCdc,
   ISifenRepository,
+  RucConsultResult,
   SifenConfig,
   SifenContribuyenteType,
   SifenEnvironment,
   SifenInvoice,
+  SifenProvider,
   UpsertSifenConfigInput,
 } from '../../core/application/ports/sifen.ports';
+import { FactufyAdapter } from '../sifen/factufy.adapter';
 
 @Injectable()
 export class SifenRepository implements ISifenRepository {
@@ -38,6 +41,8 @@ export class SifenRepository implements ISifenRepository {
     @Optional()
     @Inject('IMerchantRepository')
     private readonly merchantRepo?: IMerchantRepository,
+    @Optional()
+    private readonly factufyAdapter?: FactufyAdapter,
   ) {}
 
   private isDbActive(): boolean {
@@ -77,6 +82,12 @@ export class SifenRepository implements ISifenRepository {
       certificadoBase64: row.certificado_base64,
       certificadoPassword: row.certificado_password,
       hasCertificate: Boolean(row.certificado_base64 && row.certificado_base64.trim().length > 0),
+      provider: row.provider === 'factufy' ? 'factufy' : 'local_mock',
+      factufyClientId: row.factufy_client_id || null,
+      factufyClientSecret: row.factufy_client_secret || null,
+      hasFactufyCredentials: Boolean(row.factufy_client_id && row.factufy_client_secret),
+      factufyBranchCode: row.factufy_branch_code || row.establecimiento || '001',
+      factufyPosCode: row.factufy_pos_code || row.punto_expedicion || '001',
       lastTestStatus: row.last_test_status,
       lastTestMessage: row.last_test_message,
       lastTestCdc: row.last_test_cdc,
@@ -106,6 +117,8 @@ export class SifenRepository implements ISifenRepository {
       qrUrl: row.qr_url,
       status: row.status,
       responseMessage: row.response_message,
+      externalId: row.external_id ?? null,
+      factufyJobId: row.factufy_job_id ?? null,
       createdAt: new Date(row.created_at),
     };
   }
@@ -179,6 +192,10 @@ export class SifenRepository implements ISifenRepository {
         hasConfig: Boolean(config),
         enabled: Boolean(config?.enabled),
         environment: config?.environment || 'test',
+        provider: config?.provider || 'local_mock',
+        hasFactufyCredentials: Boolean(config?.hasFactufyCredentials),
+        factufyBranchCode: config?.factufyBranchCode || config?.establecimiento || '001',
+        factufyPosCode: config?.factufyPosCode || config?.puntoExpedicion || '001',
         ruc: config?.ruc || null,
         dv: config?.dv || null,
         razonSocial: config?.razonSocial || null,
@@ -255,6 +272,32 @@ export class SifenRepository implements ISifenRepository {
         ? input.certificadoPassword
         : existing?.certificadoPassword ?? null;
 
+    const provider: SifenProvider =
+      input.provider === 'factufy'
+        ? 'factufy'
+        : input.provider === 'local_mock'
+          ? 'local_mock'
+          : existing?.provider || 'local_mock';
+    const factufyClientId =
+      input.factufyClientId !== undefined
+        ? input.factufyClientId
+          ? input.factufyClientId.trim()
+          : null
+        : existing?.factufyClientId ?? null;
+    const rawSecret = input.factufyClientSecret;
+    const factufyClientSecret =
+      rawSecret !== undefined && rawSecret !== null && rawSecret.trim() !== '' && rawSecret !== '********'
+        ? rawSecret.trim()
+        : existing?.factufyClientSecret ?? null;
+    const factufyBranchCode = (input.factufyBranchCode || existing?.factufyBranchCode || establecimiento)
+      .replace(/\D/g, '')
+      .padStart(3, '0')
+      .slice(-3);
+    const factufyPosCode = (input.factufyPosCode || existing?.factufyPosCode || puntoExpedicion)
+      .replace(/\D/g, '')
+      .padStart(3, '0')
+      .slice(-3);
+
     const config: SifenConfig = {
       tenantId,
       enabled: input.enabled !== undefined ? Boolean(input.enabled) : existing?.enabled ?? true,
@@ -294,6 +337,12 @@ export class SifenRepository implements ISifenRepository {
       certificadoBase64: certBase64,
       certificadoPassword: certPassword,
       hasCertificate: Boolean(certBase64 && certBase64.trim().length > 0),
+      provider,
+      factufyClientId,
+      factufyClientSecret,
+      hasFactufyCredentials: Boolean(factufyClientId && factufyClientSecret),
+      factufyBranchCode,
+      factufyPosCode,
       lastTestStatus: existing?.lastTestStatus ?? null,
       lastTestMessage: existing?.lastTestMessage ?? null,
       lastTestCdc: existing?.lastTestCdc ?? null,
@@ -312,6 +361,7 @@ export class SifenRepository implements ISifenRepository {
           departamento, departamento_desc, distrito, distrito_desc, ciudad, ciudad_desc,
           telefono, email, actividad_economica_codigo, actividad_economica_desc,
           csc_id, csc, certificado_base64, certificado_password,
+          provider, factufy_client_id, factufy_client_secret, factufy_branch_code, factufy_pos_code,
           last_test_status, last_test_message, last_test_cdc, last_tested_at,
           updated_by_user_id, created_at, updated_at
         ) VALUES (
@@ -321,8 +371,9 @@ export class SifenRepository implements ISifenRepository {
           $16, $17, $18, $19, $20, $21,
           $22, $23, $24, $25,
           $26, $27, $28, $29,
-          $30, $31, $32, $33,
-          $34, $35, $36
+          $30, $31, $32, $33, $34,
+          $35, $36, $37, $38,
+          $39, $40, $41
         )
         ON CONFLICT (tenant_id) DO UPDATE SET
           enabled = EXCLUDED.enabled,
@@ -353,6 +404,11 @@ export class SifenRepository implements ISifenRepository {
           csc = EXCLUDED.csc,
           certificado_base64 = EXCLUDED.certificado_base64,
           certificado_password = EXCLUDED.certificado_password,
+          provider = EXCLUDED.provider,
+          factufy_client_id = EXCLUDED.factufy_client_id,
+          factufy_client_secret = EXCLUDED.factufy_client_secret,
+          factufy_branch_code = EXCLUDED.factufy_branch_code,
+          factufy_pos_code = EXCLUDED.factufy_pos_code,
           updated_by_user_id = EXCLUDED.updated_by_user_id,
           updated_at = EXCLUDED.updated_at`,
         [
@@ -385,6 +441,11 @@ export class SifenRepository implements ISifenRepository {
           config.csc,
           config.certificadoBase64,
           config.certificadoPassword,
+          config.provider,
+          config.factufyClientId,
+          config.factufyClientSecret,
+          config.factufyBranchCode,
+          config.factufyPosCode,
           config.lastTestStatus,
           config.lastTestMessage,
           config.lastTestCdc,
@@ -466,7 +527,8 @@ export class SifenRepository implements ISifenRepository {
     const totalAmount = input.totalAmount && input.totalAmount > 0 ? Math.round(input.totalAmount) : computedTotal;
 
     const now = new Date();
-    const cdc = generateParaguayCdc({
+    const externalId = `CS-${now.getTime().toString(36).toUpperCase()}-${nextSequential}`;
+    let cdc = generateParaguayCdc({
       tipoDocumento: '01',
       ruc: config.ruc,
       dv: config.dv,
@@ -490,10 +552,43 @@ export class SifenRepository implements ISifenRepository {
       emittedAt: now,
     });
 
-    const status = input.isTest ? 'TEST_OK' : 'GENERATED';
-    const responseMessage = input.isTest
+    let status: SifenInvoice['status'] = input.isTest ? 'TEST_OK' : 'GENERATED';
+    let responseMessage = input.isTest
       ? `Prueba SIFEN (${config.environment.toUpperCase()}) exitosa via consultame-sdk adapter. CDC de 44 dígitos validado (${cdc}).`
       : `Documento Electrónico DE generado (${numeroDocumento}) en ambiente ${config.environment.toUpperCase()}.`;
+    let factufyJobId: string | null = null;
+
+    if (
+      config.provider === 'factufy' &&
+      config.factufyClientId &&
+      config.factufyClientSecret &&
+      this.factufyAdapter
+    ) {
+      const factufyRes = await this.factufyAdapter.sendInvoice(
+        {
+          clientId: config.factufyClientId,
+          clientSecret: config.factufyClientSecret,
+          branchCode: config.factufyBranchCode,
+          posCode: config.factufyPosCode,
+        },
+        {
+          externalId,
+          fechaEmisionIso: now.toISOString().slice(0, 19),
+          receptorRuc: cleanReceptorRuc,
+          receptorDv,
+          receptorNombre,
+          condicionVenta,
+          totalAmount,
+          items,
+        },
+      );
+      if (factufyRes.cdc) {
+        cdc = factufyRes.cdc;
+      }
+      factufyJobId = factufyRes.jobId;
+      status = input.isTest ? 'TEST_OK' : factufyRes.status;
+      responseMessage = factufyRes.message;
+    }
 
     const invoice: SifenInvoice = {
       id: `sifen-inv-${randomUUID()}`,
@@ -513,6 +608,8 @@ export class SifenRepository implements ISifenRepository {
       qrUrl,
       status,
       responseMessage,
+      externalId,
+      factufyJobId,
       createdAt: now,
     };
 
@@ -521,11 +618,13 @@ export class SifenRepository implements ISifenRepository {
         `INSERT INTO sifen_invoices (
           id, tenant_id, sale_id, cdc, numero_documento, timbrado, environment,
           receptor_ruc, receptor_dv, receptor_nombre, condicion_venta,
-          total_amount, iva_10_amount, xml_payload, qr_url, status, response_message, created_at
+          total_amount, iva_10_amount, xml_payload, qr_url, status, response_message,
+          external_id, factufy_job_id, created_at
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7,
           $8, $9, $10, $11,
-          $12, $13, $14, $15, $16, $17, $18
+          $12, $13, $14, $15, $16, $17,
+          $18, $19, $20
         )`,
         [
           invoice.id,
@@ -545,6 +644,8 @@ export class SifenRepository implements ISifenRepository {
           invoice.qrUrl,
           invoice.status,
           invoice.responseMessage,
+          invoice.externalId || null,
+          invoice.factufyJobId || null,
           invoice.createdAt,
         ],
       );
@@ -587,5 +688,43 @@ export class SifenRepository implements ISifenRepository {
       .filter((inv) => inv.tenantId === tenantId)
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
       .slice(0, limit);
+  }
+
+  async consultRuc(tenantId: string, rawRuc: string): Promise<RucConsultResult> {
+    const cleanRuc = (rawRuc || '').split('-')[0].replace(/\D/g, '');
+    if (cleanRuc.length < 5) {
+      throw new BadRequestException('Ingresá un RUC válido (mínimo 5 dígitos).');
+    }
+
+    const config = await this.getConfigByTenant(tenantId);
+    if (
+      config?.provider === 'factufy' &&
+      config.factufyClientId &&
+      config.factufyClientSecret &&
+      this.factufyAdapter
+    ) {
+      const res = await this.factufyAdapter.consultRuc(
+        {
+          clientId: config.factufyClientId,
+          clientSecret: config.factufyClientSecret,
+          branchCode: config.factufyBranchCode,
+          posCode: config.factufyPosCode,
+        },
+        cleanRuc,
+      );
+      return {
+        ruc: res.ruc,
+        dv: res.dv,
+        razonSocial: res.razonSocial,
+        provider: 'factufy',
+      };
+    }
+
+    return {
+      ruc: cleanRuc,
+      dv: calculateParaguayDv(cleanRuc),
+      razonSocial: null,
+      provider: 'local_mock',
+    };
   }
 }

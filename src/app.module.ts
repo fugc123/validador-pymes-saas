@@ -45,6 +45,7 @@ import {
 import { CatalogRepository } from './infrastructure/repositories/catalog.repository';
 import { LoyaltyRepository } from './infrastructure/repositories/loyalty.repository';
 import { SifenRepository } from './infrastructure/repositories/sifen.repository';
+import { FactufyAdapter } from './infrastructure/sifen/factufy.adapter';
 
 import { AuthMiddleware } from './presentation/middlewares/auth.middleware';
 
@@ -119,6 +120,7 @@ import { AuthMiddleware } from './presentation/middlewares/auth.middleware';
     CatalogRepository,
     LoyaltyRepository,
     SifenRepository,
+    FactufyAdapter,
   ],
 })
 export class AppModule implements NestModule {

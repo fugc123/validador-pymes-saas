@@ -2,6 +2,7 @@ import * as crypto from 'crypto';
 
 export type SifenEnvironment = 'test' | 'prod';
 export type SifenContribuyenteType = 1 | 2; // 1 = Persona Física, 2 = Persona Jurídica
+export type SifenProvider = 'local_mock' | 'factufy';
 
 export interface SifenConfig {
   tenantId: string;
@@ -34,6 +35,12 @@ export interface SifenConfig {
   certificadoBase64: string | null;
   certificadoPassword: string | null;
   hasCertificate: boolean;
+  provider: SifenProvider;
+  factufyClientId: string | null;
+  factufyClientSecret: string | null;
+  hasFactufyCredentials: boolean;
+  factufyBranchCode: string;
+  factufyPosCode: string;
   lastTestStatus: string | null;
   lastTestMessage: string | null;
   lastTestCdc: string | null;
@@ -72,6 +79,11 @@ export interface UpsertSifenConfigInput {
   csc?: string;
   certificadoBase64?: string | null;
   certificadoPassword?: string | null;
+  provider?: SifenProvider;
+  factufyClientId?: string | null;
+  factufyClientSecret?: string | null;
+  factufyBranchCode?: string;
+  factufyPosCode?: string;
   updatedByUserId?: string | null;
 }
 
@@ -113,6 +125,8 @@ export interface SifenInvoice {
   qrUrl: string;
   status: 'GENERATED' | 'TEST_OK' | 'APPROVED' | 'REJECTED';
   responseMessage: string;
+  externalId?: string | null;
+  factufyJobId?: string | null;
   createdAt: Date;
 }
 
@@ -124,6 +138,10 @@ export interface FreeMerchantSifenSummary {
   hasConfig: boolean;
   enabled: boolean;
   environment: SifenEnvironment;
+  provider: SifenProvider;
+  hasFactufyCredentials: boolean;
+  factufyBranchCode: string;
+  factufyPosCode: string;
   ruc: string | null;
   dv: string | null;
   razonSocial: string | null;
@@ -136,6 +154,13 @@ export interface FreeMerchantSifenSummary {
   lastTestedAt: Date | null;
 }
 
+export interface RucConsultResult {
+  ruc: string;
+  dv: string;
+  razonSocial: string | null;
+  provider: SifenProvider;
+}
+
 export interface ISifenRepository {
   isEligibleFreeMerchant(tenantId: string): Promise<boolean>;
   assertEligibleFreeMerchant(tenantId: string): Promise<void>;
@@ -144,6 +169,7 @@ export interface ISifenRepository {
   upsertConfig(tenantId: string, input: UpsertSifenConfigInput): Promise<SifenConfig>;
   emitInvoice(input: EmitSifenInvoiceInput): Promise<SifenInvoice>;
   listInvoicesByTenant(tenantId: string, limit?: number): Promise<SifenInvoice[]>;
+  consultRuc(tenantId: string, ruc: string): Promise<RucConsultResult>;
 }
 
 /**
