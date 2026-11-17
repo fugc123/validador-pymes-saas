@@ -40,6 +40,11 @@ interface SifenConfigFormState {
   csc: string;
   certificadoBase64?: string | null;
   certificadoPassword?: string | null;
+  provider?: 'local_mock' | 'factufy';
+  factufyClientId?: string;
+  factufyClientSecret?: string;
+  factufyBranchCode?: string;
+  factufyPosCode?: string;
 }
 
 interface SifenInvoiceRecord {
@@ -112,6 +117,11 @@ const DEFAULT_FORM: SifenConfigFormState = {
   csc: 'ABCD0000000000000000000000000000',
   certificadoBase64: undefined,
   certificadoPassword: '',
+  provider: 'local_mock',
+  factufyClientId: '',
+  factufyClientSecret: '',
+  factufyBranchCode: '001',
+  factufyPosCode: '001',
 };
 
 export const SifenFreeMerchantModal: React.FC<Props> = ({
@@ -196,6 +206,11 @@ export const SifenFreeMerchantModal: React.FC<Props> = ({
           csc: data.config.csc || 'ABCD0000000000000000000000000000',
           certificadoBase64: undefined,
           certificadoPassword: '',
+          provider: data.config.provider === 'factufy' ? 'factufy' : 'local_mock',
+          factufyClientId: data.config.factufyClientId || '',
+          factufyClientSecret: data.config.factufyClientSecret || '',
+          factufyBranchCode: data.config.factufyBranchCode || '001',
+          factufyPosCode: data.config.factufyPosCode || '001',
         });
       } else if (data.autocompleteTemplate) {
         const tpl = data.autocompleteTemplate;
@@ -538,6 +553,80 @@ export const SifenFreeMerchantModal: React.FC<Props> = ({
                   <option value={1}>1 — Persona Física (Unipersonal)</option>
                 </select>
               </div>
+            </div>
+
+            {/* Proveedor Factufy API (Variables por Cliente) */}
+            <div className="bg-[#0B0F19] border border-emerald-500/30 rounded-2xl p-4 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400">
+                    Proveedor de Emisión Electrónica
+                  </h4>
+                  <p className="text-[11px] text-gray-400">
+                    Elegí Simulador Local o conectá las credenciales variables de Factufy (`api.factufy.com.py`) para este cliente.
+                  </p>
+                </div>
+                <select
+                  value={form.provider || 'local_mock'}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      provider: e.target.value === 'factufy' ? 'factufy' : 'local_mock',
+                    })
+                  }
+                  className="bg-[#151D2F] border border-[#24324D] rounded-xl px-3 py-2 text-xs text-white font-bold"
+                >
+                  <option value="local_mock">Simulador Local SIFEN</option>
+                  <option value="factufy">Factufy API (api.factufy.com.py)</option>
+                </select>
+              </div>
+
+              {form.provider === 'factufy' && (
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-2 border-t border-[#1E293B]">
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] text-gray-400 mb-1">Factufy clientId *</label>
+                    <input
+                      type="text"
+                      value={form.factufyClientId || ''}
+                      onChange={(e) => setForm({ ...form, factufyClientId: e.target.value })}
+                      placeholder="cli_..."
+                      className="w-full bg-[#151D2F] border border-[#24324D] rounded-xl px-3 py-2 text-xs font-mono text-white"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] text-gray-400 mb-1">Factufy clientSecret *</label>
+                    <input
+                      type="password"
+                      value={form.factufyClientSecret || ''}
+                      onChange={(e) => setForm({ ...form, factufyClientSecret: e.target.value })}
+                      placeholder="Dejar ******** para conservar actual"
+                      className="w-full bg-[#151D2F] border border-[#24324D] rounded-xl px-3 py-2 text-xs font-mono text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-gray-400 mb-1">branchCode</label>
+                    <input
+                      type="text"
+                      maxLength={3}
+                      value={form.factufyBranchCode || '001'}
+                      onChange={(e) => setForm({ ...form, factufyBranchCode: e.target.value })}
+                      placeholder="001"
+                      className="w-full bg-[#151D2F] border border-[#24324D] rounded-xl px-3 py-2 text-xs font-mono text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-gray-400 mb-1">posCode</label>
+                    <input
+                      type="text"
+                      maxLength={3}
+                      value={form.factufyPosCode || '001'}
+                      onChange={(e) => setForm({ ...form, factufyPosCode: e.target.value })}
+                      placeholder="001"
+                      className="w-full bg-[#151D2F] border border-[#24324D] rounded-xl px-3 py-2 text-xs font-mono text-white"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Row 2: Datos del Contribuyente Emisor */}

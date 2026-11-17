@@ -121,6 +121,7 @@ export const FastPosScreen: React.FC = () => {
   const [sifenEnabled, setSifenEnabled] = useState(false);
   const [sifenEmitInvoice, setSifenEmitInvoice] = useState(true);
   const [sifenReceptorRuc, setSifenReceptorRuc] = useState('');
+  const [lookingUpRuc, setLookingUpRuc] = useState(false);
 
   // Recent sales history
   const [recentSales, setRecentSales] = useState<CashierSaleRecord[]>([]);
@@ -266,6 +267,31 @@ export const FastPosScreen: React.FC = () => {
         })
         .filter(Boolean) as CartLine[],
     );
+  };
+
+  const handleLookupRuc = async () => {
+    const clean = (customerRuc || '').split('-')[0].replace(/\D/g, '');
+    if (!token || clean.length < 5) return;
+    setLookingUpRuc(true);
+    try {
+      const res = await fetch(`/api/v1/sifen/cashier/ruc/${encodeURIComponent(clean)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const r = json?.data;
+        if (r) {
+          const fullRuc = `${r.ruc}-${r.dv}`;
+          setCustomerRuc(fullRuc);
+          setSifenReceptorRuc(fullRuc);
+          if (r.razonSocial) {
+            setCustomerName(r.razonSocial);
+          }
+        }
+      }
+    } finally {
+      setLookingUpRuc(false);
+    }
   };
 
   const resetCheckoutForm = () => {
@@ -1049,7 +1075,7 @@ export const FastPosScreen: React.FC = () => {
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                        <div>
+                        <div className="flex items-center gap-1.5">
                           <input
                             type="text"
                             value={customerRuc}
@@ -1060,6 +1086,17 @@ export const FastPosScreen: React.FC = () => {
                             placeholder="RUC o Cédula (Ej: 80012345-6)..."
                             className="w-full bg-[#0B0F19] border border-[#24324D] focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs font-mono text-white placeholder-gray-500 focus:outline-none transition-colors"
                           />
+                          {sifenEnabled && (
+                            <button
+                              type="button"
+                              onClick={handleLookupRuc}
+                              disabled={lookingUpRuc}
+                              className="px-2.5 py-2.5 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 rounded-xl text-[10px] font-bold shrink-0"
+                              title="Consultar RUC en SIFEN / Factufy"
+                            >
+                              {lookingUpRuc ? '...' : 'Buscar RUC'}
+                            </button>
+                          )}
                         </div>
                         <div>
                           <input

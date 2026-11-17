@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { requestWebhookSecret, sendTestWebhook } from '../../context/webhook-requests';
 import { buildPersonalizedGasScript } from './personalized-gas-script';
 import { OwnerCatalogAndSalesPanel } from './OwnerCatalogAndSalesPanel';
-import { Package, Receipt } from 'lucide-react';
+import { Package, Receipt, Store, Plus } from 'lucide-react';
 import {
   TrendingUp,
   Users,
@@ -70,6 +70,38 @@ interface SubscriptionStatus {
   status: string;
   daysRemaining: number;
   isLifetime?: boolean;
+  branchesCount?: number;
+  freeBranchesLimit?: number;
+  extraBranchesCount?: number;
+  extraBranchesPyg?: number;
+  monthlyAmountPyg?: number;
+}
+
+interface BranchPricingDto {
+  basePyg: number;
+  freeBranchesLimit: number;
+  activeBranchesCount: number;
+  extraBranchesCount: number;
+  extraBranchesPyg: number;
+  totalMonthlyPyg: number;
+}
+
+interface OwnerStoreSummary {
+  tenantId: string;
+  merchantName: string;
+  slug: string;
+  status: string;
+  branchesCount: number;
+  pricing: BranchPricingDto;
+}
+
+interface MerchantBranchDto {
+  id: string;
+  tenantId: string;
+  name: string;
+  branchCode: string;
+  posCode: string;
+  address: string | null;
 }
 
 export const OwnerDashboard: React.FC = () => {
@@ -141,6 +173,21 @@ export const OwnerDashboard: React.FC = () => {
   // Audit states
   const [auditSearch, setAuditSearch] = useState('');
   const [auditStatusFilter, setAuditStatusFilter] = useState<'ALL' | 'PENDING' | 'CLAIMED'>('ALL');
+
+  // Multi-store & Branches states
+  const [ownerStores, setOwnerStores] = useState<OwnerStoreSummary[]>([]);
+  const [branches, setBranches] = useState<MerchantBranchDto[]>([]);
+  const [branchPricing, setBranchPricing] = useState<BranchPricingDto | null>(null);
+  const [showNewStoreModal, setShowNewStoreModal] = useState(false);
+  const [newStoreName, setNewStoreName] = useState('');
+  const [copyFactufyFromCurrent, setCopyFactufyFromCurrent] = useState(true);
+  const [creatingStore, setCreatingStore] = useState(false);
+  const [newStoreError, setNewStoreError] = useState<string | null>(null);
+  const [newBranchName, setNewBranchName] = useState('');
+  const [newBranchCode, setNewBranchCode] = useState('');
+  const [newBranchPosCode, setNewBranchPosCode] = useState('001');
+  const [creatingBranch, setCreatingBranch] = useState(false);
+  const [branchError, setBranchError] = useState<string | null>(null);
 
   const tenantSlug = activeTenant?.tenantId || 'comercio';
   const activeWebhookSecret =
@@ -271,11 +318,128 @@ export const OwnerDashboard: React.FC = () => {
     }
   };
 
+  const fetchStores = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await fetch('/api/v1/merchant/stores', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setOwnerStores(data.stores || []);
+      }
+    } catch {
+      // ignore
+    }
+  }, [token]);
+
+  const fetchBranches = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await fetch('/api/v1/merchant/branches', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setBranches(data.branches || []);
+        if (data.pricing) setBranchPricing(data.pricing);
+      }
+    } catch {
+      // ignore
+    }
+  }, [token]);
+
   const fetchAllData = useCallback(() => {
     fetchMetrics();
     fetchSub();
     fetchCashiers();
-  }, [fetchMetrics, fetchSub, fetchCashiers]);
+    fetchStores();
+    fetchBranches();
+  }, [fetchMetrics, fetchSub, fetchCashiers, fetchStores, fetchBranches]);
+
+  const handleCreateStore = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !newStoreName.trim()) return;
+    setCreatingStore(true);
+    setNewStoreError(null);
+    try {
+      const res = await fetch('/api/v1/merchant/stores', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: newStoreName.trim(),
+          copyFactufyFromCurrent,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || 'No se pudo crear el comercio.');
+      }
+      setShowNewStoreModal(false);
+      setNewStoreName('');
+      await fetchStores();
+      if (data.tenantId) {
+        await switchTenant(data.tenantId, 'MERCHANT_OWNER');
+      }
+    } catch (err: any) {
+      setNewStoreError(err.message || 'Error al crear el comercio.');
+    } finally {
+      setCreatingStore(false);
+    }
+  };
+
+  const handleCreateBranch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !newBranchName.trim()) return;
+    setCreatingBranch(true);
+    setBranchError(null);
+    try {
+      const res = await fetch('/api/v1/merchant/branches', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: newBranchName.trim(),
+          branchCode: newBranchCode.trim() || undefined,
+          posCode: newBranchPosCode.trim() || '001',
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || 'No se pudo crear la sucursal.');
+      }
+      setNewBranchName('');
+      setNewBranchCode('');
+      setBranches(data.branches || []);
+      if (data.pricing) setBranchPricing(data.pricing);
+      await fetchSub();
+      await fetchStores();
+    } catch (err: any) {
+      setBranchError(err.message || 'Error al agregar sucursal.');
+    } finally {
+      setCreatingBranch(false);
+    }
+  };
+
+  const handleDeleteBranch = async (branchId: string) => {
+    if (!token) return;
+    const res = await fetch(`/api/v1/merchant/branches/${branchId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setBranches(data.branches || []);
+      if (data.pricing) setBranchPricing(data.pricing);
+      await fetchSub();
+      await fetchStores();
+    }
+  };
 
   useEffect(() => {
     fetchAllData();
@@ -639,6 +803,67 @@ Estado: Transferencia acreditada en cuenta`;
 
             {/* Main Content */}
       <main className="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+        {/* Multi-Store Owner Tabs Bar */}
+        <div className="bg-[#151D2F] border border-[#24324D] rounded-2xl p-2.5 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {(ownerStores.length > 0
+              ? ownerStores
+              : [
+                  {
+                    tenantId: activeTenant?.tenantId || 'comercio',
+                    merchantName: activeTenant?.merchantName || 'Mi Comercio',
+                    slug: activeTenant?.tenantId || 'comercio',
+                    status: 'active',
+                    branchesCount: branches.length,
+                    pricing: branchPricing || {
+                      basePyg: 150000,
+                      freeBranchesLimit: 5,
+                      activeBranchesCount: branches.length,
+                      extraBranchesCount: 0,
+                      extraBranchesPyg: 0,
+                      totalMonthlyPyg: 150000,
+                    },
+                  },
+                ]
+            ).map((st) => {
+              const isSelected = st.tenantId === activeTenant?.tenantId;
+              return (
+                <button
+                  key={st.tenantId}
+                  type="button"
+                  onClick={() => {
+                    if (!isSelected) {
+                      switchTenant(st.tenantId, 'MERCHANT_OWNER');
+                    }
+                  }}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 border ${
+                    isSelected
+                      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/50 shadow-sm'
+                      : 'bg-[#0B0F19] text-gray-400 hover:text-white border-[#24324D]'
+                  }`}
+                >
+                  <Store className="w-3.5 h-3.5" />
+                  <span>{st.merchantName}</span>
+                  <span className="text-[10px] font-mono opacity-75">
+                    ({st.branchesCount} suc.)
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setNewStoreError(null);
+              setShowNewStoreModal(true);
+            }}
+            className="px-3.5 py-2 rounded-xl text-xs font-extrabold bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/40 flex items-center gap-1.5 transition-all"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>+ Nuevo Comercio (Gs. 150.000/mes)</span>
+          </button>
+        </div>
+
         {/* Owner Navigation Tabs */}
         <div className="flex flex-wrap items-center gap-2 bg-[#151D2F] border border-[#24324D] p-2 rounded-2xl">
           <button
@@ -721,8 +946,15 @@ Estado: Transferencia acreditada en cuenta`;
               <CreditCard className={`w-5 h-5 ${subscription?.isLifetime ? 'text-purple-400' : 'text-amber-400'}`} />
             </div>
             <div className="text-3xl font-mono font-extrabold text-white">
-              {subscription?.isLifetime ? 'Gs. 0' : 'Gs. 150.000'}
+              {subscription?.isLifetime
+                ? 'Gs. 0'
+                : `Gs. ${(subscription?.monthlyAmountPyg ?? branchPricing?.totalMonthlyPyg ?? 150000).toLocaleString('es-PY')}`}
             </div>
+            {(subscription?.extraBranchesCount || branchPricing?.extraBranchesCount || 0) > 0 && !subscription?.isLifetime && (
+              <div className="text-[11px] text-amber-300 font-mono mt-1">
+                Base Gs. 150.000 + {subscription?.extraBranchesCount ?? branchPricing?.extraBranchesCount} sucursal(es) extra × Gs. 50.000
+              </div>
+            )}
             <div className="text-xs mt-2 space-y-1">
               {subscription ? (
                 <>
@@ -746,7 +978,12 @@ Estado: Transferencia acreditada en cuenta`;
                       <div className="grid grid-cols-1 gap-1 text-[11px]">
                         <div>Alias: <span className="text-white font-mono font-bold">5644334</span></div>
                         <div>Titular: <span className="text-white font-bold">Franco Girala</span></div>
-                        <div>Monto Mensual: <span className="text-emerald-400 font-mono font-bold">Gs. 150.000</span></div>
+                        <div>
+                          Monto Mensual:{' '}
+                          <span className="text-emerald-400 font-mono font-bold">
+                            Gs. {(subscription?.monthlyAmountPyg ?? branchPricing?.totalMonthlyPyg ?? 150000).toLocaleString('es-PY')}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -1248,6 +1485,100 @@ Estado: Transferencia acreditada en cuenta`;
           )}
         </div>
 
+        {/* Sucursales del Comercio (5 gratis, +Gs. 50.000 desde la 6ª) */}
+        <div className="bg-[#151D2F] border border-[#24324D] rounded-2xl p-6 shadow-xl space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <div className="flex items-center gap-2">
+                <Store className="w-5 h-5 text-emerald-400" />
+                <h2 className="text-lg font-bold text-white">Sucursales de {activeTenant?.merchantName || 'este Comercio'}</h2>
+              </div>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Hasta <strong className="text-emerald-400">5 sucursales gratis</strong> incluidas en este comercio. Desde la 6ª sucursal: <strong className="text-amber-300">+Gs. 50.000/mes</strong> c/u.
+              </p>
+            </div>
+            <div className="text-xs font-mono px-3 py-1.5 rounded-xl bg-[#0B0F19] border border-[#24324D] text-gray-200">
+              Activas: <strong>{branches.length}</strong> / 5 gratis
+              {branches.length > 5 && (
+                <span className="text-amber-300 ml-2">
+                  (+Gs. {((branches.length - 5) * 50000).toLocaleString('es-PY')}/mes)
+                </span>
+              )}
+            </div>
+          </div>
+
+          <form onSubmit={handleCreateBranch} className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+            <input
+              type="text"
+              required
+              value={newBranchName}
+              onChange={(e) => setNewBranchName(e.target.value)}
+              placeholder="Nombre (Ej: Sucursal Centro)"
+              className="sm:col-span-2 bg-[#0B0F19] border border-[#24324D] rounded-xl px-3 py-2 text-xs text-white"
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="text"
+                maxLength={3}
+                value={newBranchCode}
+                onChange={(e) => setNewBranchCode(e.target.value)}
+                placeholder="Est. (001)"
+                className="bg-[#0B0F19] border border-[#24324D] rounded-xl px-3 py-2 text-xs font-mono text-white"
+              />
+              <input
+                type="text"
+                maxLength={3}
+                value={newBranchPosCode}
+                onChange={(e) => setNewBranchPosCode(e.target.value)}
+                placeholder="Pto (001)"
+                className="bg-[#0B0F19] border border-[#24324D] rounded-xl px-3 py-2 text-xs font-mono text-white"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={creatingBranch}
+              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-extrabold text-xs rounded-xl disabled:opacity-50"
+            >
+              {creatingBranch ? 'Agregando...' : '+ Agregar Sucursal'}
+            </button>
+          </form>
+
+          {branchError && (
+            <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-xl px-3 py-2">
+              {branchError}
+            </div>
+          )}
+
+          {branches.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+              {branches.map((br, idx) => (
+                <div
+                  key={br.id}
+                  className="bg-[#0B0F19] border border-[#24324D] rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-2"
+                >
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold text-white truncate">{br.name}</div>
+                    <div className="text-[11px] font-mono text-gray-400">
+                      Est: {br.branchCode} • Pto: {br.posCode}{' '}
+                      <span className={idx >= 5 ? 'text-amber-300' : 'text-emerald-400'}>
+                        {idx >= 5 ? '(+Gs. 50.000/mes)' : '(Gratis)'}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteBranch(br.id)}
+                    className="p-1.5 text-gray-500 hover:text-red-400 rounded-lg"
+                    title="Eliminar sucursal"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Live Transactions & Audit Table */}
         <div className="bg-[#151D2F] border border-[#24324D] rounded-2xl p-6 shadow-xl space-y-4">
           <div className="flex items-center justify-between">
@@ -1530,6 +1861,82 @@ Estado: Transferencia acreditada en cuenta`;
                   ) : (
                     <span>Crear y Asignar Cajero</span>
                   )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Nuevo Comercio del Mismo Dueño */}
+      {showNewStoreModal && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#151D2F] border border-[#24324D] rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between border-b border-[#24324D] pb-3">
+              <div className="flex items-center gap-2">
+                <Store className="w-5 h-5 text-indigo-400" />
+                <h3 className="text-base font-bold text-white">Agregar Nuevo Comercio</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowNewStoreModal(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateStore} className="space-y-4">
+              <div className="text-xs text-gray-300 bg-[#0B0F19] border border-[#24324D] rounded-xl p-3 space-y-1">
+                <div>• Tendrá su propio catálogo web, inventario, cajas y cajeros separados.</div>
+                <div>• Comparte tu mismo <strong>Script de Google</strong> con protección anti-repetición cruzada.</div>
+                <div>• Costo: <strong className="text-emerald-400">Gs. 150.000/mes</strong> (incluye hasta 5 sucursales gratis).</div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-400 mb-1">
+                  Nombre del Comercio * (Ej: Mi Imprenta / Kiosco 2)
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newStoreName}
+                  onChange={(e) => setNewStoreName(e.target.value)}
+                  placeholder="Ej: Imprenta Digital Centro"
+                  className="w-full bg-[#0B0F19] border border-[#24324D] rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={copyFactufyFromCurrent}
+                  onChange={(e) => setCopyFactufyFromCurrent(e.target.checked)}
+                  className="rounded border-[#24324D]"
+                />
+                <span>Usar la misma configuración de Facturación Electrónica (RUC / Factufy)</span>
+              </label>
+
+              {newStoreError && (
+                <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-xl p-2.5">
+                  {newStoreError}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-[#24324D]">
+                <button
+                  type="button"
+                  onClick={() => setShowNewStoreModal(false)}
+                  className="px-4 py-2 bg-[#0B0F19] text-gray-400 text-xs font-bold rounded-xl"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingStore}
+                  className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 text-xs font-extrabold rounded-xl disabled:opacity-50"
+                >
+                  {creatingStore ? 'Creando...' : 'Crear Comercio'}
                 </button>
               </div>
             </form>

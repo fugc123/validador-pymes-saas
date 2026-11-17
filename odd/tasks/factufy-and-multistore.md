@@ -13,5 +13,5 @@
 ## Checklist
 - [x] **T1**: Update `schema.ts` & `sifen.ports.ts`, create `factufy.adapter.ts`, and update `sifen.repository.ts`, `sifen.controller.ts`, and `app.module.ts`. (`npx tsc --noEmit` passed)
 - [x] **T2**: Implement multi-store creation, branch management + pricing helper (`5 free, +50k extra`), shared GAS webhook replication + cross-store anti-replay (`auth.ports.ts`, `in-memory.repositories.ts`, `ingest-webhook.use-case.ts`, `claim-transfer.use-case.ts`, `merchant.controller.ts`, `subscription.controller.ts`). (`npx tsc --noEmit` passed)
-- [ ] **T3**: Implement UI in `OwnerDashboard.tsx` (store tabs, new store modal, branches + pricing card), `SifenFreeMerchantModal.tsx` (Factufy dynamic fields), and `FastPosScreen.tsx` (RUC lookup button).
+- [x] **T3**: Implement UI in `OwnerDashboard.tsx` (store tabs, new store modal, branches + pricing card), `SifenFreeMerchantModal.tsx` (Factufy dynamic fields), and `FastPosScreen.tsx` (RUC lookup button). (`npm --prefix client run build` passed)
 - [ ] **T4**: Add unit tests in `test/unit/factufy-and-multistore.spec.ts` and run full verification (`tsc --noEmit`, `npm run build`, `npm --prefix client run build`, `npm test`).
