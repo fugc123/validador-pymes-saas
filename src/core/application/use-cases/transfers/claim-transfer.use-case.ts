@@ -3,7 +3,9 @@ import {
   Inject,
   NotFoundException,
   ConflictException,
+  Optional,
 } from '@nestjs/common';
+import { IMembershipRepository } from '../../ports/auth.ports';
 import { ITransferRepository } from '../../ports/transfer.ports';
 
 export interface ClaimTransferInput {
@@ -23,7 +25,12 @@ export interface ClaimTransferOutput {
 
 @Injectable()
 export class ClaimTransferUseCase {
-  constructor(@Inject('ITransferRepository') private readonly transferRepo: ITransferRepository) {}
+  constructor(
+    @Inject('ITransferRepository') private readonly transferRepo: ITransferRepository,
+    @Optional()
+    @Inject('IMembershipRepository')
+    private readonly membershipRepo?: IMembershipRepository,
+  ) {}
 
   async execute(input: ClaimTransferInput): Promise<ClaimTransferOutput> {
     const claimTime = input.claimTimestamp ?? new Date();
@@ -37,6 +44,38 @@ export class ClaimTransferUseCase {
     );
 
     if (wasUpdated) {
+      // Cross-store anti-replay: mark matching operationId as claimed in sibling stores of the same owner
+      if (this.membershipRepo) {
+        try {
+          const claimedTransfer = await this.transferRepo.findById(input.tenantId, input.transferId);
+          if (claimedTransfer) {
+            const members = await this.membershipRepo.findMembersByMerchant(input.tenantId);
+            const owners = members.filter((m) => m.role === 'MERCHANT_OWNER' && m.isActive);
+            const siblingIds = new Set<string>();
+            for (const owner of owners) {
+              const ownerStores = await this.membershipRepo.findActiveByUser(owner.userId);
+              for (const st of ownerStores) {
+                const sibId = st.merchant.id || st.merchant.slug;
+                if (st.membership.role === 'MERCHANT_OWNER' && sibId && sibId !== input.tenantId) {
+                  siblingIds.add(sibId);
+                }
+              }
+            }
+            for (const sibId of siblingIds) {
+              const sibTransfer = await this.transferRepo.findByTenantAndOperationId(
+                sibId,
+                claimedTransfer.operationId,
+              );
+              if (sibTransfer && sibTransfer.id && sibTransfer.status === 'pending') {
+                await this.transferRepo.updateClaimed(sibId, sibTransfer.id, input.cashierUserId, claimTime);
+              }
+            }
+          }
+        } catch {
+          // Non-blocking after primary claim succeeds
+        }
+      }
+
       return {
         status: 'claimed',
         transferId: input.transferId,

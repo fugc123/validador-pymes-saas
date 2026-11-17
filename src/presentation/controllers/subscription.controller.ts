@@ -15,7 +15,7 @@ import {
 import { IsNotEmpty, IsString } from 'class-validator';
 import { SubscriptionBillingUseCase } from '../../core/application/use-cases/billing/subscription-billing.use-case';
 import { ISubscriptionRepository, IPaymentReportRepository, PaymentReport } from '../../core/application/ports/onboarding.ports';
-import { IMerchantRepository } from '../../core/application/ports/auth.ports';
+import { calculateStoreMonthlyCostPyg, IMerchantRepository } from '../../core/application/ports/auth.ports';
 import { ITransferRepository } from '../../core/application/ports/transfer.ports';
 import { Transfer } from '../../core/domain/entities/transfer.entity';
 import { Roles } from '../decorators/roles.decorator';
@@ -71,11 +71,20 @@ export class SubscriptionController {
     const daysRemaining = isLifetime
       ? 99999
       : Math.max(0, Math.ceil((status.currentPeriodEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+    const branches = this.merchantRepository.listBranches
+      ? await this.merchantRepository.listBranches(tenantId)
+      : [];
+    const pricing = calculateStoreMonthlyCostPyg(branches.length);
 
     return {
       ...status,
       isLifetime,
       daysRemaining,
+      branchesCount: pricing.activeBranchesCount,
+      freeBranchesLimit: pricing.freeBranchesLimit,
+      extraBranchesCount: pricing.extraBranchesCount,
+      extraBranchesPyg: pricing.extraBranchesPyg,
+      monthlyAmountPyg: isLifetime ? 0 : pricing.totalMonthlyPyg,
     };
   }
 
@@ -132,11 +141,15 @@ export class SubscriptionController {
   async reportPayment(@Req() req: any, @Body() dto: ReportPaymentDto) {
     const tenantId = req.user.tenantId;
     const userId = req.user.userId || req.user.id;
+    const branches = this.merchantRepository.listBranches
+      ? await this.merchantRepository.listBranches(tenantId)
+      : [];
+    const pricing = calculateStoreMonthlyCostPyg(branches.length);
     const report = new PaymentReport({
       tenantId,
       reportedByUserId: userId,
       payerName: dto.payerName.trim(),
-      amount: 150000,
+      amount: pricing.totalMonthlyPyg,
     });
     return this.paymentReportRepo.save(report);
   }

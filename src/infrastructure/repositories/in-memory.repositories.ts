@@ -36,9 +36,16 @@ function normalizeLegacyWebhookSecret(secret?: string, slug?: string): string {
 import { ConflictException, Injectable, Optional } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
-import { randomBytes } from 'crypto';
+import { randomBytes, randomUUID } from 'crypto';
 import { DatabaseService } from '../database/database.service';
-import { UserRow, MerchantRow, MerchantMembershipRow, SubscriptionRow, TransferRow } from '../database/schema';
+import {
+  UserRow,
+  MerchantRow,
+  MerchantMembershipRow,
+  MerchantBranchRow,
+  SubscriptionRow,
+  TransferRow,
+} from '../database/schema';
 import { User } from '../../core/domain/entities/user.entity';
 import { Merchant } from '../../core/domain/entities/merchant.entity';
 import { MerchantMembership } from '../../core/domain/entities/merchant-membership.entity';
@@ -55,6 +62,8 @@ import {
   TempTokenPayload,
   UserMembershipDetail,
   MerchantMemberDetail,
+  MerchantBranch,
+  CreateMerchantBranchInput,
 } from '../../core/application/ports/auth.ports';
 import { ITransferRepository, MerchantMetrics } from '../../core/application/ports/transfer.ports';
 import {
@@ -345,6 +354,8 @@ export class InMemoryUserRepository implements IUserRepository {
 export class InMemoryMerchantRepository implements IMerchantRepository {
   constructor(@Optional() private readonly dbService?: DatabaseService) {}
 
+  private branches: MerchantBranch[] = [];
+
   private merchants: Merchant[] = [
     new Merchant({
       id: 'cajasegura-platform',
@@ -447,6 +458,78 @@ export class InMemoryMerchantRepository implements IMerchantRepository {
     if (idx >= 0) this.merchants[idx] = merchant;
     else this.merchants.push(merchant);
     return merchant;
+  }
+
+  private mapBranchRow(row: MerchantBranchRow): MerchantBranch {
+    return {
+      id: row.id,
+      tenantId: row.tenant_id,
+      name: row.name,
+      branchCode: row.branch_code || '001',
+      posCode: row.pos_code || '001',
+      address: row.address || null,
+      isActive: Boolean(row.is_active),
+      createdAt: new Date(row.created_at),
+    };
+  }
+
+  async listBranches(tenantId: string): Promise<MerchantBranch[]> {
+    if (this.dbService && !this.dbService.isMemoryMode) {
+      const res = await this.dbService.query<MerchantBranchRow>(
+        `SELECT * FROM merchant_branches WHERE tenant_id = $1 AND is_active = TRUE ORDER BY created_at ASC`,
+        [tenantId],
+      );
+      return (res?.rows || []).map((r) => this.mapBranchRow(r));
+    }
+    return this.branches.filter((b) => b.tenantId === tenantId && b.isActive);
+  }
+
+  async createBranch(input: CreateMerchantBranchInput): Promise<MerchantBranch> {
+    const cleanName = (input.name || '').trim();
+    if (!cleanName) {
+      throw new Error('Branch name is required');
+    }
+    const existing = await this.listBranches(input.tenantId);
+    const nextCode = String(existing.length + 1).padStart(3, '0');
+    const branchCode = (input.branchCode || nextCode).replace(/\D/g, '').padStart(3, '0').slice(-3);
+    const posCode = (input.posCode || '001').replace(/\D/g, '').padStart(3, '0').slice(-3);
+    const branch: MerchantBranch = {
+      id: `br-${randomUUID().slice(0, 8)}-${Date.now().toString(36)}`,
+      tenantId: input.tenantId,
+      name: cleanName,
+      branchCode,
+      posCode,
+      address: input.address ? input.address.trim() : null,
+      isActive: true,
+      createdAt: new Date(),
+    };
+
+    if (this.dbService && !this.dbService.isMemoryMode) {
+      const res = await this.dbService.query<MerchantBranchRow>(
+        `INSERT INTO merchant_branches (id, tenant_id, name, branch_code, pos_code, address, is_active, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, TRUE, $7)
+         RETURNING *`,
+        [branch.id, branch.tenantId, branch.name, branch.branchCode, branch.posCode, branch.address, branch.createdAt],
+      );
+      return this.mapBranchRow(res.rows[0]);
+    }
+
+    this.branches.push(branch);
+    return branch;
+  }
+
+  async deleteBranch(tenantId: string, branchId: string): Promise<boolean> {
+    if (this.dbService && !this.dbService.isMemoryMode) {
+      const res = await this.dbService.query(
+        `UPDATE merchant_branches SET is_active = FALSE WHERE tenant_id = $1 AND id = $2`,
+        [tenantId, branchId],
+      );
+      return (res?.rowCount || 0) > 0;
+    }
+    const found = this.branches.find((b) => b.tenantId === tenantId && b.id === branchId && b.isActive);
+    if (!found) return false;
+    found.isActive = false;
+    return true;
   }
 }
 

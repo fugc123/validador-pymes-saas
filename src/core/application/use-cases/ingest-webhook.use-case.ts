@@ -4,10 +4,11 @@ import {
   Inject,
   Logger,
   NotFoundException,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import * as crypto from 'crypto';
-import { IMerchantRepository } from '../ports/auth.ports';
+import { IMembershipRepository, IMerchantRepository } from '../ports/auth.ports';
 import { ITransferRepository } from '../ports/transfer.ports';
 import { BankParserFactory } from '../../../infrastructure/parsers/bank-parser.factory';
 import { detectTransferDirection } from '../../../infrastructure/parsers/transfer-direction.detector';
@@ -38,6 +39,9 @@ export class IngestWebhookUseCase {
     @Inject('IMerchantRepository') private readonly merchantRepo: IMerchantRepository,
     @Inject('ITransferRepository') private readonly transferRepo: ITransferRepository,
     private readonly parserFactory: BankParserFactory,
+    @Optional()
+    @Inject('IMembershipRepository')
+    private readonly membershipRepo?: IMembershipRepository,
   ) {}
 
   async execute(input: IngestWebhookInput): Promise<IngestWebhookOutput> {
@@ -157,6 +161,54 @@ export class IngestWebhookUseCase {
     });
 
     const saved = await this.transferRepo.save(transfer);
+
+    // Multi-store shared Google Apps Script: replicate pending transfer to sibling active stores of the same owner(s)
+    if (this.membershipRepo) {
+      try {
+        const members = await this.membershipRepo.findMembersByMerchant(tenantId);
+        const owners = members.filter((m) => m.role === 'MERCHANT_OWNER' && m.isActive);
+        const siblingIds = new Set<string>();
+        for (const owner of owners) {
+          const ownerStores = await this.membershipRepo.findActiveByUser(owner.userId);
+          for (const st of ownerStores) {
+            const sibId = st.merchant.id || st.merchant.slug;
+            if (
+              st.membership.role === 'MERCHANT_OWNER' &&
+              st.merchant.isActive() &&
+              sibId &&
+              sibId !== tenantId
+            ) {
+              siblingIds.add(sibId);
+            }
+          }
+        }
+        for (const sibId of siblingIds) {
+          const sibExists = await this.transferRepo.findByTenantAndOperationId(sibId, parsed.operationId);
+          if (!sibExists) {
+            await this.transferRepo.save(
+              new Transfer({
+                id: `tr-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+                tenantId: sibId,
+                operationId: parsed.operationId,
+                receiptNumber: parsed.receiptNumber,
+                operationDate: parsed.operationDate,
+                payerName: parsed.payerName,
+                payerAccount: parsed.payerAccount ?? undefined,
+                payerBank: parsed.payerBank ?? undefined,
+                currency: parsed.currency,
+                amount: parsed.amount,
+                creditAccount: parsed.creditAccount ?? undefined,
+                concept: parsed.concept ?? undefined,
+                rawBody: input.text,
+                status: 'pending',
+              }),
+            );
+          }
+        }
+      } catch {
+        // Non-blocking: primary tenant ingestion already succeeded
+      }
+    }
 
     return {
       status: 'created',

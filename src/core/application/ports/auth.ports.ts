@@ -29,10 +29,59 @@ export interface IUserRepository {
   save(user: User): Promise<User>;
 }
 
+export const BASE_STORE_MONTHLY_PYG = 150000;
+export const FREE_BRANCHES_PER_STORE = 5;
+export const EXTRA_BRANCH_MONTHLY_PYG = 50000;
+
+export interface StorePricingBreakdown {
+  basePyg: number;
+  freeBranchesLimit: number;
+  activeBranchesCount: number;
+  extraBranchesCount: number;
+  extraBranchesPyg: number;
+  totalMonthlyPyg: number;
+}
+
+export function calculateStoreMonthlyCostPyg(activeBranchesCount: number): StorePricingBreakdown {
+  const safeCount = Math.max(0, Math.floor(Number(activeBranchesCount) || 0));
+  const extraBranchesCount = Math.max(0, safeCount - FREE_BRANCHES_PER_STORE);
+  const extraBranchesPyg = extraBranchesCount * EXTRA_BRANCH_MONTHLY_PYG;
+  return {
+    basePyg: BASE_STORE_MONTHLY_PYG,
+    freeBranchesLimit: FREE_BRANCHES_PER_STORE,
+    activeBranchesCount: safeCount,
+    extraBranchesCount,
+    extraBranchesPyg,
+    totalMonthlyPyg: BASE_STORE_MONTHLY_PYG + extraBranchesPyg,
+  };
+}
+
+export interface MerchantBranch {
+  id: string;
+  tenantId: string;
+  name: string;
+  branchCode: string;
+  posCode: string;
+  address: string | null;
+  isActive: boolean;
+  createdAt: Date;
+}
+
+export interface CreateMerchantBranchInput {
+  tenantId: string;
+  name: string;
+  branchCode?: string;
+  posCode?: string;
+  address?: string | null;
+}
+
 export interface IMerchantRepository {
   findById(id: string): Promise<Merchant | null>;
   findBySlug(slug: string): Promise<Merchant | null>;
   save(merchant: Merchant): Promise<Merchant>;
+  listBranches?(tenantId: string): Promise<MerchantBranch[]>;
+  createBranch?(input: CreateMerchantBranchInput): Promise<MerchantBranch>;
+  deleteBranch?(tenantId: string, branchId: string): Promise<boolean>;
 }
 
 export interface IMembershipRepository {
