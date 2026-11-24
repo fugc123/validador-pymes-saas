@@ -506,4 +506,74 @@ describe('Catalog, Inventory, Time Discounts & POS Sales (T1 & T2)', () => {
     expect(validToday.status).toBe('pending');
     expect(validToday.timeSlot).toBe('15:00');
   });
+
+  it('allows CASHIER role to view availability, create counter bookings (e.g. day after tomorrow), update status, and preserves tenant isolation', async () => {
+    const pyToday = new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
+    const dayAfterTomorrow = new Date(new Date(`${pyToday}T12:00:00.000Z`).getTime() + 2 * 86400_000)
+      .toISOString()
+      .slice(0, 10);
+
+    const svc = await catalogRepo.createItem({
+      tenantId: 'barberia-caja',
+      itemType: 'service',
+      name: 'Barba + Corte',
+      price: 65000,
+      bookingEnabled: true,
+      bookingMode: 'hours',
+      bookingDaysOfWeek: '0,1,2,3,4,5,6',
+      bookingTimeSlots: '10:00,11:00,15:00',
+      bookingMaxConcurrent: 1,
+    });
+
+    await TenantContext.run(
+      { tenantId: 'barberia-caja', userId: 'usr-cajero-1', role: 'CASHIER' },
+      async () => {
+        const initialAvail = await catalogController.getCashierBookingAvailability(
+          svc.id,
+          dayAfterTomorrow,
+          dayAfterTomorrow,
+        );
+        expect(initialAvail).toEqual([]);
+
+        const created = await catalogController.createCashierBooking({
+          itemId: svc.id,
+          startDate: dayAfterTomorrow,
+          endDate: dayAfterTomorrow,
+          timeSlot: '10:00',
+          customerName: 'Luis Mostrador',
+          customerPhone: '0981555777',
+          notes: 'Viene en 2 días',
+        });
+        expect(created.tenantId).toBe('barberia-caja');
+        expect(created.status).toBe('pending');
+
+        const listRes = await catalogController.getCashierBookings();
+        expect(listRes.bookings).toHaveLength(1);
+        expect(listRes.bookings[0].startDate).toBe(dayAfterTomorrow);
+
+        const confirmed = await catalogController.updateCashierBookingStatus(created.id, {
+          status: 'confirmed',
+        });
+        expect(confirmed.status).toBe('confirmed');
+
+        const afterAvail = await catalogController.getCashierBookingAvailability(
+          svc.id,
+          dayAfterTomorrow,
+          dayAfterTomorrow,
+        );
+        expect(afterAvail).toEqual([
+          { date: dayAfterTomorrow, timeSlot: '10:00', bookedCount: 1 },
+        ]);
+      },
+    );
+
+    // Other tenant cashier cannot list or update barberia-caja bookings
+    await TenantContext.run(
+      { tenantId: 'otro-comercio', userId: 'usr-cajero-2', role: 'CASHIER' },
+      async () => {
+        const otherList = await catalogController.getCashierBookings();
+        expect(otherList.bookings).toHaveLength(0);
+      },
+    );
+  });
 });

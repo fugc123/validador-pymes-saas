@@ -27,7 +27,15 @@ import {
   Tag,
   Download,
   Gift,
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
+import {
+  CashierItineraryPanel,
+  getParaguayNowStrings,
+  PosBookingRecord,
+} from './CashierItineraryPanel';
 
 interface TransferResult {
   id: string;
@@ -58,7 +66,14 @@ interface PosCatalogItem {
   isDiscountActive: boolean;
   effectiveDiscountPercent: number;
   effectivePrice: number;
+  bookingEnabled?: boolean;
+  bookingMode?: 'hours' | 'days';
+  bookingDaysOfWeek?: string;
+  bookingTimeSlots?: string | null;
+  bookingMaxConcurrent?: number;
 }
+
+const CATALOG_PAGE_SIZE = 6;
 
 interface CartLine {
   item: PosCatalogItem;
@@ -90,12 +105,14 @@ export const FastPosScreen: React.FC = () => {
   const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
 
   // Pre-screen & Checkout state
-  const [activeTab, setActiveTab] = useState<'catalog' | 'quick_amount' | 'history'>('catalog');
+  const [activeTab, setActiveTab] = useState<'catalog' | 'quick_amount' | 'bookings' | 'history'>('catalog');
   const [step, setStep] = useState<'checkout' | 'transfer_verify'>('checkout');
   const [catalogItems, setCatalogItems] = useState<PosCatalogItem[]>([]);
   const [loadingCatalog, setLoadingCatalog] = useState(false);
   const [catalogSearch, setCatalogSearch] = useState('');
+  const [catalogPage, setCatalogPage] = useState(1);
   const [cart, setCart] = useState<CartLine[]>([]);
+  const [cashierBookings, setCashierBookings] = useState<PosBookingRecord[]>([]);
 
   // Quick amount ("Monto Libre + Qué pasó") state
   const [quickAmount, setQuickAmount] = useState('');
@@ -185,7 +202,7 @@ export const FastPosScreen: React.FC = () => {
     if (!token) return;
     setLoadingCatalog(true);
     try {
-      const [catRes, salesRes, subRes] = await Promise.all([
+      const [catRes, salesRes, subRes, bookingsRes] = await Promise.all([
         fetch('/api/v1/cashier/catalog', {
           headers: { Authorization: `Bearer ${token}` },
         }),
@@ -195,6 +212,9 @@ export const FastPosScreen: React.FC = () => {
         fetch('/api/v1/subscription/status', {
           headers: { Authorization: `Bearer ${token}` },
         }),
+        fetch('/api/v1/cashier/bookings', {
+          headers: { Authorization: `Bearer ${token}` },
+        }).catch(() => null),
       ]);
 
       if (catRes.ok) {
@@ -208,6 +228,10 @@ export const FastPosScreen: React.FC = () => {
       if (subRes.ok) {
         const subData = await subRes.json();
         setSubscription(subData);
+      }
+      if (bookingsRes && bookingsRes.ok) {
+        const bookingsData = await bookingsRes.json();
+        setCashierBookings(bookingsData.bookings || []);
       }
       const sifenRes = await fetch('/api/v1/sifen/cashier/status', {
         headers: { Authorization: `Bearer ${token}` },
@@ -229,6 +253,10 @@ export const FastPosScreen: React.FC = () => {
     fetchCashierData();
   }, [fetchCashierData, activeTenant?.tenantId]);
 
+  useEffect(() => {
+    setCatalogPage(1);
+  }, [catalogSearch, activeTenant?.tenantId]);
+
   const filteredCatalog = useMemo(() => {
     if (!catalogSearch.trim()) return catalogItems;
     const q = catalogSearch.toLowerCase();
@@ -236,6 +264,47 @@ export const FastPosScreen: React.FC = () => {
       (i) => i.name.toLowerCase().includes(q) || (i.description || '').toLowerCase().includes(q),
     );
   }, [catalogItems, catalogSearch]);
+
+  const totalCatalogPages = Math.max(1, Math.ceil(filteredCatalog.length / CATALOG_PAGE_SIZE));
+  const safeCatalogPage = Math.min(catalogPage, totalCatalogPages);
+  const paginatedCatalog = useMemo(
+    () =>
+      filteredCatalog.slice(
+        (safeCatalogPage - 1) * CATALOG_PAGE_SIZE,
+        safeCatalogPage * CATALOG_PAGE_SIZE,
+      ),
+    [filteredCatalog, safeCatalogPage],
+  );
+
+  const bookableItems = useMemo(
+    () => catalogItems.filter((i) => i.itemType === 'service' && i.bookingEnabled),
+    [catalogItems],
+  );
+
+  const todayBookingsCount = useMemo(() => {
+    const { todayIso } = getParaguayNowStrings();
+    return cashierBookings.filter(
+      (b) =>
+        (b.status === 'pending' || b.status === 'confirmed') &&
+        (b.bookingMode === 'days' && b.startDate !== b.endDate
+          ? b.startDate <= todayIso && todayIso < b.endDate
+          : b.startDate === todayIso),
+    ).length;
+  }, [cashierBookings]);
+
+  const handleLoadBookingToCheckout = (booking: PosBookingRecord) => {
+    const matchedItem = catalogItems.find((it) => it.id === booking.itemId);
+    if (matchedItem) {
+      setCart([{ item: matchedItem, quantity: 1 }]);
+      setActiveTab('catalog');
+    } else {
+      setActiveTab('quick_amount');
+      setQuickConcept(booking.itemName);
+    }
+    setCustomerName(booking.customerName);
+    setCustomerPhone(booking.customerPhone);
+    setSaleError(null);
+  };
 
   const cartTotal = useMemo(() => {
     return cart.reduce((sum, line) => sum + line.item.effectivePrice * line.quantity, 0);
@@ -900,6 +969,19 @@ export const FastPosScreen: React.FC = () => {
 
               <button
                 type="button"
+                onClick={() => setActiveTab('bookings')}
+                className={`flex-1 sm:flex-none px-4 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all flex items-center justify-center gap-2 ${
+                  activeTab === 'bookings'
+                    ? 'bg-emerald-500 text-gray-950 shadow-lg shadow-emerald-500/20'
+                    : 'text-gray-300 hover:text-white bg-[#0B0F19]/60'
+                }`}
+              >
+                <Calendar className="w-4 h-4" />
+                <span>Agenda ({todayBookingsCount})</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setActiveTab('history')}
                 className={`flex-1 sm:flex-none px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 ${
                   activeTab === 'history'
@@ -912,7 +994,15 @@ export const FastPosScreen: React.FC = () => {
               </button>
             </div>
 
-            {activeTab === 'history' ? (
+            {activeTab === 'bookings' ? (
+              <CashierItineraryPanel
+                token={token}
+                bookings={cashierBookings}
+                bookableItems={bookableItems}
+                onRefresh={fetchCashierData}
+                onLoadToCheckout={handleLoadBookingToCheckout}
+              />
+            ) : activeTab === 'history' ? (
               <div className="bg-[#151D2F] border border-[#24324D] rounded-3xl p-5 sm:p-6 space-y-4">
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-extrabold text-white">Últimas Ventas Registradas en Caja</h2>
@@ -1028,8 +1118,9 @@ export const FastPosScreen: React.FC = () => {
                           </button>
                         </div>
                       ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[460px] overflow-y-auto pr-1">
-                          {filteredCatalog.map((item) => {
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {paginatedCatalog.map((item) => {
                             const outOfStock = item.itemType === 'product' && item.stock !== null && item.stock <= 0;
                             return (
                               <button
@@ -1078,6 +1169,33 @@ export const FastPosScreen: React.FC = () => {
                               </button>
                             );
                           })}
+                          </div>
+
+                          {totalCatalogPages > 1 && (
+                            <div className="flex items-center justify-between pt-2 border-t border-[#24324D]">
+                              <button
+                                type="button"
+                                disabled={safeCatalogPage <= 1}
+                                onClick={() => setCatalogPage((p) => Math.max(1, p - 1))}
+                                className="px-3 py-2 rounded-xl bg-[#0B0F19] border border-[#24324D] text-xs font-bold text-gray-200 disabled:opacity-40 inline-flex items-center gap-1"
+                              >
+                                <ChevronLeft className="w-4 h-4" />
+                                <span>Anterior</span>
+                              </button>
+                              <span className="text-xs font-mono text-gray-400">
+                                Pág. <strong className="text-white">{safeCatalogPage}</strong> de {totalCatalogPages} ({filteredCatalog.length})
+                              </span>
+                              <button
+                                type="button"
+                                disabled={safeCatalogPage >= totalCatalogPages}
+                                onClick={() => setCatalogPage((p) => Math.min(totalCatalogPages, p + 1))}
+                                className="px-3 py-2 rounded-xl bg-[#0B0F19] border border-[#24324D] text-xs font-bold text-gray-200 disabled:opacity-40 inline-flex items-center gap-1"
+                              >
+                                <span>Siguiente</span>
+                                <ChevronRight className="w-4 h-4" />
+                              </button>
+                            </div>
+                          )}
                         </div>
                       )}
                     </>

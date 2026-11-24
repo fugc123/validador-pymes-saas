@@ -490,6 +490,73 @@ export class CatalogController {
     }
     return updated;
   }
+
+  @Get('cashier/bookings')
+  @Roles('CASHIER', 'MERCHANT_OWNER', 'SUPER_ADMIN')
+  @HttpCode(HttpStatus.OK)
+  async getCashierBookings() {
+    const tenantId = this.requireTenantId();
+    const bookings = await this.catalogRepo.listBookingsByTenant(tenantId, 300);
+    return { bookings };
+  }
+
+  @Get('cashier/bookings/availability')
+  @Roles('CASHIER', 'MERCHANT_OWNER', 'SUPER_ADMIN')
+  @HttpCode(HttpStatus.OK)
+  async getCashierBookingAvailability(
+    @Query('itemId') itemId: string,
+    @Query('fromDate') fromDate: string,
+    @Query('toDate') toDate: string,
+  ) {
+    const tenantId = this.requireTenantId();
+    if (!itemId || !fromDate || !toDate) {
+      throw new BadRequestException('Se requieren itemId, fromDate y toDate.');
+    }
+    if (toDate < fromDate) {
+      throw new BadRequestException('toDate no puede ser anterior a fromDate.');
+    }
+    const item = await this.catalogRepo.findItemById(tenantId, itemId);
+    if (!item || !item.isActive || !item.bookingEnabled) {
+      throw new NotFoundException('Servicio reservable no encontrado.');
+    }
+    return this.catalogRepo.getBookingAvailability(tenantId, itemId, fromDate, toDate);
+  }
+
+  @Post('cashier/bookings')
+  @Roles('CASHIER', 'MERCHANT_OWNER', 'SUPER_ADMIN')
+  @HttpCode(HttpStatus.CREATED)
+  async createCashierBooking(@Body() dto: CreatePublicBookingDto) {
+    const tenantId = this.requireTenantId();
+    return this.catalogRepo.createBooking({
+      tenantId,
+      itemId: dto.itemId,
+      startDate: dto.startDate,
+      endDate: dto.endDate,
+      timeSlot: dto.timeSlot,
+      customerName: dto.customerName,
+      customerPhone: dto.customerPhone,
+      notes: dto.notes,
+    });
+  }
+
+  @Patch('cashier/bookings/:id/status')
+  @Roles('CASHIER', 'MERCHANT_OWNER', 'SUPER_ADMIN')
+  @HttpCode(HttpStatus.OK)
+  async updateCashierBookingStatus(
+    @Param('id') bookingId: string,
+    @Body() dto: UpdateBookingStatusDto,
+  ) {
+    const tenantId = this.requireTenantId();
+    const allowed: BookingStatus[] = ['pending', 'confirmed', 'cancelled', 'completed'];
+    if (!allowed.includes(dto.status)) {
+      throw new BadRequestException('Estado de reserva inválido.');
+    }
+    const updated = await this.catalogRepo.updateBookingStatus(tenantId, bookingId, dto.status);
+    if (!updated) {
+      throw new NotFoundException('Reserva no encontrada.');
+    }
+    return updated;
+  }
 }
 
 @Controller('public/catalog')
