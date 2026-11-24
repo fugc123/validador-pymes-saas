@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { requestWebhookSecret, sendTestWebhook } from '../../context/webhook-requests';
 import { buildPersonalizedGasScript } from './personalized-gas-script';
 import { OwnerCatalogAndSalesPanel } from './OwnerCatalogAndSalesPanel';
-import { Package, Receipt, Store, Plus } from 'lucide-react';
+import { Package, Receipt, Store, Plus, FileCode } from 'lucide-react';
 import {
   TrendingUp,
   Users,
@@ -189,6 +189,58 @@ export const OwnerDashboard: React.FC = () => {
   const [creatingBranch, setCreatingBranch] = useState(false);
   const [branchError, setBranchError] = useState<string | null>(null);
 
+  // SIFEN Electronic Invoicing onboarding request & status
+  const [sifenStatus, setSifenStatus] = useState<{
+    isEligible: boolean;
+    request: {
+      tenantId: string;
+      ruc: string;
+      dv: string;
+      razonSocial: string;
+      nombreFantasia?: string;
+      tipoContribuyente: 1 | 2;
+      timbrado: string;
+      fechaInicioTimbrado?: string;
+      establecimiento: string;
+      puntoExpedicion: string;
+      direccion?: string;
+      telefono?: string;
+      email?: string;
+      actividadEconomicaCodigo?: string;
+      actividadEconomicaDesc?: string;
+      status: 'pending' | 'approved' | 'rejected';
+      updatedAt?: string;
+    } | null;
+    config: {
+      enabled: boolean;
+      environment: 'test' | 'prod';
+      ruc: string;
+      dv: string;
+      timbrado: string;
+      razonSocial: string;
+    } | null;
+  } | null>(null);
+  const [showSifenRequestModal, setShowSifenRequestModal] = useState(false);
+  const [submittingSifenRequest, setSubmittingSifenRequest] = useState(false);
+  const [sifenRequestError, setSifenRequestError] = useState<string | null>(null);
+  const [sifenRequestSuccess, setSifenRequestSuccess] = useState<string | null>(null);
+  const [sifenForm, setSifenForm] = useState({
+    ruc: '',
+    dv: '',
+    razonSocial: '',
+    nombreFantasia: '',
+    tipoContribuyente: 2 as 1 | 2,
+    timbrado: '',
+    fechaInicioTimbrado: '2025-01-01',
+    establecimiento: '001',
+    puntoExpedicion: '001',
+    direccion: '',
+    telefono: '',
+    email: '',
+    actividadEconomicaCodigo: '47190',
+    actividadEconomicaDesc: 'COMERCIO AL POR MENOR EN COMERCIOS NO ESPECIALIZADOS',
+  });
+
   const tenantSlug = activeTenant?.tenantId || 'comercio';
   const activeWebhookSecret =
     webhookSecret && webhookSecret.slug === tenantSlug ? webhookSecret.secret : null;
@@ -349,13 +401,81 @@ export const OwnerDashboard: React.FC = () => {
     }
   }, [token]);
 
+  const fetchSifenRequest = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await fetch('/api/v1/sifen/merchant/request', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const data = json?.data || null;
+        setSifenStatus(data);
+        if (data?.request) {
+          setSifenForm({
+            ruc: data.request.ruc || '',
+            dv: data.request.dv || '',
+            razonSocial: data.request.razonSocial || '',
+            nombreFantasia: data.request.nombreFantasia || '',
+            tipoContribuyente: data.request.tipoContribuyente === 1 ? 1 : 2,
+            timbrado: data.request.timbrado || '',
+            fechaInicioTimbrado: data.request.fechaInicioTimbrado || '2025-01-01',
+            establecimiento: data.request.establecimiento || '001',
+            puntoExpedicion: data.request.puntoExpedicion || '001',
+            direccion: data.request.direccion || '',
+            telefono: data.request.telefono || '',
+            email: data.request.email || '',
+            actividadEconomicaCodigo: data.request.actividadEconomicaCodigo || '47190',
+            actividadEconomicaDesc:
+              data.request.actividadEconomicaDesc ||
+              'COMERCIO AL POR MENOR EN COMERCIOS NO ESPECIALIZADOS',
+          });
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, [token]);
+
+  const handleSubmitSifenRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) return;
+    setSubmittingSifenRequest(true);
+    setSifenRequestError(null);
+    setSifenRequestSuccess(null);
+    try {
+      const res = await fetch('/api/v1/sifen/merchant/request', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(sifenForm),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(json?.message || 'No se pudo enviar la solicitud de facturación SIFEN.');
+      }
+      setSifenRequestSuccess(
+        json?.message || 'Datos fiscales recibidos. El equipo revisará y activará Factufy para tu comercio.',
+      );
+      await fetchSifenRequest();
+      setShowSifenRequestModal(false);
+    } catch (err: any) {
+      setSifenRequestError(err.message || 'Error al enviar la solicitud SIFEN.');
+    } finally {
+      setSubmittingSifenRequest(false);
+    }
+  };
+
   const fetchAllData = useCallback(() => {
     fetchMetrics();
     fetchSub();
     fetchCashiers();
     fetchStores();
     fetchBranches();
-  }, [fetchMetrics, fetchSub, fetchCashiers, fetchStores, fetchBranches]);
+    fetchSifenRequest();
+  }, [fetchMetrics, fetchSub, fetchCashiers, fetchStores, fetchBranches, fetchSifenRequest]);
 
   const handleCreateStore = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1579,6 +1699,66 @@ Estado: Transferencia acreditada en cuenta`;
           )}
         </div>
 
+        {/* Facturación Electrónica SIFEN (DNIT / Factufy) */}
+        <div className="bg-[#151D2F] border border-purple-500/30 rounded-2xl p-6 shadow-xl space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start sm:items-center gap-3">
+              <div className="p-2.5 bg-purple-500/15 text-purple-300 rounded-xl border border-purple-500/30 shrink-0">
+                <FileCode className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-lg font-bold text-white">Facturación Electrónica SIFEN (DNIT / Factufy)</h2>
+                  {sifenStatus?.config?.enabled ? (
+                    <span className="px-2.5 py-0.5 rounded-full font-mono text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                      Habilitada ({sifenStatus.config.environment.toUpperCase()})
+                    </span>
+                  ) : sifenStatus?.request?.status === 'approved' ? (
+                    <span className="px-2.5 py-0.5 rounded-full font-mono text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                      Solicitud Aprobada — Pendiente Activación Factufy
+                    </span>
+                  ) : sifenStatus?.request?.status === 'pending' ? (
+                    <span className="px-2.5 py-0.5 rounded-full font-mono text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      En Revisión por Cajasegura
+                    </span>
+                  ) : (
+                    <span className="px-2.5 py-0.5 rounded-full font-mono text-[10px] font-bold bg-gray-500/20 text-gray-300 border border-[#24324D]">
+                      No Solicitada
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-gray-400 mt-1">
+                  {sifenStatus?.config?.enabled
+                    ? `RUC ${sifenStatus.config.ruc}-${sifenStatus.config.dv} • ${sifenStatus.config.razonSocial} • Timbrado ${sifenStatus.config.timbrado}. Listo para emitir facturas y KuDE desde Caja POS.`
+                    : sifenStatus?.request
+                      ? `Datos enviados: RUC ${sifenStatus.request.ruc}-${sifenStatus.request.dv} • ${sifenStatus.request.razonSocial} • Timbrado ${sifenStatus.request.timbrado} (${sifenStatus.request.establecimiento}-${sifenStatus.request.puntoExpedicion}).`
+                      : 'Si tu empresa necesita emitir Facturas Electrónicas SIFEN desde Caja POS, enviá tus datos fiscales DNIT para que activemos tu conexión Factufy.'}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSifenRequestError(null);
+                setShowSifenRequestModal(true);
+              }}
+              className="px-4 py-2.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-purple-500/20 transition-all shrink-0 inline-flex items-center justify-center gap-1.5"
+            >
+              <FileCode className="w-4 h-4" />
+              <span>
+                {sifenStatus?.request ? 'Actualizar Datos Fiscales' : 'Solicitar Habilitación SIFEN'}
+              </span>
+            </button>
+          </div>
+
+          {sifenRequestSuccess && (
+            <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs text-emerald-300 font-medium">
+              {sifenRequestSuccess}
+            </div>
+          )}
+        </div>
+
         {/* Live Transactions & Audit Table */}
         <div className="bg-[#151D2F] border border-[#24324D] rounded-2xl p-6 shadow-xl space-y-4">
           <div className="flex items-center justify-between">
@@ -1937,6 +2117,261 @@ Estado: Transferencia acreditada en cuenta`;
                   className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 text-xs font-extrabold rounded-xl disabled:opacity-50"
                 >
                   {creatingStore ? 'Creando...' : 'Crear Comercio'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Solicitar Habilitación de Facturación Electrónica SIFEN */}
+      {showSifenRequestModal && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-[#151D2F] border border-purple-500/30 rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-5 my-8">
+            <div className="flex items-center justify-between border-b border-[#24324D] pb-3">
+              <div className="flex items-center gap-2.5">
+                <FileCode className="w-5 h-5 text-purple-400" />
+                <div>
+                  <h3 className="text-base font-bold text-white">
+                    Datos Fiscales para Facturación Electrónica SIFEN
+                  </h3>
+                  <p className="text-[11px] text-gray-400">
+                    Enviá los datos de tu contribuyente (DNIT / SET) para habilitar Factufy en tu comercio.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSifenRequestModal(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {sifenRequestError && (
+              <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs text-red-400">
+                {sifenRequestError}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmitSifenRequest} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-gray-300 mb-1">
+                    RUC del Contribuyente *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={sifenForm.ruc}
+                    onChange={(e) => setSifenForm({ ...sifenForm, ruc: e.target.value.replace(/\D/g, '') })}
+                    placeholder="Ej: 80012345"
+                    className="w-full bg-[#0B0F19] border border-[#24324D] rounded-xl px-3.5 py-2.5 text-sm font-mono text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-300 mb-1">
+                    DV (Opcional)
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={1}
+                    value={sifenForm.dv}
+                    onChange={(e) => setSifenForm({ ...sifenForm, dv: e.target.value.replace(/\D/g, '').slice(0, 1) })}
+                    placeholder="Auto"
+                    className="w-full bg-[#0B0F19] border border-[#24324D] rounded-xl px-3.5 py-2.5 text-sm font-mono text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-gray-300 mb-1">
+                    Razón Social *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={sifenForm.razonSocial}
+                    onChange={(e) => setSifenForm({ ...sifenForm, razonSocial: e.target.value })}
+                    placeholder="Ej: KIOSCO CENTRAL E.A.S."
+                    className="w-full bg-[#0B0F19] border border-[#24324D] rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-300 mb-1">
+                    Nombre de Fantasía
+                  </label>
+                  <input
+                    type="text"
+                    value={sifenForm.nombreFantasia}
+                    onChange={(e) => setSifenForm({ ...sifenForm, nombreFantasia: e.target.value })}
+                    placeholder="Ej: Kiosco Central"
+                    className="w-full bg-[#0B0F19] border border-[#24324D] rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-gray-300 mb-1">
+                    Tipo de Contribuyente
+                  </label>
+                  <select
+                    value={sifenForm.tipoContribuyente}
+                    onChange={(e) =>
+                      setSifenForm({ ...sifenForm, tipoContribuyente: Number(e.target.value) === 1 ? 1 : 2 })
+                    }
+                    className="w-full bg-[#0B0F19] border border-[#24324D] rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-purple-500"
+                  >
+                    <option value={2}>Persona Jurídica (S.A. / E.A.S. / S.R.L.)</option>
+                    <option value={1}>Persona Física</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-300 mb-1">
+                    Timbrado DNIT (8 dígitos) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    minLength={8}
+                    maxLength={8}
+                    value={sifenForm.timbrado}
+                    onChange={(e) =>
+                      setSifenForm({ ...sifenForm, timbrado: e.target.value.replace(/\D/g, '').slice(0, 8) })
+                    }
+                    placeholder="Ej: 17560102"
+                    className="w-full bg-[#0B0F19] border border-[#24324D] rounded-xl px-3.5 py-2.5 text-sm font-mono text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-300 mb-1">
+                    Inicio de Vigencia Timbrado
+                  </label>
+                  <input
+                    type="date"
+                    value={sifenForm.fechaInicioTimbrado}
+                    onChange={(e) => setSifenForm({ ...sifenForm, fechaInicioTimbrado: e.target.value })}
+                    className="w-full bg-[#0B0F19] border border-[#24324D] rounded-xl px-3.5 py-2.5 text-sm font-mono text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-gray-300 mb-1">
+                    Establecimiento (3 dígitos)
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={3}
+                    value={sifenForm.establecimiento}
+                    onChange={(e) =>
+                      setSifenForm({ ...sifenForm, establecimiento: e.target.value.replace(/\D/g, '').slice(0, 3) })
+                    }
+                    placeholder="001"
+                    className="w-full bg-[#0B0F19] border border-[#24324D] rounded-xl px-3.5 py-2.5 text-sm font-mono text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-300 mb-1">
+                    Punto de Expedición (3 dígitos)
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={3}
+                    value={sifenForm.puntoExpedicion}
+                    onChange={(e) =>
+                      setSifenForm({ ...sifenForm, puntoExpedicion: e.target.value.replace(/\D/g, '').slice(0, 3) })
+                    }
+                    placeholder="001"
+                    className="w-full bg-[#0B0F19] border border-[#24324D] rounded-xl px-3.5 py-2.5 text-sm font-mono text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-gray-300 mb-1">
+                    Dirección Fiscal
+                  </label>
+                  <input
+                    type="text"
+                    value={sifenForm.direccion}
+                    onChange={(e) => setSifenForm({ ...sifenForm, direccion: e.target.value })}
+                    placeholder="Av. España 1234, Asunción"
+                    className="w-full bg-[#0B0F19] border border-[#24324D] rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-300 mb-1">
+                    Teléfono
+                  </label>
+                  <input
+                    type="text"
+                    value={sifenForm.telefono}
+                    onChange={(e) => setSifenForm({ ...sifenForm, telefono: e.target.value })}
+                    placeholder="0981 123 456"
+                    className="w-full bg-[#0B0F19] border border-[#24324D] rounded-xl px-3.5 py-2.5 text-sm font-mono text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-gray-300 mb-1">
+                    Email Fiscal
+                  </label>
+                  <input
+                    type="email"
+                    value={sifenForm.email}
+                    onChange={(e) => setSifenForm({ ...sifenForm, email: e.target.value })}
+                    placeholder="facturacion@comercio.com.py"
+                    className="w-full bg-[#0B0F19] border border-[#24324D] rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-300 mb-1">
+                    Código Actividad Económica
+                  </label>
+                  <input
+                    type="text"
+                    value={sifenForm.actividadEconomicaCodigo}
+                    onChange={(e) => setSifenForm({ ...sifenForm, actividadEconomicaCodigo: e.target.value })}
+                    placeholder="47190"
+                    className="w-full bg-[#0B0F19] border border-[#24324D] rounded-xl px-3.5 py-2.5 text-sm font-mono text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-300 mb-1">
+                    Descripción Actividad Económica
+                  </label>
+                  <input
+                    type="text"
+                    value={sifenForm.actividadEconomicaDesc}
+                    onChange={(e) => setSifenForm({ ...sifenForm, actividadEconomicaDesc: e.target.value })}
+                    placeholder="Comercio al por menor"
+                    className="w-full bg-[#0B0F19] border border-[#24324D] rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-[#24324D]">
+                <button
+                  type="button"
+                  onClick={() => setShowSifenRequestModal(false)}
+                  className="px-4 py-2 text-xs text-gray-400 hover:text-white rounded-xl bg-[#0B0F19]"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingSifenRequest}
+                  className="px-5 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-xl disabled:opacity-50"
+                >
+                  {submittingSifenRequest ? 'Enviando...' : 'Enviar Datos Fiscales'}
                 </button>
               </div>
             </form>

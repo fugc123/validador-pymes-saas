@@ -47,6 +47,40 @@ interface PaymentReport {
   createdAt: string;
 }
 
+interface SifenOnboardingRequestItem {
+  id: string;
+  tenantId: string;
+  merchantName?: string;
+  ruc: string;
+  dv: string;
+  razonSocial: string;
+  nombreFantasia?: string;
+  tipoContribuyente: 1 | 2;
+  timbrado: string;
+  fechaInicioTimbrado?: string;
+  establecimiento: string;
+  puntoExpedicion: string;
+  direccion?: string;
+  telefono?: string;
+  email?: string;
+  actividadEconomicaCodigo?: string;
+  actividadEconomicaDesc?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  updatedAt?: string;
+  createdAt?: string;
+}
+
+interface SifenConfigSummary {
+  tenantId: string;
+  merchantName: string;
+  isLifetime: boolean;
+  enabled: boolean;
+  env: string;
+  ruc: string | null;
+  razonSocial: string | null;
+  timbrado: string | null;
+}
+
 export const SuperAdminPanel: React.FC = () => {
   const { user, logout, token } = useAuth();
   const [requests, setRequests] = useState<MerchantRequest[]>([]);
@@ -57,6 +91,10 @@ export const SuperAdminPanel: React.FC = () => {
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [sifenTargetMerchant, setSifenTargetMerchant] = useState<{ tenantId: string; merchantName: string } | null>(null);
+  const [sifenRequests, setSifenRequests] = useState<SifenOnboardingRequestItem[]>([]);
+  const [sifenConfigs, setSifenConfigs] = useState<SifenConfigSummary[]>([]);
+  const [approvingSifenTenantId, setApprovingSifenTenantId] = useState<string | null>(null);
+  const [sifenActionMessage, setSifenActionMessage] = useState<string | null>(null);
   const [createForm, setCreateForm] = useState({
     businessName: '',
     ownerName: '',
@@ -156,10 +194,65 @@ export const SuperAdminPanel: React.FC = () => {
     }
   };
 
+  const fetchSifenData = async () => {
+    if (!token) return;
+    try {
+      const [reqRes, cfgRes] = await Promise.all([
+        fetch('/api/v1/sifen/superadmin/requests', {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch('/api/v1/sifen/superadmin/configs', {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ]);
+      if (reqRes.ok) {
+        const reqJson = await reqRes.json();
+        setSifenRequests(reqJson?.data || []);
+      }
+      if (cfgRes.ok) {
+        const cfgJson = await cfgRes.json();
+        setSifenConfigs(cfgJson?.data || []);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleApproveSifenRequest = async (reqItem: SifenOnboardingRequestItem) => {
+    if (!token) return;
+    setApprovingSifenTenantId(reqItem.tenantId);
+    setSifenActionMessage(null);
+    try {
+      const res = await fetch(
+        `/api/v1/sifen/superadmin/requests/${encodeURIComponent(reqItem.tenantId)}/approve`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+      const json = await res.json().catch(() => null);
+      if (res.ok) {
+        setSifenActionMessage(
+          json?.message || `Solicitud SIFEN aprobada para ${reqItem.merchantName || reqItem.razonSocial}.`,
+        );
+        await fetchSifenData();
+        setSifenTargetMerchant({
+          tenantId: reqItem.tenantId,
+          merchantName: reqItem.merchantName || reqItem.razonSocial || reqItem.tenantId,
+        });
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setApprovingSifenTenantId(null);
+    }
+  };
+
   useEffect(() => {
     fetchRequests();
     fetchSubscriptions();
     fetchPaymentReports();
+    fetchSifenData();
   }, [token]);
 
   const handleApprove = async (id: string) => {
@@ -489,31 +582,126 @@ export const SuperAdminPanel: React.FC = () => {
           </div>
         </div>
 
-        {/* SIFEN Electronic Invoicing Section (Exclusivo Comercios Gratuitos / Propios) */}
-        <div className="bg-gradient-to-r from-[#171531] via-[#151D2F] to-[#151D2F] border border-purple-500/30 rounded-2xl p-6 shadow-xl space-y-4">
+        {/* SIFEN Electronic Invoicing Section (Demo VIP + Empresas Aprobadas) */}
+        <div className="bg-gradient-to-r from-[#171531] via-[#151D2F] to-[#151D2F] border border-purple-500/30 rounded-2xl p-6 shadow-xl space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center space-x-3">
               <div className="p-2.5 bg-purple-500/15 text-purple-300 rounded-xl border border-purple-500/30">
                 <FileCode className="w-5 h-5" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <h2 className="text-lg font-bold text-white">Facturación Electrónica SIFEN (Paraguay)</h2>
                   <span className="px-2.5 py-0.5 rounded-full font-mono text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                    Solo Empresas Gratuitas / Propias
+                    Demo VIP + Empresas Aprobadas
                   </span>
                 </div>
                 <p className="text-xs text-gray-400">
-                  Autocompletá por tus empresas los datos del contribuyente SET/DNIT (<code className="text-purple-300">consultame-sdk</code>), Timbrado, CSC y Certificado <code className="text-purple-300">.p12</code> para homologación y emisión.
+                  Aprobá solicitudes de comercios con sus datos DNIT y configurá credenciales Factufy o <code className="text-purple-300">consultame-sdk</code> para homologación y emisión.
                 </p>
               </div>
             </div>
           </div>
 
+          {sifenActionMessage && (
+            <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs text-emerald-300 font-medium">
+              {sifenActionMessage}
+            </div>
+          )}
+
+          {sifenRequests.length > 0 && (
+            <div className="space-y-2.5">
+              <div className="text-xs font-bold uppercase tracking-wider text-purple-300 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5" />
+                <span>Solicitudes de Facturación Electrónica de Comercios</span>
+              </div>
+              <div className="overflow-x-auto rounded-xl border border-[#24324D]">
+                <table className="w-full text-left text-xs min-w-[680px]">
+                  <thead className="bg-[#0B0F19] text-gray-400 uppercase font-mono">
+                    <tr>
+                      <th className="p-3">Comercio</th>
+                      <th className="p-3">RUC / Razón Social</th>
+                      <th className="p-3">Timbrado / Est-Pto</th>
+                      <th className="p-3">Estado</th>
+                      <th className="p-3 text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#24324D] bg-[#0B0F19]/40">
+                    {sifenRequests.map((reqItem) => (
+                      <tr key={reqItem.tenantId} className="hover:bg-[#1A253C]/40 transition-colors">
+                        <td className="p-3">
+                          <div className="font-semibold text-white">{reqItem.merchantName || reqItem.tenantId}</div>
+                          <div className="text-[10px] font-mono text-gray-400">{reqItem.tenantId}</div>
+                        </td>
+                        <td className="p-3">
+                          <div className="font-mono font-bold text-purple-200">{reqItem.ruc}-{reqItem.dv}</div>
+                          <div className="text-[11px] text-gray-300">{reqItem.razonSocial}</div>
+                        </td>
+                        <td className="p-3 font-mono text-gray-300">
+                          <div>Timb: {reqItem.timbrado}</div>
+                          <div className="text-[10px] text-gray-400">
+                            Est {reqItem.establecimiento} • Pto {reqItem.puntoExpedicion}
+                          </div>
+                        </td>
+                        <td className="p-3">
+                          {reqItem.status === 'approved' ? (
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-mono text-[10px] font-bold">
+                              Aprobada
+                            </span>
+                          ) : reqItem.status === 'rejected' ? (
+                            <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 font-mono text-[10px] font-bold">
+                              Rechazada
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono text-[10px] font-bold">
+                              Pendiente
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3 text-right">
+                          {reqItem.status === 'pending' ? (
+                            <button
+                              type="button"
+                              onClick={() => handleApproveSifenRequest(reqItem)}
+                              disabled={approvingSifenTenantId === reqItem.tenantId}
+                              className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold rounded-lg text-xs inline-flex items-center space-x-1 disabled:opacity-50"
+                            >
+                              <CheckCircle className="w-3.5 h-3.5" />
+                              <span>
+                                {approvingSifenTenantId === reqItem.tenantId
+                                  ? 'Aprobando...'
+                                  : 'Aprobar y Configurar Factufy'}
+                              </span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setSifenTargetMerchant({
+                                  tenantId: reqItem.tenantId,
+                                  merchantName: reqItem.merchantName || reqItem.razonSocial || reqItem.tenantId,
+                                })
+                              }
+                              className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-lg text-xs inline-flex items-center space-x-1"
+                            >
+                              <FileCode className="w-3.5 h-3.5" />
+                              <span>Configurar Factufy</span>
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {subscriptions.filter((s) => s.isLifetime || s.status === 'lifetime').length === 0 ? (
+            {sifenConfigs.length === 0 &&
+            subscriptions.filter((s) => s.isLifetime || s.status === 'lifetime').length === 0 ? (
               <div className="col-span-full p-4 bg-[#0B0F19] border border-[#24324D] rounded-xl text-xs text-gray-400 flex items-center justify-between">
-                <span>Aún no hay comercios gratuitos creados. Creá tu empresa con "Crear Comercio Gratuito" para habilitarle SIFEN.</span>
+                <span>Aún no hay comercios habilitados para SIFEN. Creá un comercio gratuito o aprobá una solicitud arriba.</span>
                 <button
                   type="button"
                   onClick={() => { setShowCreateModal(true); setCreatedResult(null); setCreateError(null); }}
@@ -523,27 +711,49 @@ export const SuperAdminPanel: React.FC = () => {
                 </button>
               </div>
             ) : (
-              subscriptions
-                .filter((s) => s.isLifetime || s.status === 'lifetime')
-                .map((s) => (
-                  <div
-                    key={s.tenantId}
-                    className="p-4 bg-[#0B0F19] border border-purple-500/25 rounded-xl flex items-center justify-between gap-3"
-                  >
-                    <div>
-                      <div className="font-bold text-white text-sm">{s.merchantName || s.tenantId}</div>
-                      <div className="text-[11px] font-mono text-purple-300">{s.tenantId} • Plan Gratuito Propio</div>
+              (sifenConfigs.length > 0
+                ? sifenConfigs
+                : subscriptions
+                    .filter((s) => s.isLifetime || s.status === 'lifetime')
+                    .map((s) => ({
+                      tenantId: s.tenantId,
+                      merchantName: s.merchantName || s.tenantId,
+                      isLifetime: true,
+                      enabled: false,
+                      env: 'test',
+                      ruc: null,
+                      razonSocial: null,
+                      timbrado: null,
+                    }))
+              ).map((cfg) => (
+                <div
+                  key={cfg.tenantId}
+                  className="p-4 bg-[#0B0F19] border border-purple-500/25 rounded-xl flex items-center justify-between gap-3"
+                >
+                  <div className="min-w-0">
+                    <div className="font-bold text-white text-sm truncate">{cfg.merchantName || cfg.tenantId}</div>
+                    <div className="text-[11px] font-mono text-purple-300 truncate">
+                      {cfg.tenantId} • {cfg.isLifetime ? 'Demo / VIP' : 'Aprobado'} •{' '}
+                      <span className={cfg.enabled ? 'text-emerald-400 font-bold' : 'text-amber-300'}>
+                        {cfg.enabled ? `Activa (${(cfg.env || 'test').toUpperCase()})` : 'Pendiente credenciales'}
+                      </span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setSifenTargetMerchant({ tenantId: s.tenantId, merchantName: s.merchantName || s.tenantId })}
-                      className="px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl flex items-center space-x-1.5 shadow-md shadow-purple-600/20 transition-all shrink-0"
-                    >
-                      <FileCode className="w-3.5 h-3.5" />
-                      <span>Autocompletar / SIFEN</span>
-                    </button>
+                    {cfg.ruc && (
+                      <div className="text-[10px] font-mono text-gray-400 truncate mt-0.5">
+                        RUC {cfg.ruc} • Timb. {cfg.timbrado || '—'}
+                      </div>
+                    )}
                   </div>
-                ))
+                  <button
+                    type="button"
+                    onClick={() => setSifenTargetMerchant({ tenantId: cfg.tenantId, merchantName: cfg.merchantName || cfg.tenantId })}
+                    className="px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl flex items-center space-x-1.5 shadow-md shadow-purple-600/20 transition-all shrink-0"
+                  >
+                    <FileCode className="w-3.5 h-3.5" />
+                    <span>Autocompletar / SIFEN</span>
+                  </button>
+                </div>
+              ))
             )}
           </div>
         </div>
@@ -621,6 +831,16 @@ export const SuperAdminPanel: React.FC = () => {
                                 <span>Marcar Moroso</span>
                               </button>
                             )}
+                            {sifenConfigs.some((c) => c.tenantId === s.tenantId) && (
+                              <button
+                                type="button"
+                                onClick={() => setSifenTargetMerchant({ tenantId: s.tenantId, merchantName: s.merchantName || s.tenantId })}
+                                className="px-2.5 py-1 bg-purple-600/20 hover:bg-purple-600/35 text-purple-200 border border-purple-500/40 rounded-lg text-xs font-bold flex items-center space-x-1 transition-all"
+                              >
+                                <FileCode className="w-3.5 h-3.5 text-purple-300" />
+                                <span>Configurar SIFEN</span>
+                              </button>
+                            )}
                           </>
                         )}
                       </td>
@@ -640,7 +860,10 @@ export const SuperAdminPanel: React.FC = () => {
           merchantName={sifenTargetMerchant.merchantName}
           token={token}
           onClose={() => setSifenTargetMerchant(null)}
-          onSaved={() => fetchSubscriptions()}
+          onSaved={() => {
+            fetchSubscriptions();
+            fetchSifenData();
+          }}
         />
       )}
 

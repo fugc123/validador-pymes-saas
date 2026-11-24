@@ -25,6 +25,8 @@ import {
   Wrench,
   History,
   Tag,
+  Download,
+  Gift,
 } from 'lucide-react';
 
 interface TransferResult {
@@ -122,6 +124,19 @@ export const FastPosScreen: React.FC = () => {
   const [sifenEmitInvoice, setSifenEmitInvoice] = useState(true);
   const [sifenReceptorRuc, setSifenReceptorRuc] = useState('');
   const [lookingUpRuc, setLookingUpRuc] = useState(false);
+  const [downloadingPdfCdc, setDownloadingPdfCdc] = useState<string | null>(null);
+  const [posLoyaltyCard, setPosLoyaltyCard] = useState<{
+    id: string;
+    customerPhone: string;
+    customerName?: string;
+    cardToken: string;
+    stampsCount: number;
+    totalVisits: number;
+    coupons: Array<{ id: string; code: string; rewardTitle: string; status: 'available' | 'redeemed' }>;
+  } | null>(null);
+  const [lookingUpLoyalty, setLookingUpLoyalty] = useState(false);
+  const [redeemingCouponId, setRedeemingCouponId] = useState<string | null>(null);
+  const [loyaltyFeedback, setLoyaltyFeedback] = useState<string | null>(null);
 
   // Recent sales history
   const [recentSales, setRecentSales] = useState<CashierSaleRecord[]>([]);
@@ -294,6 +309,93 @@ export const FastPosScreen: React.FC = () => {
     }
   };
 
+  const handleDownloadInvoicePdf = async (cdc: string) => {
+    if (!token || !cdc) return;
+    setDownloadingPdfCdc(cdc);
+    try {
+      const res = await fetch(`/api/v1/sifen/cashier/invoices/${encodeURIComponent(cdc)}/pdf`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.message || 'No se pudo descargar el PDF KuDE.');
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `factura-${cdc}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setSaleError(err.message || 'Error al descargar el PDF KuDE.');
+    } finally {
+      setDownloadingPdfCdc(null);
+    }
+  };
+
+  const handleLookupLoyaltyCard = async () => {
+    const cleanPhone = customerPhone.trim();
+    if (!token || !cleanPhone) return;
+    setLookingUpLoyalty(true);
+    setLoyaltyFeedback(null);
+    try {
+      const res = await fetch(`/api/v1/merchant/loyalty/cards/by-phone?phone=${encodeURIComponent(cleanPhone)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 404) {
+        setPosLoyaltyCard(null);
+        setLoyaltyFeedback('Todavía no hay tarjeta de fidelidad para ese celular.');
+        return;
+      }
+      if (!res.ok) {
+        throw new Error('No se pudo consultar la tarjeta de fidelidad.');
+      }
+      const data = await res.json();
+      const card = data?.card ?? data?.data ?? data;
+      setPosLoyaltyCard(card);
+      if (card?.customerName && !customerName.trim()) {
+        setCustomerName(card.customerName);
+      }
+    } catch (err: any) {
+      setPosLoyaltyCard(null);
+      setLoyaltyFeedback(err.message || 'Error consultando fidelidad.');
+    } finally {
+      setLookingUpLoyalty(false);
+    }
+  };
+
+  const handleRedeemPosCoupon = async (couponId: string) => {
+    if (!token || !couponId) return;
+    setRedeemingCouponId(couponId);
+    setLoyaltyFeedback(null);
+    try {
+      const res = await fetch(`/api/v1/merchant/loyalty/coupons/${encodeURIComponent(couponId)}/redeem`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.message || 'No se pudo canjear el cupón.');
+      }
+      setPosLoyaltyCard((prev) =>
+        prev
+          ? {
+              ...prev,
+              coupons: (prev.coupons || []).map((c) => (c.id === couponId ? { ...c, status: 'redeemed' } : c)),
+            }
+          : prev,
+      );
+      setLoyaltyFeedback('✓ Cupón canjeado correctamente.');
+    } catch (err: any) {
+      setLoyaltyFeedback(err.message || 'Error al canjear el cupón.');
+    } finally {
+      setRedeemingCouponId(null);
+    }
+  };
+
   const resetCheckoutForm = () => {
     stopRadar();
     setCart([]);
@@ -437,7 +539,7 @@ export const FastPosScreen: React.FC = () => {
 
       resetCheckoutForm();
       await fetchCashierData();
-      setTimeout(() => setCompletedSaleBanner(null), 5000);
+      setTimeout(() => setCompletedSaleBanner(null), emittedCdc ? 15000 : 5000);
     } catch (err: any) {
       setSaleError(err.message || 'Error al concretar la venta.');
     } finally {
@@ -678,8 +780,21 @@ export const FastPosScreen: React.FC = () => {
                   Gs. {completedSaleBanner.total.toLocaleString('es-PY')} • {completedSaleBanner.method} ({completedSaleBanner.summary})
                 </div>
                 {completedSaleBanner.sifenCdc && (
-                  <div className="text-[11px] font-mono text-purple-300 mt-1">
-                    🧾 Factura SIFEN N° {completedSaleBanner.sifenNumero} • CDC: {completedSaleBanner.sifenCdc}
+                  <div className="text-[11px] font-mono text-purple-300 mt-1 flex flex-wrap items-center gap-2">
+                    <span>
+                      🧾 Factura SIFEN N° {completedSaleBanner.sifenNumero} • CDC: {completedSaleBanner.sifenCdc}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadInvoicePdf(completedSaleBanner.sifenCdc!)}
+                      disabled={downloadingPdfCdc === completedSaleBanner.sifenCdc}
+                      className="px-2.5 py-0.5 bg-purple-500/25 hover:bg-purple-500/40 text-purple-200 border border-purple-400/40 rounded-md text-[10px] font-bold inline-flex items-center space-x-1 disabled:opacity-50 transition-colors"
+                    >
+                      <Download className="w-3 h-3" />
+                      <span>
+                        {downloadingPdfCdc === completedSaleBanner.sifenCdc ? 'Descargando...' : 'Descargar PDF (KuDE)'}
+                      </span>
+                    </button>
                   </div>
                 )}
                 {completedSaleBanner.loyaltyMessage && (
@@ -1064,14 +1179,80 @@ export const FastPosScreen: React.FC = () => {
                         />
                       </div>
 
-                      <div>
-                        <input
-                          type="tel"
-                          value={customerPhone}
-                          onChange={(e) => setCustomerPhone(e.target.value)}
-                          placeholder="Celular del cliente (ej: 0981 123 456) — suma visita de fidelidad..."
-                          className="w-full bg-[#0B0F19] border border-[#24324D] focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs font-mono text-white placeholder-gray-500 focus:outline-none transition-colors"
-                        />
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="tel"
+                            value={customerPhone}
+                            onChange={(e) => {
+                              setCustomerPhone(e.target.value);
+                              setPosLoyaltyCard(null);
+                              setLoyaltyFeedback(null);
+                            }}
+                            placeholder="Celular del cliente (ej: 0981 123 456) — suma visita o canjeá cupón..."
+                            className="w-full bg-[#0B0F19] border border-[#24324D] focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs font-mono text-white placeholder-gray-500 focus:outline-none transition-colors"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleLookupLoyaltyCard}
+                            disabled={lookingUpLoyalty || !customerPhone.trim()}
+                            className="px-2.5 py-2.5 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 rounded-xl text-[10px] font-bold shrink-0 inline-flex items-center space-x-1 disabled:opacity-50"
+                            title="Consultar sellos y cupones de fidelidad del cliente"
+                          >
+                            <Gift className="w-3.5 h-3.5" />
+                            <span>{lookingUpLoyalty ? '...' : 'Ver Sellos'}</span>
+                          </button>
+                        </div>
+
+                        {loyaltyFeedback && (
+                          <div className="text-[11px] font-mono text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-1.5">
+                            {loyaltyFeedback}
+                          </div>
+                        )}
+
+                        {posLoyaltyCard && (
+                          <div className="p-3 bg-[#151D2F] border border-amber-500/30 rounded-xl space-y-2">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="font-bold text-amber-300 flex items-center space-x-1.5">
+                                <Gift className="w-3.5 h-3.5" />
+                                <span>Fidelidad: {posLoyaltyCard.customerName || posLoyaltyCard.customerPhone}</span>
+                              </span>
+                              <span className="font-mono text-[11px] text-gray-300">
+                                {posLoyaltyCard.stampsCount} sellos • {posLoyaltyCard.totalVisits} visitas
+                              </span>
+                            </div>
+
+                            {posLoyaltyCard.coupons && posLoyaltyCard.coupons.filter((c) => c.status === 'available').length > 0 ? (
+                              <div className="space-y-1.5 pt-1 border-t border-[#24324D]">
+                                {posLoyaltyCard.coupons
+                                  .filter((c) => c.status === 'available')
+                                  .map((coupon) => (
+                                    <div
+                                      key={coupon.id}
+                                      className="flex items-center justify-between gap-2 bg-[#0B0F19] border border-emerald-500/30 rounded-lg px-2.5 py-1.5"
+                                    >
+                                      <div className="text-[11px]">
+                                        <span className="font-bold text-emerald-400">🎁 {coupon.rewardTitle}</span>
+                                        <span className="ml-2 font-mono text-[10px] text-gray-400">{coupon.code}</span>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRedeemPosCoupon(coupon.id)}
+                                        disabled={redeemingCouponId === coupon.id}
+                                        className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-400 text-gray-950 rounded-md text-[10px] font-extrabold transition-colors disabled:opacity-50"
+                                      >
+                                        {redeemingCouponId === coupon.id ? 'Canjeando...' : 'Canjear'}
+                                      </button>
+                                    </div>
+                                  ))}
+                              </div>
+                            ) : (
+                              <div className="text-[11px] text-gray-400">
+                                Sin cupones disponibles para canje todavía.
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
