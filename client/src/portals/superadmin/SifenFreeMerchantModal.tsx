@@ -148,6 +148,11 @@ export const SifenFreeMerchantModal: React.FC<Props> = ({
   const [testReceptorRuc, setTestReceptorRuc] = useState('44444401');
   const [testReceptorNombre, setTestReceptorNombre] = useState('CLIENTE PRUEBA HOMOLOGACION SIFEN');
   const [testTotalAmount, setTestTotalAmount] = useState('110000');
+  const [lookingUpIssuerRuc, setLookingUpIssuerRuc] = useState(false);
+  const [lookingUpTestRuc, setLookingUpTestRuc] = useState(false);
+  const [rucConsultFeedback, setRucConsultFeedback] = useState<string | null>(null);
+  const lastLookedUpIssuerRef = React.useRef<string>('');
+  const lastLookedUpTestRef = React.useRef<string>('');
 
   const fetchConfig = async () => {
     setLoading(true);
@@ -174,6 +179,7 @@ export const SifenFreeMerchantModal: React.FC<Props> = ({
       }
 
       if (data.config) {
+        lastLookedUpIssuerRef.current = (data.config.ruc || '').split('-')[0].replace(/\D/g, '');
         setHasExistingCert(Boolean(data.config.hasCertificate));
         setForm({
           enabled: Boolean(data.config.enabled),
@@ -233,12 +239,109 @@ export const SifenFreeMerchantModal: React.FC<Props> = ({
 
   const handleRucChange = (newRuc: string) => {
     const clean = newRuc.replace(/\D/g, '');
+    setRucConsultFeedback(null);
     setForm((prev) => ({
       ...prev,
       ruc: clean,
       dv: calculateParaguayDvClient(clean),
     }));
   };
+
+  const consultRucSuperAdmin = async (rawRuc: string) => {
+    const clean = (rawRuc || '').split('-')[0].replace(/\D/g, '');
+    if (!token || clean.length < 5) return null;
+    const res = await fetch(`/api/v1/sifen/superadmin/consult-ruc/${encodeURIComponent(tenantId)}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        ruc: clean,
+        factufyClientId: form.factufyClientId,
+        factufyClientSecret: form.factufyClientSecret,
+        factufyBranchCode: form.factufyBranchCode,
+        factufyPosCode: form.factufyPosCode,
+      }),
+    });
+    if (!res.ok) return null;
+    const json = await res.json().catch(() => null);
+    return json?.data || null;
+  };
+
+  const handleLookupIssuerRuc = async (rawValue?: string) => {
+    const targetRuc = rawValue ?? form.ruc;
+    const clean = (targetRuc || '').split('-')[0].replace(/\D/g, '');
+    if (clean.length < 5) return;
+    lastLookedUpIssuerRef.current = clean;
+    setLookingUpIssuerRuc(true);
+    setRucConsultFeedback(null);
+    try {
+      const r = await consultRucSuperAdmin(clean);
+      if (r) {
+        const cleanName = typeof r.razonSocial === 'string' ? r.razonSocial.trim() : '';
+        setForm((prev) => ({
+          ...prev,
+          ruc: r.ruc || clean,
+          dv: r.dv || prev.dv,
+          razonSocial: cleanName || prev.razonSocial,
+          nombreFantasia: !prev.nombreFantasia && cleanName ? cleanName : prev.nombreFantasia,
+        }));
+        if (cleanName) {
+          setRucConsultFeedback(`✓ RUC Emisor ${r.ruc}-${r.dv}: ${cleanName}`);
+        }
+      }
+    } finally {
+      setLookingUpIssuerRuc(false);
+    }
+  };
+
+  const handleLookupTestRuc = async (rawValue?: string) => {
+    const targetRuc = rawValue ?? testReceptorRuc;
+    const clean = (targetRuc || '').split('-')[0].replace(/\D/g, '');
+    if (clean.length < 5) return;
+    lastLookedUpTestRef.current = clean;
+    setLookingUpTestRuc(true);
+    try {
+      const r = await consultRucSuperAdmin(clean);
+      if (r) {
+        const cleanName = typeof r.razonSocial === 'string' ? r.razonSocial.trim() : '';
+        if (cleanName) {
+          setTestReceptorNombre(cleanName);
+          setFeedback({
+            type: 'success',
+            text: `✓ RUC Receptor ${r.ruc}-${r.dv} encontrado: ${cleanName}`,
+          });
+        }
+      }
+    } finally {
+      setLookingUpTestRuc(false);
+    }
+  };
+
+  useEffect(() => {
+    if (loading || form.provider !== 'factufy') return;
+    const clean = (form.ruc || '').split('-')[0].replace(/\D/g, '');
+    if (clean.length < 6 || clean === '80012345' || lastLookedUpIssuerRef.current === clean) {
+      return;
+    }
+    const t = setTimeout(() => {
+      handleLookupIssuerRuc(clean);
+    }, 550);
+    return () => clearTimeout(t);
+  }, [form.ruc, form.provider, loading]);
+
+  useEffect(() => {
+    if (loading || form.provider !== 'factufy') return;
+    const clean = (testReceptorRuc || '').split('-')[0].replace(/\D/g, '');
+    if (clean.length < 6 || clean === '44444401' || lastLookedUpTestRef.current === clean) {
+      return;
+    }
+    const t = setTimeout(() => {
+      handleLookupTestRuc(clean);
+    }, 550);
+    return () => clearTimeout(t);
+  }, [testReceptorRuc, form.provider, loading]);
 
   const handleAutocompleteAsuncion = () => {
     const rucBase = form.ruc && form.ruc.length >= 6 ? form.ruc : '80098765';
@@ -637,14 +740,36 @@ export const SifenFreeMerchantModal: React.FC<Props> = ({
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">RUC Emisor (sin DV) *</label>
-                  <input
-                    type="text"
-                    required
-                    value={form.ruc}
-                    onChange={(e) => handleRucChange(e.target.value)}
-                    placeholder="80012345"
-                    className="w-full bg-[#0B0F19] border border-[#24324D] rounded-xl px-3 py-2 text-xs font-mono text-white"
-                  />
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      required
+                      value={form.ruc}
+                      onChange={(e) => handleRucChange(e.target.value)}
+                      onBlur={() => {
+                        if (form.provider === 'factufy') handleLookupIssuerRuc();
+                      }}
+                      placeholder="80012345"
+                      className="w-full bg-[#0B0F19] border border-[#24324D] rounded-xl px-3 py-2 text-xs font-mono text-white"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        lastLookedUpIssuerRef.current = '';
+                        handleLookupIssuerRuc();
+                      }}
+                      disabled={lookingUpIssuerRuc}
+                      className="px-2.5 py-2 bg-purple-500/20 hover:bg-purple-500/35 text-purple-200 border border-purple-500/40 rounded-xl text-[10px] font-bold shrink-0"
+                      title="Consultar Razón Social en Factufy / DNIT"
+                    >
+                      {lookingUpIssuerRuc ? '...' : 'Buscar'}
+                    </button>
+                  </div>
+                  {rucConsultFeedback && (
+                    <div className="text-[10px] font-mono text-emerald-400 mt-1 truncate">
+                      {rucConsultFeedback}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">
@@ -894,12 +1019,29 @@ export const SifenFreeMerchantModal: React.FC<Props> = ({
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-[#0B0F19] p-4 rounded-2xl border border-[#24324D]">
             <div>
               <label className="block text-[11px] text-gray-400 mb-1">RUC Receptor Prueba</label>
-              <input
-                type="text"
-                value={testReceptorRuc}
-                onChange={(e) => setTestReceptorRuc(e.target.value)}
-                className="w-full bg-[#151D2F] border border-[#24324D] rounded-xl px-3 py-2 text-xs font-mono text-white"
-              />
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  value={testReceptorRuc}
+                  onChange={(e) => setTestReceptorRuc(e.target.value)}
+                  onBlur={() => {
+                    if (form.provider === 'factufy') handleLookupTestRuc();
+                  }}
+                  className="w-full bg-[#151D2F] border border-[#24324D] rounded-xl px-3 py-2 text-xs font-mono text-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    lastLookedUpTestRef.current = '';
+                    handleLookupTestRuc();
+                  }}
+                  disabled={lookingUpTestRuc}
+                  className="px-2.5 py-2 bg-purple-500/20 hover:bg-purple-500/35 text-purple-200 border border-purple-500/40 rounded-xl text-[10px] font-bold shrink-0"
+                  title="Consultar RUC en Factufy / DNIT"
+                >
+                  {lookingUpTestRuc ? '...' : 'Buscar'}
+                </button>
+              </div>
             </div>
             <div className="sm:col-span-2">
               <label className="block text-[11px] text-gray-400 mb-1">

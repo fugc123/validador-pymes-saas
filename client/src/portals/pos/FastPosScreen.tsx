@@ -124,6 +124,9 @@ export const FastPosScreen: React.FC = () => {
   const [sifenEmitInvoice, setSifenEmitInvoice] = useState(true);
   const [sifenReceptorRuc, setSifenReceptorRuc] = useState('');
   const [lookingUpRuc, setLookingUpRuc] = useState(false);
+  const [rucLookupStatus, setRucLookupStatus] = useState<string | null>(null);
+  const lastLookedUpRucRef = useRef<string>('');
+  const rucDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [downloadingPdfCdc, setDownloadingPdfCdc] = useState<string | null>(null);
   const [posLoyaltyCard, setPosLoyaltyCard] = useState<{
     id: string;
@@ -284,30 +287,61 @@ export const FastPosScreen: React.FC = () => {
     );
   };
 
-  const handleLookupRuc = async () => {
-    const clean = (customerRuc || '').split('-')[0].replace(/\D/g, '');
-    if (!token || clean.length < 5) return;
-    setLookingUpRuc(true);
-    try {
-      const res = await fetch(`/api/v1/sifen/cashier/ruc/${encodeURIComponent(clean)}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const json = await res.json();
-        const r = json?.data;
-        if (r) {
-          const fullRuc = `${r.ruc}-${r.dv}`;
-          setCustomerRuc(fullRuc);
-          setSifenReceptorRuc(fullRuc);
-          if (r.razonSocial) {
-            setCustomerName(r.razonSocial);
+  const lookupRuc = useCallback(
+    async (rawValue: string, formatInputField: boolean) => {
+      const clean = (rawValue || '').split('-')[0].replace(/\D/g, '');
+      if (!token || clean.length < 5) return;
+      lastLookedUpRucRef.current = clean;
+      setLookingUpRuc(true);
+      try {
+        const res = await fetch(`/api/v1/sifen/cashier/ruc/${encodeURIComponent(clean)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          const r = json?.data;
+          if (r) {
+            const fullRuc = `${r.ruc}-${r.dv}`;
+            setSifenReceptorRuc(fullRuc);
+            if (formatInputField) {
+              setCustomerRuc(fullRuc);
+            }
+            const cleanName = typeof r.razonSocial === 'string' ? r.razonSocial.trim() : '';
+            if (cleanName) {
+              setCustomerName(cleanName);
+              setRucLookupStatus(`✓ ${fullRuc} • ${cleanName}`);
+            } else {
+              setRucLookupStatus(`DV calculado: ${fullRuc} (completá nombre manual)`);
+            }
           }
         }
+      } finally {
+        setLookingUpRuc(false);
       }
-    } finally {
-      setLookingUpRuc(false);
+    },
+    [token],
+  );
+
+  useEffect(() => {
+    if (rucDebounceRef.current) {
+      clearTimeout(rucDebounceRef.current);
+      rucDebounceRef.current = null;
     }
-  };
+    const clean = (customerRuc || '').split('-')[0].replace(/\D/g, '');
+    if (!sifenEnabled || !token || clean.length < 6 || lastLookedUpRucRef.current === clean) {
+      return;
+    }
+    rucDebounceRef.current = setTimeout(() => {
+      lookupRuc(customerRuc, false);
+    }, 500);
+
+    return () => {
+      if (rucDebounceRef.current) {
+        clearTimeout(rucDebounceRef.current);
+        rucDebounceRef.current = null;
+      }
+    };
+  }, [customerRuc, sifenEnabled, token, lookupRuc]);
 
   const handleDownloadInvoicePdf = async (cdc: string) => {
     if (!token || !cdc) return;
@@ -405,6 +439,8 @@ export const FastPosScreen: React.FC = () => {
     setCustomerPhone('');
     setCustomerRuc('');
     setSifenReceptorRuc('');
+    setRucLookupStatus(null);
+    lastLookedUpRucRef.current = '';
     setCustomerEmail('');
     setMatch(null);
     setReplayAlert(null);
@@ -1169,6 +1205,50 @@ export const FastPosScreen: React.FC = () => {
                     </div>
 
                     <div className="space-y-2.5">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            value={customerRuc}
+                            onChange={(e) => {
+                              setCustomerRuc(e.target.value);
+                              setSifenReceptorRuc(e.target.value);
+                              setRucLookupStatus(null);
+                            }}
+                            onBlur={() => {
+                              if (sifenEnabled) lookupRuc(customerRuc, true);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && sifenEnabled) {
+                                e.preventDefault();
+                                lookupRuc(customerRuc, true);
+                              }
+                            }}
+                            placeholder="RUC o Cédula (Ej: 80012345-6) — autocompleta nombre..."
+                            className="w-full bg-[#0B0F19] border border-[#24324D] focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs font-mono text-white placeholder-gray-500 focus:outline-none transition-colors"
+                          />
+                          {sifenEnabled && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                lastLookedUpRucRef.current = '';
+                                lookupRuc(customerRuc, true);
+                              }}
+                              disabled={lookingUpRuc}
+                              className="px-2.5 py-2.5 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 rounded-xl text-[10px] font-bold shrink-0"
+                              title="Consultar RUC en SIFEN / Factufy"
+                            >
+                              {lookingUpRuc ? '...' : 'Buscar RUC'}
+                            </button>
+                          )}
+                        </div>
+                        {sifenEnabled && rucLookupStatus && (
+                          <div className="text-[11px] font-mono text-purple-300 px-1">
+                            {rucLookupStatus}
+                          </div>
+                        )}
+                      </div>
+
                       <div>
                         <input
                           type="text"
@@ -1255,39 +1335,14 @@ export const FastPosScreen: React.FC = () => {
                         )}
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                        <div className="flex items-center gap-1.5">
-                          <input
-                            type="text"
-                            value={customerRuc}
-                            onChange={(e) => {
-                              setCustomerRuc(e.target.value);
-                              setSifenReceptorRuc(e.target.value);
-                            }}
-                            placeholder="RUC o Cédula (Ej: 80012345-6)..."
-                            className="w-full bg-[#0B0F19] border border-[#24324D] focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs font-mono text-white placeholder-gray-500 focus:outline-none transition-colors"
-                          />
-                          {sifenEnabled && (
-                            <button
-                              type="button"
-                              onClick={handleLookupRuc}
-                              disabled={lookingUpRuc}
-                              className="px-2.5 py-2.5 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 rounded-xl text-[10px] font-bold shrink-0"
-                              title="Consultar RUC en SIFEN / Factufy"
-                            >
-                              {lookingUpRuc ? '...' : 'Buscar RUC'}
-                            </button>
-                          )}
-                        </div>
-                        <div>
-                          <input
-                            type="email"
-                            value={customerEmail}
-                            onChange={(e) => setCustomerEmail(e.target.value)}
-                            placeholder="Email (Ej: cliente@gmail.com)..."
-                            className="w-full bg-[#0B0F19] border border-[#24324D] focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none transition-colors"
-                          />
-                        </div>
+                      <div>
+                        <input
+                          type="email"
+                          value={customerEmail}
+                          onChange={(e) => setCustomerEmail(e.target.value)}
+                          placeholder="Email (Ej: cliente@gmail.com)..."
+                          className="w-full bg-[#0B0F19] border border-[#24324D] focus:border-emerald-500 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none transition-colors"
+                        />
                       </div>
                     </div>
                   </div>

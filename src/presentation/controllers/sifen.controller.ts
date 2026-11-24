@@ -46,6 +46,14 @@ export interface CashierEmitSifenDto {
   items?: SifenInvoiceItemInput[];
 }
 
+export interface SuperAdminConsultRucDto {
+  ruc: string;
+  factufyClientId?: string;
+  factufyClientSecret?: string;
+  factufyBranchCode?: string;
+  factufyPosCode?: string;
+}
+
 @Controller('sifen')
 @UseGuards(RolesGuard)
 export class SifenController {
@@ -182,6 +190,57 @@ export class SifenController {
         invoice,
         config: this.sanitizeConfig(updatedConfig),
       },
+    };
+  }
+
+  @Post('superadmin/consult-ruc/:tenantId')
+  @Roles('SUPER_ADMIN')
+  @HttpCode(HttpStatus.OK)
+  async consultRucForSuperAdmin(
+    @Param('tenantId') tenantId: string,
+    @Body() dto: SuperAdminConsultRucDto,
+  ) {
+    const cleanRuc = (dto?.ruc || '').split('-')[0].replace(/\D/g, '');
+    if (cleanRuc.length < 5) {
+      throw new BadRequestException('Ingresá un RUC válido (mínimo 5 dígitos).');
+    }
+
+    const bodySecret = (dto?.factufyClientSecret || '').trim();
+    if (
+      dto?.factufyClientId &&
+      dto.factufyClientId.trim() &&
+      bodySecret &&
+      bodySecret !== '********' &&
+      this.factufyAdapter
+    ) {
+      try {
+        const res = await this.factufyAdapter.consultRuc(
+          {
+            clientId: dto.factufyClientId.trim(),
+            clientSecret: bodySecret,
+            branchCode: dto.factufyBranchCode || '001',
+            posCode: dto.factufyPosCode || '001',
+          },
+          cleanRuc,
+        );
+        return {
+          status: 'ok',
+          data: {
+            ruc: res.ruc,
+            dv: res.dv,
+            razonSocial: res.razonSocial,
+            provider: 'factufy',
+          },
+        };
+      } catch {
+        // Fallback to stored tenant credentials or local Modulo-11 if draft creds fail
+      }
+    }
+
+    const result = await this.sifenRepo.consultRuc(tenantId, cleanRuc);
+    return {
+      status: 'ok',
+      data: result,
     };
   }
 

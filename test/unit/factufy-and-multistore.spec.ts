@@ -1,4 +1,6 @@
 import { FactufyAdapter } from '../../src/infrastructure/sifen/factufy.adapter';
+import { SifenRepository } from '../../src/infrastructure/repositories/sifen.repository';
+import { SifenController } from '../../src/presentation/controllers/sifen.controller';
 import { calculateStoreMonthlyCostPyg } from '../../src/core/application/ports/auth.ports';
 import { IngestWebhookUseCase } from '../../src/core/application/use-cases/ingest-webhook.use-case';
 import { ClaimTransferUseCase } from '../../src/core/application/use-cases/transfers/claim-transfer.use-case';
@@ -187,5 +189,100 @@ describe('Factufy Adapter, Branch Pricing & Multi-Store Anti-Replay', () => {
         cashierUserId: 'usr-cashier-imprenta',
       }),
     ).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('retries Factufy RUC lookup on transient 5xx and trims returned taxpayer name', async () => {
+    let rucAttempts = 0;
+    const fetchMock = jest.fn(async (url: string) => {
+      if (url.endsWith('/auth/token')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ access_token: 'jwt_retry_test_token' }),
+        } as any;
+      }
+      if (url.includes('/invoices/ruc/80023017')) {
+        rucAttempts += 1;
+        if (rucAttempts === 1) {
+          return {
+            ok: false,
+            status: 502,
+            json: async () => ({ message: 'Bad Gateway from DNIT' }),
+          } as any;
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            ruc: '80023017',
+            nombre: '  INFOZOOM SRL  ',
+            estado: 'ACTIVO',
+          }),
+        } as any;
+      }
+      return { ok: false, status: 404, json: async () => ({}) } as any;
+    });
+    global.fetch = fetchMock as any;
+
+    const adapter = new FactufyAdapter();
+    const res = await adapter.consultRuc(
+      {
+        clientId: 'cli_test_mock_retry',
+        clientSecret: 'sec_test_mock_retry',
+        branchCode: '001',
+        posCode: '001',
+      },
+      '80023017',
+    );
+
+    expect(rucAttempts).toBe(2);
+    expect(res).toEqual({
+      ruc: '80023017',
+      dv: '5',
+      razonSocial: 'INFOZOOM SRL',
+    });
+  });
+
+  it('allows SuperAdmin RUC lookup using unsaved Factufy credentials in SifenController', async () => {
+    const mockFactufyAdapter = {
+      consultRuc: jest.fn(async (_creds: any, cleanRuc: string) => ({
+        ruc: cleanRuc,
+        dv: '5',
+        razonSocial: 'ÑEMU SRL',
+      })),
+    } as any;
+
+    const controller = new SifenController(
+      new SifenRepository(),
+      { findById: async () => null } as any,
+      mockFactufyAdapter,
+    );
+
+    const resp = await controller.consultRucForSuperAdmin('comercio-test', {
+      ruc: '80001616-5',
+      factufyClientId: 'cli_test_synthetic_001',
+      factufyClientSecret: 'sec_test_synthetic_001',
+      factufyBranchCode: '001',
+      factufyPosCode: '001',
+    });
+
+    expect(mockFactufyAdapter.consultRuc).toHaveBeenCalledWith(
+      {
+        clientId: 'cli_test_synthetic_001',
+        clientSecret: 'sec_test_synthetic_001',
+        branchCode: '001',
+        posCode: '001',
+      },
+      '80001616',
+    );
+    expect(resp).toEqual({
+      status: 'ok',
+      data: {
+        ruc: '80001616',
+        dv: '5',
+        razonSocial: 'ÑEMU SRL',
+        provider: 'factufy',
+      },
+    });
   });
 });

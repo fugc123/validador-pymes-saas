@@ -95,22 +95,53 @@ export class FactufyAdapter {
 
     const baseUrl = this.resolveBaseUrl(creds.baseUrl);
     const token = await this.getAccessToken(creds);
-    const res = await fetch(`${baseUrl}/invoices/ruc/${encodeURIComponent(cleanRuc)}`, {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const url = `${baseUrl}/invoices/ruc/${encodeURIComponent(cleanRuc)}`;
+    const maxAttempts = 3;
+    let lastErrorMessage = '';
 
-    const data: any = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new BadGatewayException(data?.message || `Error consultando RUC en Factufy (${res.status}).`);
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const res = await fetch(url, {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data: any = await res.json().catch(() => ({}));
+
+        if (res.ok) {
+          const payload = data?.data || data;
+          const rawName =
+            payload?.razonSocial ||
+            payload?.nombre ||
+            payload?.nombreCompleto ||
+            [payload?.nombres, payload?.apellidos].filter(Boolean).join(' ') ||
+            '';
+          const cleanName = String(rawName).trim();
+
+          return {
+            ruc: cleanRuc,
+            dv: String(payload?.dv ?? payload?.digitoVerificado ?? calculateParaguayDv(cleanRuc)),
+            razonSocial: cleanName.length > 0 ? cleanName : null,
+          };
+        }
+
+        lastErrorMessage = data?.message || `Error consultando RUC en Factufy (${res.status}).`;
+        if (res.status < 500 || attempt === maxAttempts) {
+          throw new BadGatewayException(lastErrorMessage);
+        }
+      } catch (err: any) {
+        if (err instanceof BadGatewayException || err instanceof BadRequestException) {
+          throw err;
+        }
+        lastErrorMessage = err?.message || 'Error de red consultando RUC en Factufy.';
+        if (attempt === maxAttempts) {
+          throw new BadGatewayException(lastErrorMessage);
+        }
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
     }
 
-    const payload = data?.data || data;
-    return {
-      ruc: cleanRuc,
-      dv: String(payload?.dv ?? payload?.digitoVerificado ?? calculateParaguayDv(cleanRuc)),
-      razonSocial: payload?.razonSocial || payload?.nombre || null,
-    };
+    throw new BadGatewayException(lastErrorMessage || 'Error consultando RUC en Factufy.');
   }
 
   async sendInvoice(creds: FactufyCredentials, input: FactufyInvoicePayloadInput): Promise<FactufyEmitResult> {
