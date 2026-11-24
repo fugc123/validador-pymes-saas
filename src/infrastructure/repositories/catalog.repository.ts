@@ -820,7 +820,7 @@ export class CatalogRepository implements ICatalogRepository {
     }
   }
 
-  async createBooking(input: CreateBookingInput): Promise<CatalogBooking> {
+  async createBooking(input: CreateBookingInput, now: Date = new Date()): Promise<CatalogBooking> {
     const customerName = (input.customerName || '').trim();
     const customerPhone = (input.customerPhone || '').trim();
     if (!customerName) {
@@ -843,9 +843,11 @@ export class CatalogRepository implements ICatalogRepository {
     const occupiedDates = this.enumerateOccupiedDates(startDate, endDate);
 
     // Reject bookings in the past (Paraguay UTC-3)
-    const todayParaguay = new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
+    const pyIso = new Date(now.getTime() - 3 * 3600 * 1000).toISOString();
+    const todayParaguay = pyIso.slice(0, 10);
+    const currentHhMmParaguay = pyIso.slice(11, 16);
     if (startDate < todayParaguay) {
-      throw new BadRequestException('Cannot create a booking for a past date');
+      throw new BadRequestException('No se puede crear una reserva en una fecha pasada.');
     }
 
     const allowedDays = item.bookingDaysOfWeek
@@ -873,9 +875,13 @@ export class CatalogRepository implements ICatalogRepository {
       if (!effectiveSlots.includes(timeSlot)) {
         throw new BadRequestException(`Time slot '${timeSlot}' is not enabled for this service`);
       }
+      if (startDate === todayParaguay && timeSlot <= currentHhMmParaguay) {
+        throw new BadRequestException(
+          `El horario ${timeSlot} ya pasó hoy (${currentHhMmParaguay}). Elegí un horario posterior o una fecha futura.`,
+        );
+      }
     }
 
-    const now = new Date();
     const booking: CatalogBooking = {
       id: `bkg-${randomUUID().slice(0, 8)}-${Date.now().toString(36)}`,
       tenantId: item.tenantId,

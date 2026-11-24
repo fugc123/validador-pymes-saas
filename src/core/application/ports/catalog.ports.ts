@@ -224,7 +224,7 @@ export interface ICatalogRepository {
   } | null>;
   createSale(input: CreateSaleInput, now?: Date): Promise<Sale>;
   listSalesByTenant(tenantId: string, limit?: number): Promise<Sale[]>;
-  createBooking(input: CreateBookingInput): Promise<CatalogBooking>;
+  createBooking(input: CreateBookingInput, now?: Date): Promise<CatalogBooking>;
   listBookingsByTenant(tenantId: string, limit?: number): Promise<CatalogBooking[]>;
   updateBookingStatus(tenantId: string, bookingId: string, status: BookingStatus): Promise<CatalogBooking | null>;
   getBookingAvailability(tenantId: string, itemId: string, fromDate: string, toDate: string): Promise<BookingSlotCount[]>;

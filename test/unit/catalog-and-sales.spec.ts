@@ -429,4 +429,81 @@ describe('Catalog, Inventory, Time Discounts & POS Sales (T1 & T2)', () => {
     const confirmed = await catalogRepo.updateBookingStatus('hotel-asuncion', stay.id, 'confirmed');
     expect(confirmed?.status).toBe('confirmed');
   });
+
+  it('rejects same-day bookings whose time slot has already passed in Paraguay time (UTC-3)', async () => {
+    // 2026-11-24T17:30:00.000Z === 2026-11-24 14:30 in Paraguay (UTC-3), Tuesday (day 2)
+    const fixedNow = new Date('2026-11-24T17:30:00.000Z');
+
+    const service = await catalogRepo.createItem({
+      tenantId: 'barberia-hoy',
+      itemType: 'service',
+      name: 'Corte Express',
+      price: 45000,
+      bookingEnabled: true,
+      bookingMode: 'hours',
+      bookingDaysOfWeek: '0,1,2,3,4,5,6',
+      bookingTimeSlots: '09:00,14:00,14:30,15:00,17:00',
+      bookingMaxConcurrent: 1,
+    });
+
+    // Past time slot today -> rejected
+    await expect(
+      catalogRepo.createBooking(
+        {
+          tenantId: 'barberia-hoy',
+          itemId: service.id,
+          startDate: '2026-11-24',
+          timeSlot: '09:00',
+          customerName: 'Pedro',
+          customerPhone: '0981111222',
+        },
+        fixedNow,
+      ),
+    ).rejects.toThrow(/ya pasó hoy/i);
+
+    // Exact current HH:mm today -> rejected
+    await expect(
+      catalogRepo.createBooking(
+        {
+          tenantId: 'barberia-hoy',
+          itemId: service.id,
+          startDate: '2026-11-24',
+          timeSlot: '14:30',
+          customerName: 'Pedro',
+          customerPhone: '0981111222',
+        },
+        fixedNow,
+      ),
+    ).rejects.toThrow(/ya pasó hoy/i);
+
+    // Past date -> rejected
+    await expect(
+      catalogRepo.createBooking(
+        {
+          tenantId: 'barberia-hoy',
+          itemId: service.id,
+          startDate: '2026-11-23',
+          timeSlot: '17:00',
+          customerName: 'Pedro',
+          customerPhone: '0981111222',
+        },
+        fixedNow,
+      ),
+    ).rejects.toThrow(/fecha pasada/i);
+
+    // Future slot later today -> accepted
+    const validToday = await catalogRepo.createBooking(
+      {
+        tenantId: 'barberia-hoy',
+        itemId: service.id,
+        startDate: '2026-11-24',
+        timeSlot: '15:00',
+        customerName: 'Pedro',
+        customerPhone: '0981111222',
+      },
+      fixedNow,
+    );
+    expect(validToday.status).toBe('pending');
+    expect(validToday.timeSlot).toBe('15:00');
+  });
 });

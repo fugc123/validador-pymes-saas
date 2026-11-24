@@ -48,11 +48,9 @@ interface BookingSlotCount {
 
 const WEEKDAY_LABELS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
-function toLocalIsoDate(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+function getParaguayNowStrings(now: Date = new Date()): { todayIso: string; currentHhMm: string } {
+  const pyIso = new Date(now.getTime() - 3 * 3600 * 1000).toISOString();
+  return { todayIso: pyIso.slice(0, 10), currentHhMm: pyIso.slice(11, 16) };
 }
 
 function addDaysToIso(iso: string, days: number): string {
@@ -158,8 +156,12 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ slug, onBa
 
   // Booking modal state
   const [bookingItem, setBookingItem] = useState<PublicCatalogItem | null>(null);
-  const [bookingStartDate, setBookingStartDate] = useState<string>(() => toLocalIsoDate(new Date()));
-  const [bookingEndDate, setBookingEndDate] = useState<string>(() => addDaysToIso(toLocalIsoDate(new Date()), 1));
+  const [nowClock, setNowClock] = useState<Date>(() => new Date());
+  const { todayIso, currentHhMm } = useMemo(() => getParaguayNowStrings(nowClock), [nowClock]);
+  const [bookingStartDate, setBookingStartDate] = useState<string>(() => getParaguayNowStrings().todayIso);
+  const [bookingEndDate, setBookingEndDate] = useState<string>(() =>
+    addDaysToIso(getParaguayNowStrings().todayIso, 1),
+  );
   const [bookingTimeSlot, setBookingTimeSlot] = useState<string>('');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -169,6 +171,13 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ slug, onBa
   const [submittingBooking, setSubmittingBooking] = useState(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [bookingSuccessId, setBookingSuccessId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!bookingItem) return;
+    setNowClock(new Date());
+    const id = setInterval(() => setNowClock(new Date()), 30000);
+    return () => clearInterval(id);
+  }, [bookingItem]);
 
   useEffect(() => {
     const fetchCatalog = async () => {
@@ -195,7 +204,7 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ slug, onBa
 
   useEffect(() => {
     if (!bookingItem) return;
-    const fromDate = bookingStartDate || toLocalIsoDate(new Date());
+    const fromDate = bookingStartDate || todayIso;
     const toDate = bookingItem.bookingMode === 'days' ? bookingEndDate || fromDate : fromDate;
     if (toDate < fromDate) return;
 
@@ -248,10 +257,34 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ slug, onBa
   }, [data, filterType, searchQuery]);
 
   const openBookingModal = (item: PublicCatalogItem) => {
-    const today = toLocalIsoDate(new Date());
+    const now = new Date();
+    const { todayIso: currentToday, currentHhMm: nowHhMm } = getParaguayNowStrings(now);
+    let initialDate = currentToday;
+
+    if (item.bookingMode !== 'days') {
+      const allowedDays = (item.bookingDaysOfWeek || '1,2,3,4,5,6')
+        .split(',')
+        .map((d) => Number(d.trim()))
+        .filter((n) => !Number.isNaN(n));
+      const slots = (item.bookingTimeSlots || '09:00,10:00,11:00,14:00,15:00,16:00,17:00')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+      for (let d = 0; d <= 7; d++) {
+        const candidate = addDaysToIso(currentToday, d);
+        const weekday = new Date(`${candidate}T12:00:00.000Z`).getUTCDay();
+        if (!allowedDays.includes(weekday)) continue;
+        if (candidate === currentToday && !slots.some((s) => s > nowHhMm)) continue;
+        initialDate = candidate;
+        break;
+      }
+    }
+
+    setNowClock(now);
     setBookingItem(item);
-    setBookingStartDate(today);
-    setBookingEndDate(addDaysToIso(today, 1));
+    setBookingStartDate(initialDate);
+    setBookingEndDate(addDaysToIso(initialDate, 1));
     setBookingTimeSlot('');
     setBookingNotes('');
     setBookingError(null);
@@ -269,6 +302,18 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ slug, onBa
     }
     if (bookingItem.bookingMode !== 'days' && !bookingTimeSlot) {
       setBookingError('Seleccioná un horario disponible.');
+      return;
+    }
+
+    const { todayIso: freshToday, currentHhMm: freshHhMm } = getParaguayNowStrings();
+    if (
+      bookingItem.bookingMode !== 'days' &&
+      (bookingStartDate < freshToday ||
+        (bookingStartDate === freshToday && bookingTimeSlot <= freshHhMm))
+    ) {
+      setNowClock(new Date());
+      setBookingTimeSlot('');
+      setBookingError('Ese horario acaba de pasar. Por favor elegí un horario posterior.');
       return;
     }
 
@@ -611,7 +656,7 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ slug, onBa
                       <input
                         type="date"
                         required
-                        min={toLocalIsoDate(new Date())}
+                        min={todayIso}
                         value={bookingStartDate}
                         onChange={(e) => {
                           setBookingStartDate(e.target.value);
@@ -641,7 +686,7 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ slug, onBa
                       <input
                         type="date"
                         required
-                        min={toLocalIsoDate(new Date())}
+                        min={todayIso}
                         value={bookingStartDate}
                         onChange={(e) => {
                           setBookingStartDate(e.target.value);
@@ -672,6 +717,20 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ slug, onBa
                           .map((s) => s.trim())
                           .filter(Boolean);
                         const maxConcurrent = bookingItem.bookingMaxConcurrent || 1;
+                        const allPassedToday =
+                          slots.length > 0 &&
+                          slots.every(
+                            (slot) =>
+                              bookingStartDate < todayIso ||
+                              (bookingStartDate === todayIso && slot <= currentHhMm),
+                          );
+                        if (allPassedToday) {
+                          return (
+                            <div className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2">
+                              Ya pasaron todos los horarios disponibles por hoy. Elegí otra fecha arriba.
+                            </div>
+                          );
+                        }
                         return (
                           <div className="grid grid-cols-4 gap-2">
                             {slots.map((slot) => {
@@ -680,15 +739,26 @@ export const PublicCatalogView: React.FC<PublicCatalogViewProps> = ({ slug, onBa
                                   (a) => a.date === bookingStartDate && a.timeSlot === slot,
                                 )?.bookedCount || 0;
                               const full = booked >= maxConcurrent;
-                              const selected = bookingTimeSlot === slot;
+                              const isPastToday =
+                                bookingStartDate < todayIso ||
+                                (bookingStartDate === todayIso && slot <= currentHhMm);
+                              const disabledSlot = full || isPastToday;
+                              const selected = !disabledSlot && bookingTimeSlot === slot;
                               return (
                                 <button
                                   key={slot}
                                   type="button"
-                                  disabled={full}
+                                  disabled={disabledSlot}
+                                  title={
+                                    isPastToday
+                                      ? 'Horario ya pasado hoy'
+                                      : full
+                                        ? 'Cupo completo'
+                                        : 'Disponible'
+                                  }
                                   onClick={() => setBookingTimeSlot(slot)}
                                   className={`py-2 rounded-xl text-xs font-mono font-bold border transition-all ${
-                                    full
+                                    disabledSlot
                                       ? 'bg-[#0B0F19] border-[#1E293B] text-gray-600 line-through cursor-not-allowed'
                                       : selected
                                         ? `${theme.buttonBg} border-transparent`
