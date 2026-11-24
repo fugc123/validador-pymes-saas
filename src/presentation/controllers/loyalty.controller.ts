@@ -15,7 +15,7 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { Allow, IsOptional } from 'class-validator';
+import { Allow, IsOptional, IsString, MaxLength } from 'class-validator';
 import { Roles } from '../decorators/roles.decorator';
 import { RolesGuard } from '../guards/roles.guard';
 import { TenantGuard } from '../guards/tenant.guard';
@@ -30,20 +30,24 @@ export class UpsertLoyaltyProgramDto {
   @Allow()
   stampsRequired!: number;
 
-  @Allow()
+  @IsString()
+  @MaxLength(120)
   rewardTitle!: string;
 
   @IsOptional()
-  @Allow()
+  @IsString()
+  @MaxLength(300)
   rewardDescription?: string | null;
 }
 
 export class RecordLoyaltyVisitDto {
-  @Allow()
+  @IsString()
+  @MaxLength(40)
   customerPhone!: string;
 
   @IsOptional()
-  @Allow()
+  @IsString()
+  @MaxLength(120)
   customerName?: string | null;
 }
 

@@ -28,6 +28,29 @@ export interface MerchantMembershipRow {
   created_at: Date;
 }
 
+export interface SifenOnboardingRequestRow {
+  tenant_id: string;
+  ruc: string;
+  dv: string;
+  razon_social: string;
+  nombre_fantasia: string;
+  tipo_contribuyente: number;
+  timbrado: string;
+  fecha_inicio_timbrado: string;
+  establecimiento: string;
+  punto_expedicion: string;
+  direccion: string;
+  telefono: string;
+  email: string;
+  actividad_economica_codigo: string;
+  actividad_economica_desc: string;
+  status: 'pending' | 'approved' | 'rejected';
+  requested_by_user_id: string | null;
+  reviewed_by_user_id: string | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
 export interface TransferRow {
   id: string;
   tenant_id: string;
@@ -252,6 +275,29 @@ export interface MerchantBranchRow {
   created_at: Date;
 }
 
+export interface SifenOnboardingRequestRow {
+  tenant_id: string;
+  ruc: string;
+  dv: string;
+  razon_social: string;
+  nombre_fantasia: string;
+  tipo_contribuyente: number;
+  timbrado: string;
+  fecha_inicio_timbrado: string;
+  establecimiento: string;
+  punto_expedicion: string;
+  direccion: string;
+  telefono: string;
+  email: string;
+  actividad_economica_codigo: string;
+  actividad_economica_desc: string;
+  status: 'pending' | 'approved' | 'rejected';
+  requested_by_user_id: string | null;
+  reviewed_by_user_id: string | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
 export const DDL_SCHEMA_SQL = `
 -- Merchants Table (Tenants)
 CREATE TABLE IF NOT EXISTS merchants (
@@ -470,7 +516,7 @@ CREATE TABLE IF NOT EXISTS sifen_configs (
     certificado_password VARCHAR(255),
     provider VARCHAR(20) NOT NULL DEFAULT 'local_mock',
     factufy_client_id VARCHAR(120),
-    factufy_client_secret VARCHAR(255),
+    factufy_client_secret TEXT,
     factufy_branch_code VARCHAR(10) NOT NULL DEFAULT '001',
     factufy_pos_code VARCHAR(10) NOT NULL DEFAULT '001',
     last_test_status VARCHAR(50),
@@ -484,9 +530,34 @@ CREATE TABLE IF NOT EXISTS sifen_configs (
 
 ALTER TABLE sifen_configs ADD COLUMN IF NOT EXISTS provider VARCHAR(20) NOT NULL DEFAULT 'local_mock';
 ALTER TABLE sifen_configs ADD COLUMN IF NOT EXISTS factufy_client_id VARCHAR(120);
-ALTER TABLE sifen_configs ADD COLUMN IF NOT EXISTS factufy_client_secret VARCHAR(255);
+ALTER TABLE sifen_configs ADD COLUMN IF NOT EXISTS factufy_client_secret TEXT;
+ALTER TABLE sifen_configs ALTER COLUMN factufy_client_secret TYPE TEXT;
 ALTER TABLE sifen_configs ADD COLUMN IF NOT EXISTS factufy_branch_code VARCHAR(10) NOT NULL DEFAULT '001';
 ALTER TABLE sifen_configs ADD COLUMN IF NOT EXISTS factufy_pos_code VARCHAR(10) NOT NULL DEFAULT '001';
+
+-- SIFEN Onboarding Requests (Merchants submit taxpayer data for SuperAdmin approval & Factufy setup)
+CREATE TABLE IF NOT EXISTS sifen_onboarding_requests (
+    tenant_id VARCHAR(100) PRIMARY KEY,
+    ruc VARCHAR(30) NOT NULL,
+    dv VARCHAR(5) NOT NULL,
+    razon_social VARCHAR(255) NOT NULL,
+    nombre_fantasia VARCHAR(255) NOT NULL,
+    tipo_contribuyente INTEGER NOT NULL DEFAULT 2,
+    timbrado VARCHAR(20) NOT NULL,
+    fecha_inicio_timbrado VARCHAR(20) NOT NULL,
+    establecimiento VARCHAR(10) NOT NULL DEFAULT '001',
+    punto_expedicion VARCHAR(10) NOT NULL DEFAULT '001',
+    direccion VARCHAR(255) NOT NULL,
+    telefono VARCHAR(50) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    actividad_economica_codigo VARCHAR(30) NOT NULL DEFAULT '47190',
+    actividad_economica_desc VARCHAR(255) NOT NULL DEFAULT 'COMERCIO AL POR MENOR EN COMERCIOS NO ESPECIALIZADOS',
+    status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+    requested_by_user_id VARCHAR(100),
+    reviewed_by_user_id VARCHAR(100),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 
 -- SIFEN Emitted Electronic Invoices (DE / KuDE / CDC)
 CREATE TABLE IF NOT EXISTS sifen_invoices (

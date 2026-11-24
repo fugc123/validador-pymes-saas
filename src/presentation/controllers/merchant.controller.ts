@@ -280,6 +280,16 @@ export class MerchantController {
       throw new ForbiddenException('Usuario no autenticado.');
     }
     const currentTenantId = TenantContext.getTenantId();
+    if (!req?.user?.isSuperAdmin) {
+      const existingStores = (await this.membershipRepo.findActiveByUser(userId)).filter(
+        (m) => m.membership.role === 'MERCHANT_OWNER',
+      );
+      if (existingStores.length >= 10) {
+        throw new BadRequestException(
+          'Alcanzaste el límite de 10 comercios autogestionados. Contactá a soporte para habilitar más.',
+        );
+      }
+    }
     const cleanName = (dto.name || '').trim();
     if (!cleanName) {
       throw new BadRequestException('El nombre del nuevo comercio es obligatorio.');

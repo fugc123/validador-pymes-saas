@@ -161,6 +161,49 @@ export interface RucConsultResult {
   provider: SifenProvider;
 }
 
+export type SifenRequestStatus = 'pending' | 'approved' | 'rejected';
+
+export interface SifenOnboardingRequest {
+  tenantId: string;
+  ruc: string;
+  dv: string;
+  razonSocial: string;
+  nombreFantasia: string;
+  tipoContribuyente: SifenContribuyenteType;
+  timbrado: string;
+  fechaInicioTimbrado: string;
+  establecimiento: string;
+  puntoExpedicion: string;
+  direccion: string;
+  telefono: string;
+  email: string;
+  actividadEconomicaCodigo: string;
+  actividadEconomicaDesc: string;
+  status: SifenRequestStatus;
+  requestedByUserId: string | null;
+  reviewedByUserId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface SubmitSifenRequestInput {
+  ruc: string;
+  dv?: string;
+  razonSocial: string;
+  nombreFantasia?: string;
+  tipoContribuyente?: SifenContribuyenteType;
+  timbrado: string;
+  fechaInicioTimbrado?: string;
+  establecimiento?: string;
+  puntoExpedicion?: string;
+  direccion?: string;
+  telefono?: string;
+  email?: string;
+  actividadEconomicaCodigo?: string;
+  actividadEconomicaDesc?: string;
+  requestedByUserId?: string | null;
+}
+
 export interface ISifenRepository {
   isEligibleFreeMerchant(tenantId: string): Promise<boolean>;
   assertEligibleFreeMerchant(tenantId: string): Promise<void>;
@@ -170,6 +213,11 @@ export interface ISifenRepository {
   emitInvoice(input: EmitSifenInvoiceInput): Promise<SifenInvoice>;
   listInvoicesByTenant(tenantId: string, limit?: number): Promise<SifenInvoice[]>;
   consultRuc(tenantId: string, ruc: string): Promise<RucConsultResult>;
+  findInvoiceByCdc?(tenantId: string, cdc: string): Promise<SifenInvoice | null>;
+  getOnboardingRequest?(tenantId: string): Promise<SifenOnboardingRequest | null>;
+  listOnboardingRequests?(): Promise<Array<SifenOnboardingRequest & { merchantName: string }>>;
+  submitOnboardingRequest?(tenantId: string, input: SubmitSifenRequestInput): Promise<SifenOnboardingRequest>;
+  approveOnboardingRequest?(tenantId: string, reviewerUserId: string): Promise<SifenOnboardingRequest>;
 }
 
 /**

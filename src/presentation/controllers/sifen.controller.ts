@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Inject,
+  NotFoundException,
   Optional,
   Param,
   Post,
@@ -24,6 +25,7 @@ import {
   ISifenRepository,
   SifenConfig,
   SifenInvoiceItemInput,
+  SubmitSifenRequestInput,
   UpsertSifenConfigInput,
 } from '../../core/application/ports/sifen.ports';
 
@@ -279,6 +281,15 @@ export class SifenController {
     if (!tenantId) {
       throw new BadRequestException('No se encontró un comercio activo en la sesión.');
     }
+    if (!/^\d{44}$/.test(cdc || '')) {
+      throw new BadRequestException('CDC inválido (debe tener exactamente 44 dígitos numéricos).');
+    }
+    if (this.sifenRepo.findInvoiceByCdc) {
+      const ownedInvoice = await this.sifenRepo.findInvoiceByCdc(tenantId, cdc);
+      if (!ownedInvoice) {
+        throw new NotFoundException('Factura electrónica no encontrada para este comercio.');
+      }
+    }
     const config = await this.sifenRepo.getConfigByTenant(tenantId);
     if (
       !config ||
@@ -301,5 +312,79 @@ export class SifenController {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="Factura-${cdc}.pdf"`);
     return res.send(pdf);
+  }
+
+  @Get('merchant/request')
+  @Roles('MERCHANT_OWNER', 'SUPER_ADMIN')
+  async getMerchantOnboardingRequest(@Req() req: any) {
+    const tenantId = req?.user?.tenantId;
+    if (!tenantId) {
+      throw new BadRequestException('No se encontró un comercio activo en la sesión.');
+    }
+    const [request, isEligible, config] = await Promise.all([
+      this.sifenRepo.getOnboardingRequest ? this.sifenRepo.getOnboardingRequest(tenantId) : null,
+      this.sifenRepo.isEligibleFreeMerchant(tenantId),
+      this.sifenRepo.getConfigByTenant(tenantId),
+    ]);
+    return {
+      status: 'ok',
+      data: {
+        request,
+        isEligible,
+        config: this.sanitizeConfig(config),
+      },
+    };
+  }
+
+  @Post('merchant/request')
+  @Roles('MERCHANT_OWNER', 'SUPER_ADMIN')
+  @HttpCode(HttpStatus.CREATED)
+  async submitMerchantOnboardingRequest(@Req() req: any, @Body() dto: SubmitSifenRequestInput) {
+    const tenantId = req?.user?.tenantId;
+    if (!tenantId) {
+      throw new BadRequestException('No se encontró un comercio activo en la sesión.');
+    }
+    if (!this.sifenRepo.submitOnboardingRequest) {
+      throw new BadRequestException('El envío de solicitudes SIFEN no está disponible.');
+    }
+    const saved = await this.sifenRepo.submitOnboardingRequest(tenantId, {
+      ...dto,
+      requestedByUserId: req?.user?.userId || null,
+    });
+    return {
+      status: 'ok',
+      message: 'Solicitud de Facturación Electrónica recibida. El equipo la revisará para habilitar tu comercio.',
+      data: saved,
+    };
+  }
+
+  @Get('superadmin/requests')
+  @Roles('SUPER_ADMIN')
+  async listOnboardingRequests() {
+    const requests = this.sifenRepo.listOnboardingRequests
+      ? await this.sifenRepo.listOnboardingRequests()
+      : [];
+    return {
+      status: 'ok',
+      data: requests,
+    };
+  }
+
+  @Post('superadmin/requests/:tenantId/approve')
+  @Roles('SUPER_ADMIN')
+  @HttpCode(HttpStatus.OK)
+  async approveOnboardingRequest(@Param('tenantId') tenantId: string, @Req() req: any) {
+    if (!this.sifenRepo.approveOnboardingRequest) {
+      throw new BadRequestException('La aprobación de solicitudes SIFEN no está disponible.');
+    }
+    const approved = await this.sifenRepo.approveOnboardingRequest(
+      tenantId,
+      req?.user?.userId || 'superadmin',
+    );
+    return {
+      status: 'ok',
+      message: 'Comercio aprobado para Facturación Electrónica. Ahora podés cargar sus credenciales Factufy.',
+      data: approved,
+    };
   }
 }

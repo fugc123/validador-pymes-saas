@@ -3,12 +3,19 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
+  OnModuleInit,
   Optional,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { DatabaseService } from '../database/database.service';
-import { SifenConfigRow, SifenInvoiceRow, SubscriptionRow } from '../database/schema';
+import {
+  SifenConfigRow,
+  SifenInvoiceRow,
+  SifenOnboardingRequestRow,
+  SubscriptionRow,
+} from '../database/schema';
 import { IMerchantRepository } from '../../core/application/ports/auth.ports';
 import { ISubscriptionRepository } from '../../core/application/ports/onboarding.ports';
 import {
@@ -23,15 +30,20 @@ import {
   SifenContribuyenteType,
   SifenEnvironment,
   SifenInvoice,
+  SifenOnboardingRequest,
   SifenProvider,
+  SubmitSifenRequestInput,
   UpsertSifenConfigInput,
 } from '../../core/application/ports/sifen.ports';
+import { decryptSecretAtRest, encryptSecretAtRest } from '../../core/application/utils/secret-crypto';
 import { FactufyAdapter } from '../sifen/factufy.adapter';
 
 @Injectable()
-export class SifenRepository implements ISifenRepository {
+export class SifenRepository implements ISifenRepository, OnModuleInit {
+  private readonly logger = new Logger(SifenRepository.name);
   private configs = new Map<string, SifenConfig>();
   private invoices: SifenInvoice[] = [];
+  private onboardingRequests = new Map<string, SifenOnboardingRequest>();
 
   constructor(
     @Optional() private readonly dbService?: DatabaseService,
@@ -44,6 +56,61 @@ export class SifenRepository implements ISifenRepository {
     @Optional()
     private readonly factufyAdapter?: FactufyAdapter,
   ) {}
+
+  async onModuleInit(): Promise<void> {
+    const clientId = (process.env.FACTUFY_DEMO_CLIENT_ID || '').trim();
+    const clientSecret = (process.env.FACTUFY_DEMO_CLIENT_SECRET || '').trim();
+    if (!clientId || !clientSecret) {
+      return;
+    }
+
+    const demoTenant = (process.env.FACTUFY_DEMO_TENANT || 'comercio-franco').trim();
+    const demoRuc = (process.env.FACTUFY_DEMO_RUC || '80023017').replace(/\D/g, '') || '80023017';
+    const demoTimbrado = (process.env.FACTUFY_DEMO_TIMBRADO || '12560102').replace(/\D/g, '').padStart(8, '0').slice(0, 8);
+    const demoRazon = (process.env.FACTUFY_DEMO_RAZON_SOCIAL || 'COMERCIO DEMO FACTUFY E.A.S.').trim();
+    const branchCode = (process.env.FACTUFY_DEMO_BRANCH_CODE || '001').replace(/\D/g, '').padStart(3, '0').slice(-3);
+    const posCode = (process.env.FACTUFY_DEMO_POS_CODE || '001').replace(/\D/g, '').padStart(3, '0').slice(-3);
+
+    try {
+      const existingReq = await this.getOnboardingRequest(demoTenant);
+      if (!existingReq || existingReq.status !== 'approved') {
+        await this.submitOnboardingRequest(demoTenant, {
+          ruc: demoRuc,
+          dv: calculateParaguayDv(demoRuc),
+          razonSocial: demoRazon,
+          nombreFantasia: demoTenant,
+          timbrado: demoTimbrado,
+          establecimiento: branchCode,
+          puntoExpedicion: posCode,
+          requestedByUserId: 'env-bootstrap',
+        });
+        await this.approveOnboardingRequest(demoTenant, 'env-bootstrap');
+      }
+
+      await this.upsertConfig(demoTenant, {
+        enabled: true,
+        environment: 'test',
+        provider: 'factufy',
+        ruc: demoRuc,
+        dv: calculateParaguayDv(demoRuc),
+        razonSocial: demoRazon,
+        nombreFantasia: demoTenant,
+        timbrado: demoTimbrado,
+        establecimiento: branchCode,
+        puntoExpedicion: posCode,
+        factufyClientId: clientId,
+        factufyClientSecret: clientSecret,
+        factufyBranchCode: branchCode,
+        factufyPosCode: posCode,
+        updatedByUserId: 'env-bootstrap',
+      });
+      this.logger.log(`Factufy demo config bootstrapped for tenant '${demoTenant}'.`);
+    } catch (err: unknown) {
+      this.logger.warn(
+        `Could not bootstrap Factufy demo config for '${demoTenant}': ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
 
   private isDbActive(): boolean {
     return Boolean(this.dbService && !this.dbService.isMemoryMode);
@@ -84,7 +151,7 @@ export class SifenRepository implements ISifenRepository {
       hasCertificate: Boolean(row.certificado_base64 && row.certificado_base64.trim().length > 0),
       provider: row.provider === 'factufy' ? 'factufy' : 'local_mock',
       factufyClientId: row.factufy_client_id || null,
-      factufyClientSecret: row.factufy_client_secret || null,
+      factufyClientSecret: decryptSecretAtRest(row.factufy_client_secret),
       hasFactufyCredentials: Boolean(row.factufy_client_id && row.factufy_client_secret),
       factufyBranchCode: row.factufy_branch_code || row.establecimiento || '001',
       factufyPosCode: row.factufy_pos_code || row.punto_expedicion || '001',
@@ -126,18 +193,17 @@ export class SifenRepository implements ISifenRepository {
   async isEligibleFreeMerchant(tenantId: string): Promise<boolean> {
     if (!tenantId) return false;
 
+    let isLifetime = false;
     if (this.subscriptionRepo) {
       const sub = await this.subscriptionRepo.findByTenantId(tenantId);
-      if (!sub) return false;
-      const periodEndYear = sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd).getUTCFullYear() : 0;
-      return (
-        sub.externalCustomerId === 'free-lifetime-partner' ||
-        sub.externalSubscriptionId === 'sub_lifetime_permanent' ||
-        periodEndYear >= 2090
-      );
-    }
-
-    if (this.isDbActive()) {
+      if (sub) {
+        const periodEndYear = sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd).getUTCFullYear() : 0;
+        isLifetime =
+          sub.externalCustomerId === 'free-lifetime-partner' ||
+          sub.externalSubscriptionId === 'sub_lifetime_permanent' ||
+          periodEndYear >= 2090;
+      }
+    } else if (this.isDbActive()) {
       const res = await this.dbService!.query<SubscriptionRow>(
         `SELECT s.*
          FROM subscriptions s
@@ -147,23 +213,26 @@ export class SifenRepository implements ISifenRepository {
         [tenantId],
       );
       const row = res.rows?.[0];
-      if (!row) return false;
-      const periodEndYear = row.current_period_end ? new Date(row.current_period_end).getUTCFullYear() : 0;
-      return (
-        row.external_customer_id === 'free-lifetime-partner' ||
-        row.external_subscription_id === 'sub_lifetime_permanent' ||
-        periodEndYear >= 2090
-      );
+      if (row) {
+        const periodEndYear = row.current_period_end ? new Date(row.current_period_end).getUTCFullYear() : 0;
+        isLifetime =
+          row.external_customer_id === 'free-lifetime-partner' ||
+          row.external_subscription_id === 'sub_lifetime_permanent' ||
+          periodEndYear >= 2090;
+      }
     }
 
-    return false;
+    if (isLifetime) return true;
+
+    const req = await this.getOnboardingRequest(tenantId);
+    return req?.status === 'approved';
   }
 
   async assertEligibleFreeMerchant(tenantId: string): Promise<void> {
     const eligible = await this.isEligibleFreeMerchant(tenantId);
     if (!eligible) {
       throw new ForbiddenException(
-        'La facturación electrónica SIFEN está restringida exclusivamente a comercios creados como gratuitos / propios (Lifetime).',
+        'La facturación electrónica SIFEN requiere estar habilitado como comercio gratuito / propio o tener una solicitud aprobada por administración.',
       );
     }
   }
@@ -179,16 +248,27 @@ export class SifenRepository implements ISifenRepository {
       );
     });
 
-    const summaries: FreeMerchantSifenSummary[] = [];
+    const eligibleTenants = new Map<string, boolean>();
     for (const sub of freeSubs) {
-      const merchant = this.merchantRepo ? await this.merchantRepo.findById(sub.tenantId) : null;
-      const config = await this.getConfigByTenant(sub.tenantId);
+      eligibleTenants.set(sub.tenantId, true);
+    }
+    const approvedReqs = (await this.listOnboardingRequests()).filter((r) => r.status === 'approved');
+    for (const req of approvedReqs) {
+      if (!eligibleTenants.has(req.tenantId)) {
+        eligibleTenants.set(req.tenantId, false);
+      }
+    }
+
+    const summaries: FreeMerchantSifenSummary[] = [];
+    for (const [tenantId, isLifetime] of eligibleTenants.entries()) {
+      const merchant = this.merchantRepo ? await this.merchantRepo.findById(tenantId) : null;
+      const config = await this.getConfigByTenant(tenantId);
 
       summaries.push({
-        tenantId: sub.tenantId,
-        merchantName: merchant?.name || sub.tenantId,
-        merchantSlug: merchant?.slug || sub.tenantId,
-        isLifetime: true,
+        tenantId,
+        merchantName: merchant?.name || tenantId,
+        merchantSlug: merchant?.slug || tenantId,
+        isLifetime,
         hasConfig: Boolean(config),
         enabled: Boolean(config?.enabled),
         environment: config?.environment || 'test',
@@ -443,7 +523,7 @@ export class SifenRepository implements ISifenRepository {
           config.certificadoPassword,
           config.provider,
           config.factufyClientId,
-          config.factufyClientSecret,
+          encryptSecretAtRest(config.factufyClientSecret),
           config.factufyBranchCode,
           config.factufyPosCode,
           config.lastTestStatus,
@@ -730,5 +810,236 @@ export class SifenRepository implements ISifenRepository {
       razonSocial: null,
       provider: 'local_mock',
     };
+  }
+
+  async findInvoiceByCdc(tenantId: string, cdc: string): Promise<SifenInvoice | null> {
+    if (this.isDbActive()) {
+      const res = await this.dbService!.query<SifenInvoiceRow>(
+        `SELECT * FROM sifen_invoices WHERE tenant_id = $1 AND cdc = $2 LIMIT 1`,
+        [tenantId, cdc],
+      );
+      return res.rows?.[0] ? this.mapRowToInvoice(res.rows[0]) : null;
+    }
+    return this.invoices.find((i) => i.tenantId === tenantId && i.cdc === cdc) || null;
+  }
+
+  private mapOnboardingRow(row: SifenOnboardingRequestRow): SifenOnboardingRequest {
+    return {
+      tenantId: row.tenant_id,
+      ruc: row.ruc,
+      dv: row.dv,
+      razonSocial: row.razon_social,
+      nombreFantasia: row.nombre_fantasia,
+      tipoContribuyente: (Number(row.tipo_contribuyente) === 1 ? 1 : 2) as SifenContribuyenteType,
+      timbrado: row.timbrado,
+      fechaInicioTimbrado: row.fecha_inicio_timbrado,
+      establecimiento: row.establecimiento || '001',
+      puntoExpedicion: row.punto_expedicion || '001',
+      direccion: row.direccion,
+      telefono: row.telefono,
+      email: row.email,
+      actividadEconomicaCodigo: row.actividad_economica_codigo || '47190',
+      actividadEconomicaDesc: row.actividad_economica_desc,
+      status: row.status,
+      requestedByUserId: row.requested_by_user_id,
+      reviewedByUserId: row.reviewed_by_user_id,
+      createdAt: new Date(row.created_at),
+      updatedAt: new Date(row.updated_at),
+    };
+  }
+
+  async getOnboardingRequest(tenantId: string): Promise<SifenOnboardingRequest | null> {
+    if (this.isDbActive()) {
+      const res = await this.dbService!.query<SifenOnboardingRequestRow>(
+        `SELECT * FROM sifen_onboarding_requests WHERE tenant_id = $1 LIMIT 1`,
+        [tenantId],
+      );
+      return res.rows?.[0] ? this.mapOnboardingRow(res.rows[0]) : null;
+    }
+    return this.onboardingRequests.get(tenantId) || null;
+  }
+
+  async listOnboardingRequests(): Promise<Array<SifenOnboardingRequest & { merchantName: string }>> {
+    let items: SifenOnboardingRequest[];
+    if (this.isDbActive()) {
+      const res = await this.dbService!.query<SifenOnboardingRequestRow>(
+        `SELECT * FROM sifen_onboarding_requests ORDER BY updated_at DESC`,
+      );
+      items = (res.rows || []).map((r) => this.mapOnboardingRow(r));
+    } else {
+      items = Array.from(this.onboardingRequests.values()).sort(
+        (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime(),
+      );
+    }
+
+    return Promise.all(
+      items.map(async (item) => {
+        const merchant = this.merchantRepo ? await this.merchantRepo.findById(item.tenantId) : null;
+        return {
+          ...item,
+          merchantName: merchant?.name || item.nombreFantasia || item.tenantId,
+        };
+      }),
+    );
+  }
+
+  async submitOnboardingRequest(
+    tenantId: string,
+    input: SubmitSifenRequestInput,
+  ): Promise<SifenOnboardingRequest> {
+    const cleanRuc = (input.ruc || '').replace(/\D/g, '').trim();
+    if (!cleanRuc || cleanRuc.length < 5) {
+      throw new BadRequestException('El RUC debe tener al menos 5 dígitos numéricos.');
+    }
+    const razonSocial = (input.razonSocial || '').trim();
+    if (!razonSocial) {
+      throw new BadRequestException('La Razón Social es obligatoria.');
+    }
+    const cleanTimbrado = (input.timbrado || '').replace(/\D/g, '').trim();
+    if (!cleanTimbrado || cleanTimbrado.length !== 8) {
+      throw new BadRequestException('El Timbrado debe tener exactamente 8 dígitos.');
+    }
+
+    const existing = await this.getOnboardingRequest(tenantId);
+    const now = new Date();
+    const dv =
+      input.dv !== undefined && String(input.dv).trim() !== ''
+        ? String(input.dv).replace(/\D/g, '').slice(0, 1)
+        : calculateParaguayDv(cleanRuc);
+    const establecimiento = (input.establecimiento || '001').replace(/\D/g, '').padStart(3, '0').slice(-3);
+    const puntoExpedicion = (input.puntoExpedicion || '001').replace(/\D/g, '').padStart(3, '0').slice(-3);
+
+    const record: SifenOnboardingRequest = {
+      tenantId,
+      ruc: cleanRuc,
+      dv,
+      razonSocial,
+      nombreFantasia: (input.nombreFantasia || razonSocial).trim(),
+      tipoContribuyente: Number(input.tipoContribuyente) === 1 ? 1 : 2,
+      timbrado: cleanTimbrado,
+      fechaInicioTimbrado: (input.fechaInicioTimbrado || '2025-01-01').trim(),
+      establecimiento,
+      puntoExpedicion,
+      direccion: (input.direccion || 'Asunción, Paraguay').trim(),
+      telefono: (input.telefono || '0981000000').trim(),
+      email: (input.email || 'facturacion@comercio.com.py').trim(),
+      actividadEconomicaCodigo: (input.actividadEconomicaCodigo || '47190').trim(),
+      actividadEconomicaDesc: (
+        input.actividadEconomicaDesc || 'COMERCIO AL POR MENOR EN COMERCIOS NO ESPECIALIZADOS'
+      ).trim(),
+      status: existing?.status === 'approved' ? 'approved' : 'pending',
+      requestedByUserId: input.requestedByUserId ?? existing?.requestedByUserId ?? null,
+      reviewedByUserId: existing?.reviewedByUserId ?? null,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+
+    if (this.isDbActive()) {
+      await this.dbService!.query(
+        `INSERT INTO sifen_onboarding_requests (
+          tenant_id, ruc, dv, razon_social, nombre_fantasia, tipo_contribuyente,
+          timbrado, fecha_inicio_timbrado, establecimiento, punto_expedicion,
+          direccion, telefono, email, actividad_economica_codigo, actividad_economica_desc,
+          status, requested_by_user_id, reviewed_by_user_id, created_at, updated_at
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+        ON CONFLICT (tenant_id) DO UPDATE SET
+          ruc = EXCLUDED.ruc,
+          dv = EXCLUDED.dv,
+          razon_social = EXCLUDED.razon_social,
+          nombre_fantasia = EXCLUDED.nombre_fantasia,
+          tipo_contribuyente = EXCLUDED.tipo_contribuyente,
+          timbrado = EXCLUDED.timbrado,
+          fecha_inicio_timbrado = EXCLUDED.fecha_inicio_timbrado,
+          establecimiento = EXCLUDED.establecimiento,
+          punto_expedicion = EXCLUDED.punto_expedicion,
+          direccion = EXCLUDED.direccion,
+          telefono = EXCLUDED.telefono,
+          email = EXCLUDED.email,
+          actividad_economica_codigo = EXCLUDED.actividad_economica_codigo,
+          actividad_economica_desc = EXCLUDED.actividad_economica_desc,
+          status = CASE WHEN sifen_onboarding_requests.status = 'approved' THEN 'approved' ELSE 'pending' END,
+          updated_at = EXCLUDED.updated_at`,
+        [
+          record.tenantId,
+          record.ruc,
+          record.dv,
+          record.razonSocial,
+          record.nombreFantasia,
+          record.tipoContribuyente,
+          record.timbrado,
+          record.fechaInicioTimbrado,
+          record.establecimiento,
+          record.puntoExpedicion,
+          record.direccion,
+          record.telefono,
+          record.email,
+          record.actividadEconomicaCodigo,
+          record.actividadEconomicaDesc,
+          record.status,
+          record.requestedByUserId,
+          record.reviewedByUserId,
+          record.createdAt,
+          record.updatedAt,
+        ],
+      );
+    } else {
+      this.onboardingRequests.set(tenantId, record);
+    }
+
+    return record;
+  }
+
+  async approveOnboardingRequest(tenantId: string, reviewerUserId: string): Promise<SifenOnboardingRequest> {
+    const req = await this.getOnboardingRequest(tenantId);
+    if (!req) {
+      throw new NotFoundException(`No se encontró solicitud de facturación electrónica para '${tenantId}'.`);
+    }
+
+    const now = new Date();
+    const approved: SifenOnboardingRequest = {
+      ...req,
+      status: 'approved',
+      reviewedByUserId: reviewerUserId,
+      updatedAt: now,
+    };
+
+    if (this.isDbActive()) {
+      await this.dbService!.query(
+        `UPDATE sifen_onboarding_requests
+         SET status = 'approved', reviewed_by_user_id = $1, updated_at = $2
+         WHERE tenant_id = $3`,
+        [reviewerUserId, now, tenantId],
+      );
+    } else {
+      this.onboardingRequests.set(tenantId, approved);
+    }
+
+    const existingConfig = await this.getConfigByTenant(tenantId);
+    if (!existingConfig) {
+      await this.upsertConfig(tenantId, {
+        enabled: false,
+        environment: 'test',
+        provider: 'factufy',
+        ruc: approved.ruc,
+        dv: approved.dv,
+        razonSocial: approved.razonSocial,
+        nombreFantasia: approved.nombreFantasia,
+        tipoContribuyente: approved.tipoContribuyente,
+        timbrado: approved.timbrado,
+        fechaInicioTimbrado: approved.fechaInicioTimbrado,
+        establecimiento: approved.establecimiento,
+        puntoExpedicion: approved.puntoExpedicion,
+        direccion: approved.direccion,
+        telefono: approved.telefono,
+        email: approved.email,
+        actividadEconomicaCodigo: approved.actividadEconomicaCodigo,
+        actividadEconomicaDesc: approved.actividadEconomicaDesc,
+        factufyBranchCode: approved.establecimiento,
+        factufyPosCode: approved.puntoExpedicion,
+        updatedByUserId: reviewerUserId,
+      });
+    }
+
+    return approved;
   }
 }

@@ -18,7 +18,8 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { Allow, IsOptional } from 'class-validator';
+import { Throttle } from '@nestjs/throttler';
+import { Allow, IsOptional, IsString, MaxLength } from 'class-validator';
 import { Roles } from '../decorators/roles.decorator';
 import { RolesGuard } from '../guards/roles.guard';
 import { TenantGuard } from '../guards/tenant.guard';
@@ -170,28 +171,35 @@ export class UpdateCatalogItemDto {
 }
 
 export class CreatePublicBookingDto {
-  @Allow()
+  @IsString()
+  @MaxLength(100)
   itemId!: string;
 
-  @Allow()
+  @IsString()
+  @MaxLength(10)
   startDate!: string;
 
   @IsOptional()
-  @Allow()
+  @IsString()
+  @MaxLength(10)
   endDate?: string;
 
   @IsOptional()
-  @Allow()
+  @IsString()
+  @MaxLength(10)
   timeSlot?: string | null;
 
-  @Allow()
+  @IsString()
+  @MaxLength(120)
   customerName!: string;
 
-  @Allow()
+  @IsString()
+  @MaxLength(40)
   customerPhone!: string;
 
   @IsOptional()
-  @Allow()
+  @IsString()
+  @MaxLength(500)
   notes?: string | null;
 }
 
@@ -527,6 +535,7 @@ export class PublicCatalogController {
   }
 
   @Post(':slug/bookings')
+  @Throttle({ default: { limit: 8, ttl: 60000 } })
   @HttpCode(HttpStatus.CREATED)
   async createPublicBooking(@Param('slug') slug: string, @Body() dto: CreatePublicBookingDto) {
     const catalog = await this.catalogRepo.getPublicCatalogBySlug(slug);
