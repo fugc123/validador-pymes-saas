@@ -3,6 +3,7 @@ import {
   decryptSecretAtRest,
   encryptSecretAtRest,
 } from '../../src/core/application/utils/secret-crypto';
+import { generateKudePdfBuffer } from '../../src/core/application/utils/kude-pdf';
 import { SifenRepository } from '../../src/infrastructure/repositories/sifen.repository';
 import { SifenController } from '../../src/presentation/controllers/sifen.controller';
 
@@ -226,6 +227,158 @@ describe('Security Hardening, Demo Bootstrap & SIFEN Onboarding', () => {
         NotFoundException,
       );
       expect(repo.findInvoiceByCdc).toHaveBeenCalledWith('tenant-other', validCdc);
+    });
+
+    it('generates a valid native %PDF-1.4 KuDE document buffer as fallback', () => {
+      const pdf = generateKudePdfBuffer({
+        id: 'sifen-inv-fallback-1',
+        tenantId: 'tenant-local',
+        saleId: 'sale-1',
+        cdc: validCdc,
+        numeroDocumento: '001-001-0000003',
+        timbrado: '12560102',
+        environment: 'test',
+        receptorRuc: '80023017',
+        receptorDv: '5',
+        receptorNombre: 'INFOZOOM SRL',
+        condicionVenta: 'CONTADO',
+        totalAmount: 110000,
+        iva10Amount: 10000,
+        xmlPayload: '<rDE/>',
+        qrUrl: 'https://ekuatia.set.gov.py/consultas-test/qr?Id=' + validCdc,
+        status: 'GENERATED',
+        responseMessage: 'Documento Electrónico DE generado',
+        createdAt: new Date('2026-11-24T17:50:00Z'),
+      });
+
+      const asLatin1 = pdf.toString('latin1');
+      expect(asLatin1.startsWith('%PDF-1.4\n')).toBe(true);
+      expect(asLatin1).toContain('001-001-0000003');
+      expect(asLatin1).toContain('INFOZOOM SRL');
+      expect(asLatin1.trimEnd().endsWith('%%EOF')).toBe(true);
+    });
+
+    it('reconciles async Factufy jobId CDC lazily when initial PDF request fails on provisional CDC', async () => {
+      const provisionalCdc = '01800123450001001000000322026112415056834325';
+      const authorizedCdc = '01800230175001001000000322026112415056834999';
+
+      const repo = new SifenRepository();
+      const fakeInvoice: any = {
+        id: 'inv-async-3',
+        tenantId: 'tenant-factufy',
+        saleId: 'sale-3',
+        cdc: provisionalCdc,
+        numeroDocumento: '001-001-0000003',
+        timbrado: '12560102',
+        environment: 'test',
+        receptorRuc: '44444401',
+        receptorDv: '0',
+        receptorNombre: 'SIN NOMBRE',
+        condicionVenta: 'CONTADO',
+        totalAmount: 50000,
+        iva10Amount: 4545,
+        xmlPayload: '<rDE/>',
+        qrUrl: 'https://ekuatia.set.gov.py/consultas-test/qr',
+        status: 'GENERATED',
+        responseMessage: 'Enviado a Factufy',
+        factufyJobId: 'job-async-003',
+        createdAt: new Date(),
+      };
+      jest.spyOn(repo, 'findInvoiceByCdc').mockResolvedValue(fakeInvoice);
+      jest.spyOn(repo, 'updateInvoiceCdc').mockResolvedValue(undefined);
+      jest.spyOn(repo, 'getConfigByTenant').mockResolvedValue({
+        tenantId: 'tenant-factufy',
+        enabled: true,
+        environment: 'test',
+        provider: 'factufy',
+        factufyClientId: 'cli_test_synthetic_001',
+        factufyClientSecret: 'sec_test_synthetic_secret',
+        factufyBranchCode: '001',
+        factufyPosCode: '001',
+      } as any);
+
+      const officialPdfBytes = Buffer.from('%PDF-1.4\nofficial-factufy\n%%EOF', 'latin1');
+      const mockAdapter: any = {
+        downloadPdf: jest.fn(async (_creds: any, reqCdc: string) => {
+          if (reqCdc === provisionalCdc) {
+            throw new Error('Provisional CDC not found at Factufy');
+          }
+          return officialPdfBytes;
+        }),
+        resolveJobCdc: jest.fn(async () => ({ cdc: authorizedCdc, approved: true })),
+      };
+
+      const controller = new SifenController(repo, { findById: async () => null } as any, mockAdapter);
+      const mockRes: any = { setHeader: jest.fn(), send: jest.fn((b) => b) };
+      const req: any = { user: { tenantId: 'tenant-factufy', userId: 'cashier-1' } };
+
+      const returned = await controller.downloadInvoicePdf(req, provisionalCdc, mockRes, '1');
+      expect(mockAdapter.resolveJobCdc).toHaveBeenCalledWith(
+        expect.objectContaining({ clientId: 'cli_test_synthetic_001' }),
+        'job-async-003',
+        4,
+        400,
+      );
+      expect(repo.updateInvoiceCdc).toHaveBeenCalledWith(
+        'tenant-factufy',
+        'inv-async-3',
+        authorizedCdc,
+        'APPROVED',
+      );
+      expect(mockRes.setHeader).toHaveBeenCalledWith('Content-Type', 'application/pdf');
+      expect(mockRes.setHeader).toHaveBeenCalledWith(
+        'Content-Disposition',
+        'attachment; filename="Factura-001-001-0000003.pdf"',
+      );
+      expect(returned).toBe(officialPdfBytes);
+    });
+
+    it('falls back to native KuDE PDF when provider is local_mock or upstream Factufy PDF fails', async () => {
+      const repo = new SifenRepository();
+      const localInvoice: any = {
+        id: 'inv-local-4',
+        tenantId: 'tenant-local-only',
+        saleId: null,
+        cdc: validCdc,
+        numeroDocumento: '001-001-0000004',
+        timbrado: '12560102',
+        environment: 'test',
+        receptorRuc: '44444401',
+        receptorDv: '0',
+        receptorNombre: 'CONSUMIDOR FINAL',
+        condicionVenta: 'CONTADO',
+        totalAmount: 25000,
+        iva10Amount: 2273,
+        xmlPayload: '<rDE/>',
+        qrUrl: 'https://ekuatia.set.gov.py/consultas-test/qr',
+        status: 'GENERATED',
+        responseMessage: 'Local DE',
+        createdAt: new Date(),
+      };
+      jest.spyOn(repo, 'findInvoiceByCdc').mockResolvedValue(localInvoice);
+      jest.spyOn(repo, 'getConfigByTenant').mockResolvedValue({
+        tenantId: 'tenant-local-only',
+        enabled: true,
+        environment: 'test',
+        provider: 'local_mock',
+        ruc: '80012345',
+        dv: '5',
+        razonSocial: 'COMERCIO LOCAL E.A.S.',
+        direccion: 'Asunción',
+        telefono: '021000',
+      } as any);
+
+      const controller = new SifenController(repo, { findById: async () => null } as any);
+      const mockRes: any = { setHeader: jest.fn(), send: jest.fn((b) => b) };
+      const req: any = { user: { tenantId: 'tenant-local-only', userId: 'cashier-1' } };
+
+      const buf: Buffer = await controller.downloadInvoicePdf(req, validCdc, mockRes);
+      expect(Buffer.isBuffer(buf)).toBe(true);
+      expect(buf.toString('latin1').startsWith('%PDF-1.4\n')).toBe(true);
+      expect(mockRes.setHeader).toHaveBeenCalledWith(
+        'Content-Disposition',
+        'inline; filename="Factura-001-001-0000004.pdf"',
+      );
     });
   });
 });

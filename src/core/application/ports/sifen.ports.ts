@@ -214,6 +214,12 @@ export interface ISifenRepository {
   listInvoicesByTenant(tenantId: string, limit?: number): Promise<SifenInvoice[]>;
   consultRuc(tenantId: string, ruc: string): Promise<RucConsultResult>;
   findInvoiceByCdc?(tenantId: string, cdc: string): Promise<SifenInvoice | null>;
+  updateInvoiceCdc?(
+    tenantId: string,
+    invoiceId: string,
+    newCdc: string,
+    status?: SifenInvoice['status'],
+  ): Promise<void>;
   getOnboardingRequest?(tenantId: string): Promise<SifenOnboardingRequest | null>;
   listOnboardingRequests?(): Promise<Array<SifenOnboardingRequest & { merchantName: string }>>;
   submitOnboardingRequest?(tenantId: string, input: SubmitSifenRequestInput): Promise<SifenOnboardingRequest>;

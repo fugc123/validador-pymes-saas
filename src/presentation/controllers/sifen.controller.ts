@@ -11,6 +11,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
   Req,
   Res,
   UseGuards,
@@ -19,6 +20,7 @@ import { Roles } from '../decorators/roles.decorator';
 import { RolesGuard } from '../guards/roles.guard';
 import { IMerchantRepository } from '../../core/application/ports/auth.ports';
 import { FactufyAdapter } from '../../infrastructure/sifen/factufy.adapter';
+import { generateKudePdfBuffer } from '../../core/application/utils/kude-pdf';
 import {
   calculateParaguayDv,
   EmitSifenInvoiceInput,
@@ -335,7 +337,12 @@ export class SifenController {
 
   @Get('cashier/invoices/:cdc/pdf')
   @Roles('CASHIER', 'MERCHANT_OWNER', 'SUPER_ADMIN')
-  async downloadInvoicePdf(@Req() req: any, @Param('cdc') cdc: string, @Res() res: any) {
+  async downloadInvoicePdf(
+    @Req() req: any,
+    @Param('cdc') cdc: string,
+    @Res() res: any,
+    @Query('download') download?: string,
+  ) {
     const tenantId = req?.user?.tenantId;
     if (!tenantId) {
       throw new BadRequestException('No se encontró un comercio activo en la sesión.');
@@ -343,33 +350,73 @@ export class SifenController {
     if (!/^\d{44}$/.test(cdc || '')) {
       throw new BadRequestException('CDC inválido (debe tener exactamente 44 dígitos numéricos).');
     }
-    if (this.sifenRepo.findInvoiceByCdc) {
-      const ownedInvoice = await this.sifenRepo.findInvoiceByCdc(tenantId, cdc);
-      if (!ownedInvoice) {
-        throw new NotFoundException('Factura electrónica no encontrada para este comercio.');
-      }
+    const ownedInvoice = this.sifenRepo.findInvoiceByCdc
+      ? await this.sifenRepo.findInvoiceByCdc(tenantId, cdc)
+      : null;
+    if (this.sifenRepo.findInvoiceByCdc && !ownedInvoice) {
+      throw new NotFoundException('Factura electrónica no encontrada para este comercio.');
     }
+
     const config = await this.sifenRepo.getConfigByTenant(tenantId);
+    let effectiveCdc = ownedInvoice?.cdc || cdc;
+    let pdf: Buffer | null = null;
+
     if (
-      !config ||
-      config.provider !== 'factufy' ||
-      !config.factufyClientId ||
-      !config.factufyClientSecret ||
-      !this.factufyAdapter
+      config?.provider === 'factufy' &&
+      config.factufyClientId &&
+      config.factufyClientSecret &&
+      this.factufyAdapter
     ) {
-      throw new BadRequestException('Este comercio no tiene credenciales de Factufy configuradas para descargar PDF.');
-    }
-    const pdf = await this.factufyAdapter.downloadPdf(
-      {
+      const creds = {
         clientId: config.factufyClientId,
         clientSecret: config.factufyClientSecret,
         branchCode: config.factufyBranchCode,
         posCode: config.factufyPosCode,
-      },
-      cdc,
+      };
+      try {
+        pdf = await this.factufyAdapter.downloadPdf(creds, effectiveCdc);
+      } catch {
+        if (ownedInvoice?.factufyJobId && this.factufyAdapter.resolveJobCdc) {
+          try {
+            const resolved = await this.factufyAdapter.resolveJobCdc(
+              creds,
+              ownedInvoice.factufyJobId,
+              4,
+              400,
+            );
+            if (resolved.cdc && /^\d{44}$/.test(resolved.cdc)) {
+              effectiveCdc = resolved.cdc;
+              await this.sifenRepo.updateInvoiceCdc?.(
+                tenantId,
+                ownedInvoice.id,
+                effectiveCdc,
+                'APPROVED',
+              );
+              pdf = await this.factufyAdapter.downloadPdf(creds, effectiveCdc);
+            }
+          } catch {
+            pdf = null;
+          }
+        }
+      }
+    }
+
+    if (!pdf && ownedInvoice) {
+      pdf = generateKudePdfBuffer({ ...ownedInvoice, cdc: effectiveCdc }, config);
+    }
+    if (!pdf) {
+      throw new BadRequestException(
+        'No se pudo obtener ni generar el PDF KuDE para esta factura.',
+      );
+    }
+
+    const safeName = (ownedInvoice?.numeroDocumento || effectiveCdc).replace(
+      /[^A-Za-z0-9._-]/g,
+      '',
     );
+    const disposition = download === '1' ? 'attachment' : 'inline';
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="Factura-${cdc}.pdf"`);
+    res.setHeader('Content-Disposition', `${disposition}; filename="Factura-${safeName}.pdf"`);
     return res.send(pdf);
   }
 

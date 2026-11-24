@@ -30,6 +30,8 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
+  ExternalLink,
+  FileText,
 } from 'lucide-react';
 import {
   CashierItineraryPanel,
@@ -145,6 +147,21 @@ export const FastPosScreen: React.FC = () => {
   const lastLookedUpRucRef = useRef<string>('');
   const rucDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [downloadingPdfCdc, setDownloadingPdfCdc] = useState<string | null>(null);
+  const [openingPdfCdc, setOpeningPdfCdc] = useState<string | null>(null);
+  const [pdfActionError, setPdfActionError] = useState<string | null>(null);
+  const [recentSifenInvoices, setRecentSifenInvoices] = useState<
+    Array<{
+      id: string;
+      saleId: string | null;
+      cdc: string;
+      numeroDocumento: string;
+      receptorRuc: string;
+      receptorNombre: string;
+      totalAmount: number;
+      status: string;
+      createdAt: string;
+    }>
+  >([]);
   const [posLoyaltyCard, setPosLoyaltyCard] = useState<{
     id: string;
     customerPhone: string;
@@ -239,8 +256,10 @@ export const FastPosScreen: React.FC = () => {
       if (sifenRes && sifenRes.ok) {
         const sifenJson = await sifenRes.json();
         setSifenEnabled(Boolean(sifenJson?.data?.isFreeMerchant && sifenJson?.data?.enabled));
+        setRecentSifenInvoices(sifenJson?.data?.recentInvoices || []);
       } else {
         setSifenEnabled(false);
+        setRecentSifenInvoices([]);
       }
     } catch {
       // ignore network error on initial load
@@ -412,30 +431,84 @@ export const FastPosScreen: React.FC = () => {
     };
   }, [customerRuc, sifenEnabled, token, lookupRuc]);
 
-  const handleDownloadInvoicePdf = async (cdc: string) => {
+  const handleDownloadInvoicePdf = async (cdc: string, numeroDoc?: string) => {
     if (!token || !cdc) return;
     setDownloadingPdfCdc(cdc);
+    setPdfActionError(null);
+    try {
+      const res = await fetch(
+        `/api/v1/sifen/cashier/invoices/${encodeURIComponent(cdc)}/pdf?download=1`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.message || 'No se pudo descargar el PDF KuDE.');
+      }
+      const blob = new Blob([await res.arrayBuffer()], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Factura-${numeroDoc || cdc}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch (err: any) {
+      const msg = err.message || 'Error al descargar el PDF KuDE.';
+      setPdfActionError(msg);
+      setSaleError(msg);
+    } finally {
+      setDownloadingPdfCdc(null);
+    }
+  };
+
+  const handleOpenInvoiceInNewTab = async (cdc: string) => {
+    if (!token || !cdc) return;
+    setOpeningPdfCdc(cdc);
+    setPdfActionError(null);
+    const newTab = window.open('', '_blank');
+    if (newTab) {
+      try {
+        newTab.document.write(
+          '<!doctype html><html><body style="background:#0B0F19;color:#e5e7eb;font-family:sans-serif;padding:24px;">Cargando Factura Electronica SIFEN (KuDE)...</body></html>',
+        );
+      } catch {
+        // ignore cross-origin window restrictions if any
+      }
+    }
     try {
       const res = await fetch(`/api/v1/sifen/cashier/invoices/${encodeURIComponent(cdc)}/pdf`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
         const err = await res.json().catch(() => null);
-        throw new Error(err?.message || 'No se pudo descargar el PDF KuDE.');
+        throw new Error(err?.message || 'No se pudo abrir el PDF KuDE.');
       }
-      const blob = await res.blob();
+      const blob = new Blob([await res.arrayBuffer()], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `factura-${cdc}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
+      if (newTab && !newTab.closed) {
+        newTab.location.href = url;
+      } else {
+        const link = document.createElement('a');
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
     } catch (err: any) {
-      setSaleError(err.message || 'Error al descargar el PDF KuDE.');
+      if (newTab && !newTab.closed) {
+        newTab.close();
+      }
+      const msg = err.message || 'Error al abrir el PDF KuDE en una pestaña nueva.';
+      setPdfActionError(msg);
+      setSaleError(msg);
     } finally {
-      setDownloadingPdfCdc(null);
+      setOpeningPdfCdc(null);
     }
   };
 
@@ -644,7 +717,7 @@ export const FastPosScreen: React.FC = () => {
 
       resetCheckoutForm();
       await fetchCashierData();
-      setTimeout(() => setCompletedSaleBanner(null), emittedCdc ? 15000 : 5000);
+      setTimeout(() => setCompletedSaleBanner(null), emittedCdc ? 60000 : 5000);
     } catch (err: any) {
       setSaleError(err.message || 'Error al concretar la venta.');
     } finally {
@@ -869,6 +942,21 @@ export const FastPosScreen: React.FC = () => {
         return null;
       })()}
 
+      {pdfActionError && (
+        <div className="max-w-5xl mx-auto w-full px-4 mt-3">
+          <div className="bg-red-950/70 border border-red-500/40 text-red-200 rounded-xl px-4 py-2.5 text-xs flex items-center justify-between gap-2">
+            <span>⚠️ {pdfActionError}</span>
+            <button
+              type="button"
+              onClick={() => setPdfActionError(null)}
+              className="text-red-300 hover:text-white font-bold"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Completed Sale Notification Toast */}
       {completedSaleBanner && (
         <div className="max-w-5xl mx-auto w-full px-4 mt-4">
@@ -891,13 +979,29 @@ export const FastPosScreen: React.FC = () => {
                     </span>
                     <button
                       type="button"
-                      onClick={() => handleDownloadInvoicePdf(completedSaleBanner.sifenCdc!)}
+                      onClick={() => handleOpenInvoiceInNewTab(completedSaleBanner.sifenCdc!)}
+                      disabled={openingPdfCdc === completedSaleBanner.sifenCdc}
+                      className="px-2.5 py-0.5 bg-indigo-500/25 hover:bg-indigo-500/40 text-indigo-200 border border-indigo-400/40 rounded-md text-[10px] font-bold inline-flex items-center space-x-1 disabled:opacity-50 transition-colors"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      <span>
+                        {openingPdfCdc === completedSaleBanner.sifenCdc ? 'Abriendo...' : 'Abrir en Pestaña'}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleDownloadInvoicePdf(
+                          completedSaleBanner.sifenCdc!,
+                          completedSaleBanner.sifenNumero,
+                        )
+                      }
                       disabled={downloadingPdfCdc === completedSaleBanner.sifenCdc}
                       className="px-2.5 py-0.5 bg-purple-500/25 hover:bg-purple-500/40 text-purple-200 border border-purple-400/40 rounded-md text-[10px] font-bold inline-flex items-center space-x-1 disabled:opacity-50 transition-colors"
                     >
                       <Download className="w-3 h-3" />
                       <span>
-                        {downloadingPdfCdc === completedSaleBanner.sifenCdc ? 'Descargando...' : 'Descargar PDF (KuDE)'}
+                        {downloadingPdfCdc === completedSaleBanner.sifenCdc ? 'Descargando...' : 'Descargar PDF'}
                       </span>
                     </button>
                   </div>
@@ -1014,62 +1118,148 @@ export const FastPosScreen: React.FC = () => {
                   </button>
                 </div>
 
+                {recentSifenInvoices.length > 0 && (
+                  <div className="bg-[#0B0F19] border border-purple-500/30 rounded-2xl p-4 space-y-2.5">
+                    <div className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-wider text-purple-300">
+                      <FileText className="w-4 h-4" />
+                      <span>Facturas Electrónicas SIFEN Recientes ({recentSifenInvoices.length})</span>
+                    </div>
+                    <div className="space-y-2">
+                      {recentSifenInvoices.map((inv) => (
+                        <div
+                          key={inv.id}
+                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-[#151D2F]/70 border border-[#24324D] rounded-xl px-3 py-2.5"
+                        >
+                          <div className="min-w-0 space-y-0.5">
+                            <div className="text-xs font-bold text-white flex flex-wrap items-center gap-2">
+                              <span>N° {inv.numeroDocumento}</span>
+                              <span className="text-emerald-400 font-mono">
+                                Gs. {Number(inv.totalAmount || 0).toLocaleString('es-PY')}
+                              </span>
+                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-200">
+                                {inv.status}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-gray-400 truncate">
+                              {inv.receptorNombre} ({inv.receptorRuc}) •{' '}
+                              <span className="font-mono text-gray-500">CDC {inv.cdc}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenInvoiceInNewTab(inv.cdc)}
+                              disabled={openingPdfCdc === inv.cdc}
+                              className="px-2.5 py-1.5 bg-indigo-500/20 hover:bg-indigo-500/35 text-indigo-200 border border-indigo-400/40 rounded-lg text-[11px] font-bold inline-flex items-center gap-1 disabled:opacity-50"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                              <span>{openingPdfCdc === inv.cdc ? 'Abriendo...' : 'Abrir en Pestaña'}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadInvoicePdf(inv.cdc, inv.numeroDocumento)}
+                              disabled={downloadingPdfCdc === inv.cdc}
+                              className="px-2.5 py-1.5 bg-purple-500/20 hover:bg-purple-500/35 text-purple-200 border border-purple-400/40 rounded-lg text-[11px] font-bold inline-flex items-center gap-1 disabled:opacity-50"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              <span>{downloadingPdfCdc === inv.cdc ? 'Bajando...' : 'Descargar PDF'}</span>
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {recentSales.length === 0 ? (
                   <p className="text-sm text-gray-400 py-8 text-center">
                     Todavía no se registraron ventas en este turno.
                   </p>
                 ) : (
                   <div className="space-y-3">
-                    {recentSales.map((s) => (
-                      <div
-                        key={s.id}
-                        className="bg-[#0B0F19] border border-[#24324D] rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                      >
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                              {s.paymentMethod === 'TRANSFER'
-                                ? 'Transferencia SIPAP'
-                                : s.paymentMethod === 'CASH'
-                                  ? 'Efectivo'
-                                  : 'Tarjeta'}
-                            </span>
-                            <span className="text-xs text-gray-400">
-                              Cajero: <strong className="text-gray-200">{s.cashierName}</strong>
-                            </span>
-                            {s.customerName && (
+                    {recentSales.map((s) => {
+                      const linkedInvoice = recentSifenInvoices.find((inv) => inv.saleId === s.id);
+                      return (
+                        <div
+                          key={s.id}
+                          className="bg-[#0B0F19] border border-[#24324D] rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                {s.paymentMethod === 'TRANSFER'
+                                  ? 'Transferencia SIPAP'
+                                  : s.paymentMethod === 'CASH'
+                                    ? 'Efectivo'
+                                    : 'Tarjeta'}
+                              </span>
                               <span className="text-xs text-gray-400">
-                                • Cliente: <strong className="text-gray-200">{s.customerName}</strong>
+                                Cajero: <strong className="text-gray-200">{s.cashierName}</strong>
                               </span>
-                            )}
-                            {s.customerRuc && (
-                              <span className="text-xs text-gray-400 font-mono">
-                                • RUC: <strong className="text-gray-300">{s.customerRuc}</strong>
-                              </span>
-                            )}
-                            {s.customerEmail && (
-                              <span className="text-xs text-gray-400">
-                                • Email: <span className="text-gray-300">{s.customerEmail}</span>
-                              </span>
+                              {s.customerName && (
+                                <span className="text-xs text-gray-400">
+                                  • Cliente: <strong className="text-gray-200">{s.customerName}</strong>
+                                </span>
+                              )}
+                              {s.customerRuc && (
+                                <span className="text-xs text-gray-400 font-mono">
+                                  • RUC: <strong className="text-gray-300">{s.customerRuc}</strong>
+                                </span>
+                              )}
+                              {s.customerEmail && (
+                                <span className="text-xs text-gray-400">
+                                  • Email: <span className="text-gray-300">{s.customerEmail}</span>
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-gray-300">
+                              {s.saleMode === 'quick_amount'
+                                ? `Cobro rápido: ${s.concept || 'Monto libre'}`
+                                : s.items.map((i) => `${i.quantity}x ${i.itemName}`).join(', ')}
+                            </div>
+                            {linkedInvoice && (
+                              <div className="pt-1 flex flex-wrap items-center gap-2">
+                                <span className="text-[11px] font-mono text-purple-300">
+                                  🧾 SIFEN N° {linkedInvoice.numeroDocumento}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenInvoiceInNewTab(linkedInvoice.cdc)}
+                                  disabled={openingPdfCdc === linkedInvoice.cdc}
+                                  className="px-2 py-0.5 bg-indigo-500/20 hover:bg-indigo-500/35 text-indigo-200 border border-indigo-400/40 rounded-md text-[10px] font-bold inline-flex items-center gap-1"
+                                >
+                                  <ExternalLink className="w-3 h-3" />
+                                  <span>Abrir en Pestaña</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleDownloadInvoicePdf(
+                                      linkedInvoice.cdc,
+                                      linkedInvoice.numeroDocumento,
+                                    )
+                                  }
+                                  disabled={downloadingPdfCdc === linkedInvoice.cdc}
+                                  className="px-2 py-0.5 bg-purple-500/20 hover:bg-purple-500/35 text-purple-200 border border-purple-400/40 rounded-md text-[10px] font-bold inline-flex items-center gap-1"
+                                >
+                                  <Download className="w-3 h-3" />
+                                  <span>Descargar PDF</span>
+                                </button>
+                              </div>
                             )}
                           </div>
-                          <div className="text-xs text-gray-300">
-                            {s.saleMode === 'quick_amount'
-                              ? `Cobro rápido: ${s.concept || 'Monto libre'}`
-                              : s.items.map((i) => `${i.quantity}x ${i.itemName}`).join(', ')}
-                          </div>
-                        </div>
 
-                        <div className="text-right">
-                          <div className="text-lg font-mono font-black text-emerald-400">
-                            Gs. {s.totalAmount.toLocaleString('es-PY')}
-                          </div>
-                          <div className="text-[11px] text-gray-500 font-mono">
-                            {new Date(s.createdAt).toLocaleString('es-PY')}
+                          <div className="text-right">
+                            <div className="text-lg font-mono font-black text-emerald-400">
+                              Gs. {s.totalAmount.toLocaleString('es-PY')}
+                            </div>
+                            <div className="text-[11px] text-gray-500 font-mono">
+                              {new Date(s.createdAt).toLocaleString('es-PY')}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>

@@ -823,6 +823,31 @@ export class SifenRepository implements ISifenRepository, OnModuleInit {
     return this.invoices.find((i) => i.tenantId === tenantId && i.cdc === cdc) || null;
   }
 
+  async updateInvoiceCdc(
+    tenantId: string,
+    invoiceId: string,
+    newCdc: string,
+    status?: SifenInvoice['status'],
+  ): Promise<void> {
+    if (this.isDbActive()) {
+      await this.dbService!.query(
+        `UPDATE sifen_invoices
+         SET cdc = $1, status = COALESCE($2, status)
+         WHERE tenant_id = $3 AND id = $4`,
+        [newCdc, status ?? null, tenantId, invoiceId],
+      );
+      return;
+    }
+
+    const found = this.invoices.find((i) => i.tenantId === tenantId && i.id === invoiceId);
+    if (found) {
+      found.cdc = newCdc;
+      if (status) {
+        found.status = status;
+      }
+    }
+  }
+
   private mapOnboardingRow(row: SifenOnboardingRequestRow): SifenOnboardingRequest {
     return {
       tenantId: row.tenant_id,

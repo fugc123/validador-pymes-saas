@@ -218,30 +218,25 @@ export class FactufyAdapter {
     let message: string = data?.message || 'Documento enviado a SIFEN vía Factufy correctamente.';
 
     if ((!cdc || typeof cdc !== 'string' || cdc.length !== 44) && jobId) {
-      for (let attempt = 0; attempt < 3; attempt++) {
-        await new Promise((r) => setTimeout(r, 500));
-        try {
-          const jobRes = await fetch(`${baseUrl}/invoices/job/${encodeURIComponent(String(jobId))}`, {
-            method: 'GET',
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (!jobRes.ok) continue;
-          const jobData: any = await jobRes.json().catch(() => ({}));
-          const jobCdc = jobData?.cdc || jobData?.responses?.[0]?.cdc;
-          if (typeof jobCdc === 'string' && jobCdc.length === 44) {
-            cdc = jobCdc;
-            if (jobData?.responses?.[0]?.aprobado) {
-              status = 'APPROVED';
-              message = jobData.responses[0].mensajeRespuesta || message;
-            }
-            break;
-          }
-          if (jobData?.status === 'completed' || jobData?.status === 'failed') {
-            break;
-          }
-        } catch {
-          // Non-blocking: return provisional status if polling fails or times out
-          break;
+      const resolved = await this.resolveJobCdc(
+        {
+          clientId: creds.clientId,
+          clientSecret: creds.clientSecret,
+          branchCode: creds.branchCode,
+          posCode: creds.posCode,
+          baseUrl: creds.baseUrl,
+        },
+        String(jobId),
+        6,
+        600,
+      );
+      if (resolved.cdc) {
+        cdc = resolved.cdc;
+        if (resolved.approved) {
+          status = 'APPROVED';
+        }
+        if (resolved.message) {
+          message = resolved.message;
         }
       }
     }
@@ -253,6 +248,48 @@ export class FactufyAdapter {
       message,
       raw: data,
     };
+  }
+
+  async resolveJobCdc(
+    creds: FactufyCredentials,
+    jobId: string,
+    maxAttempts = 6,
+    delayMs = 600,
+  ): Promise<{ cdc: string | null; approved?: boolean; message?: string }> {
+    const cleanJobId = (jobId || '').trim();
+    if (!cleanJobId) return { cdc: null };
+
+    const baseUrl = this.resolveBaseUrl(creds.baseUrl);
+    const token = await this.getAccessToken(creds);
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      if (attempt > 0 && delayMs > 0) {
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
+      try {
+        const jobRes = await fetch(`${baseUrl}/invoices/job/${encodeURIComponent(cleanJobId)}`, {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!jobRes.ok) continue;
+        const jobData: any = await jobRes.json().catch(() => ({}));
+        const jobCdc = jobData?.cdc || jobData?.responses?.[0]?.cdc;
+        if (typeof jobCdc === 'string' && /^\d{44}$/.test(jobCdc)) {
+          return {
+            cdc: jobCdc,
+            approved: Boolean(jobData?.responses?.[0]?.aprobado),
+            message: jobData?.responses?.[0]?.mensajeRespuesta,
+          };
+        }
+        if (jobData?.status === 'failed') {
+          break;
+        }
+      } catch {
+        break;
+      }
+    }
+
+    return { cdc: null };
   }
 
   async consultStatus(creds: FactufyCredentials, cdc: string): Promise<unknown> {
